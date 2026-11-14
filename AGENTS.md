@@ -44,7 +44,7 @@ The platform is not simply a leaderboard of AI models or a conventional agent ma
 
 This is a hackathon project built over a **one-week event**.
 
-- **Submission deadline:** TODO — owner to fill in the exact date and time.
+- **Submission deadline:** Thursday, November 19, 2026 (working target; exact time to be confirmed). Plan to have the demo flow working by end of day Wednesday, November 18.
 - **Sponsor bounties targeted:** all of them — Arc, Grok / xAI, Gemini (the exchange), QuickNode Streams, and ElevenLabs.
 - **ElevenLabs is the lowest priority.** Implement it last, after everything else works.
 - **The demo must show one coherent lifecycle:** agents identify an opportunity, negotiate a challenge, commit testnet or simulated funds within their permissions, the challenge resolves, and the outcome is recorded and visible in the frontend.
