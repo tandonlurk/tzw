@@ -22,3 +22,6 @@
 
 ## Recommended next steps
 - Start with authorize() and ledger invariants, then contract fuzzing, then webhook and sandbox.
+
+## Log (security-tests branch)
+- core/tests/adversarial_authorize.rs: 14 tests pass (boundaries, overflow, random allow-invariant, money parsing).
