@@ -5,10 +5,11 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use aen_server::grok::GrokReasoner;
 use aen_server::market::MarketData;
 use aen_server::market::fake::FakeMarket;
 use aen_server::market::gemini::GeminiClient;
-use aen_server::reasoner::RuleBasedReasoner;
+use aen_server::reasoner::{Reasoner, RuleBasedReasoner};
 use aen_server::state::{AppState, Settings};
 use aen_server::{DEFAULT_CORS_ORIGIN, MIGRATOR, app_with_state, lifecycle};
 use sqlx::postgres::PgPoolOptions;
@@ -77,13 +78,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         _ => return Err("MARKET_DATA must be `gemini` or `fake`".into()),
     };
-    tracing::info!(market_data = %source, reasoner = "rule_based", "runtime configured");
+    // Grok is used only when a key is present; it falls back to the rules on
+    // any error. The key is never logged.
+    let reasoner: Arc<dyn Reasoner> = match env::var("XAI_API_KEY") {
+        Ok(key) if !key.trim().is_empty() => {
+            let base: String = var("XAI_BASE_URL", GrokReasoner::DEFAULT_BASE_URL.to_owned())?;
+            let model: String = var("XAI_MODEL", GrokReasoner::DEFAULT_MODEL.to_owned())?;
+            Arc::new(GrokReasoner::new(
+                &base,
+                &model,
+                key.trim(),
+                GrokReasoner::TIMEOUT,
+            )?)
+        }
+        _ => Arc::new(RuleBasedReasoner),
+    };
+    tracing::info!(market_data = %source, reasoner = reasoner.name(), "runtime configured");
 
     let state = AppState {
         pool,
         market,
         fake_market,
-        reasoner: Arc::new(RuleBasedReasoner),
+        reasoner,
         settings,
     };
 

@@ -67,7 +67,7 @@ Done (all committed):
 
 ### Tests
 
-`cd backend && cargo test --workspace` -> **206 passed, 0 failed, 0 ignored** (core: 94 unit, 14 + 6 adversarial, 2 schema; server: 32 unit, 11 + 5 adversarial, 17 api, 25 lifecycle). `cargo fmt` and `cargo clippy --all-targets` clean. No test uses the network.
+`cd backend && cargo test --workspace` -> **211 passed, 0 failed, 0 ignored** (core: 94 unit, 14 + 6 adversarial, 2 schema; server: 37 unit, 11 + 5 adversarial, 17 api, 25 lifecycle). `cargo fmt` and `cargo clippy --all-targets` clean. No test uses the network.
 
 ### Curl-driven lifecycle (2026-11-15, `MARKET_DATA=fake TICK_INTERVAL_SECS=0`, db `aen_m2_dev`, script in `backend/README.md`)
 
@@ -107,11 +107,12 @@ Done (all committed):
 - The graph executor returns `PlannedIntent { intent, terms, ask_owner, summary }`, not a bare `Vec<Intent>`: `core::Intent` carries only the stake and stays the thing `authorize()` judges; terms are data, validated separately.
 - No `Funded` dwell: `Accepted -> Funded -> Active` happen in one transaction (simulated funds, no deposit confirmation to wait for).
 - Every POST now needs a JSON content type and body (`{}` for approve / reject / tick) because of SEC-01. **Frontend: `web/lib/api/client.ts` only sets the header when there is a body, so it must send `{}` on those calls.**
-- New dependency: `reqwest` (rustls) for the Gemini client.
+- New dependency: `reqwest` (rustls) for the Gemini client and the Grok reasoner.
+- Grok: the model returns an opinion plus stake and threshold only; terms are assembled in Rust from the request (it cannot name a market).
 
 ### Known limitations / unfinished
 
-- `GrokReasoner` is not implemented; the rule-based reasoner is the only one. Co-captain not started.
+- `GrokReasoner` (`server/src/grok.rs`) exists and is used when `XAI_API_KEY` is set, but has **only been tested against a local stand-in server**: no real xAI call was made (no key). The raw `/chat/completions` path and model name `grok-4.7` come from `sponsors.md` and are unverified against the live API. It falls back to the rules on any error; a run's `reasoner` field still says `grok` then, and the summary starts with "(Rule-based fallback". Co-captain not started.
 - No cooldown: after a cancelled negotiation or a settlement the same agents may propose again on the next tick (bounded by exposure, balance and stop-loss, but noisy with the 15 s scheduler).
 - `trigger.challenge_received` is not event-driven: answers happen on the next tick.
 - Only `resolutionSide: "yes"` was observed live; `"no"` is assumed symmetric (see the research file).
@@ -121,7 +122,7 @@ Done (all committed):
 
 ### Next steps
 
-1. `GrokReasoner` behind `Reasoner` (xAI chat completions, JSON-schema output, `XAI_API_KEY`), falling back to `RuleBasedReasoner` on any error; test with a local mock like `market/gemini.rs` does.
+1. Try `GrokReasoner` once with a real `XAI_API_KEY` (and D-8 approval); adjust the endpoint or schema if xAI answers differently.
 2. A proposal cooldown per (agent, market).
 3. Frontend: interactions list / detail, approvals inbox, portfolio charts from `/stats/portfolio`.
 4. Lead: copy F-1..F-15 into `docs/decisions.md`; fill `docs/demo.md` from the README script.

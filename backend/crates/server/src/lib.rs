@@ -4,6 +4,7 @@ pub mod agents;
 pub mod error;
 pub mod extract;
 pub mod graph_exec;
+pub mod grok;
 pub mod interactions;
 pub mod ledger_db;
 pub mod lifecycle;

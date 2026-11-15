@@ -47,7 +47,7 @@ signs or sends a transaction. The moving parts:
 |---|---|
 | `core::challenge` | terms, formulas, pure `resolve() -> A | B | Void` |
 | `server::market` | `MarketData` trait; `gemini` (Gemini **crypto exchange** public API) and `fake` |
-| `server::reasoner` | `Reasoner` trait, output validation, `RuleBasedReasoner` |
+| `server::reasoner`, `server::grok` | `Reasoner` trait, output validation, `RuleBasedReasoner`; `GrokReasoner` (xAI) when `XAI_API_KEY` is set, falling back to the rules on any error |
 | `server::graph_exec` | walks an agent's graph, returns intents + a trace; has no DB or ledger handle |
 | `server::lifecycle` | `tick`: every intent goes through `core::authorize` in the transaction that applies it |
 
