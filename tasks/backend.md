@@ -62,11 +62,66 @@ Done (all committed):
 - `server/src/interactions.rs` + routes: `/interactions`, `/interactions/{id}`, `/approvals`, approve / reject, `/stats/portfolio`, `/dev/tick`, `/dev/fake-market`. Interval scheduler in `main.rs` (`TICK_INTERVAL_SECS`, 0 disables).
 - Tests: `cargo test --workspace` green (core 94 + 14 + 6 + 2; server 22 unit, 11 + 5 adversarial, 17 api, 25 lifecycle).
 
-Next steps (in order):
-1. `docs/api.md`: document the M2 endpoints and types.
-2. `docs/research/gemini-prediction-markets.md`: write up the live spike (shapes are already modelled in `market/gemini.rs`).
-3. Gemini client tests against a local mock HTTP server (parse, retry, timeout, 404).
-4. `.env.example` / README: `MARKET_DATA`, `TICK_INTERVAL_SECS`, lifecycle settings.
-5. Curl-driven lifecycle against a running server; paste numbers here.
-6. `GrokReasoner` only if time allows.
-7. Financial defaults list for the lead (below, to be completed).
+- Docs: `docs/api.md` (M2 section), `docs/research/gemini-prediction-markets.md` (live spike), `backend/README.md`, `.env.example`.
+- Gemini client tested against a local mock HTTP server (parse, retry with backoff, timeout, 404 not retried, bad identifiers). One manual tick against the live public API (simulated stakes) proposed on `GEMI-BTC2611202200-HI64500` and `GEMI-BTC2611160000-HI65100`.
+
+### Tests
+
+`cd backend && cargo test --workspace` -> **206 passed, 0 failed, 0 ignored** (core: 94 unit, 14 + 6 adversarial, 2 schema; server: 32 unit, 11 + 5 adversarial, 17 api, 25 lifecycle). `cargo fmt` and `cargo clippy --all-targets` clean. No test uses the network.
+
+### Curl-driven lifecycle (2026-11-15, `MARKET_DATA=fake TICK_INTERVAL_SECS=0`, db `aen_m2_dev`, script in `backend/README.md`)
+
+| Step | Result |
+|---|---|
+| deposit 200, allocate 100 + 100 | bull 100 / 0, skeptic 100 / 0 (available / committed, USDC) |
+| tick 1 | `proposed 1, countered 1`; state `negotiating`, stake 5.00 -> 2.50, turn = bull |
+| tick 2 | `accepted 1, funded 1`; state `active`; each agent 97.50 / 2.50; wallet committed 5.00 |
+| fake YES price -> 0.70, tick at `end_at + 5 s` | `resolving 1, settled 1`; outcome `a` (bull), observed 7000 vs threshold 5500 |
+| end | bull 102.50 / 0, realized +2.50, 1 win; skeptic 97.50 / 0, realized -2.50; wallet committed 0; portfolio realized 0 |
+| ledger rows for the interaction | 4 `commit_stake` + 6 `settle`; escrow nets to 0; replayed tick adds none |
+| activity | proposed, countered, accepted, 2x stake_committed, 2x settled, all full sentences |
+
+### Financial and behavioural defaults chosen in M2 (for `docs/decisions.md`; all on simulated funds, owner may overturn)
+
+| # | Default | Where (single place to change) |
+|---|---|---|
+| F-1 | A challenge is a claim on one integer observation. "Above" wins when `observed >= threshold`, "below" when `<` (Gemini's "or above" strike convention). No ties | `core/src/challenge.rs` `resolve` |
+| F-2 | Formulas: `pm_yes_price_bps_v1` = contract `resolutionSide` (yes 10000 / no 0) if settled, else `lastTradePrice` in bps; `spot_last_price_micros_v1` = spot `last`. Observation = first successful read at or after `end_ts` (not the price exactly at `end_ts`) | `core/src/challenge.rs` `FormulaId`, `server/src/market/mod.rs` `observe` |
+| F-3 | Missing data is never a value: retry every tick for `RESOLUTION_GRACE_SECS` (600) after `end_ts`, then **void**: both stakes refunded, state `cancelled`, `outcome: void`, no P&L | `lifecycle.rs` `settle_locked` |
+| F-4 | Equal stakes; winner takes both (+stake / -stake); no fee | `core/src/ledger.rs` `settle` |
+| F-5 | `start_ts` is the **funding deadline** (proposal time + `FUNDING_WINDOW_SECS`, 300). Not funded by then (still negotiating or awaiting approval) = cancelled, approvals expire. The challenge is active as soon as both stakes commit; `end_ts = start_ts + agent horizon_secs` | `reasoner.rs` `GenerateProposal`, `lifecycle.rs` `expire_one` |
+| F-6 | Authorization happens three times: at proposal, at each answer, and at commit. Only the commit can end in an approval request. `RequireApproval` during negotiation lets the talk continue; the stake still cannot move without the owner | `lifecycle.rs` |
+| F-7 | Commit authorizes **both** agents against their **current** policy version and a fresh snapshot, under locks. Any deny cancels the whole challenge; nobody is funded alone | `lifecycle.rs` `try_commit` |
+| F-8 | An approval is per (interaction, agent, stake). Approving re-runs authorization; a deny then cancels (HTTP 200 with the interaction `cancelled`). Rejecting cancels. `action.request_approval` in a graph forces an approval request even under the threshold (it can only tighten) | `lifecycle.rs` `try_commit`, `decide_approval` |
+| F-9 | Exposure = stakes of the agent's challenges in funded / active / resolving. Unfunded agreements do not count | `lifecycle.rs` `AGENT_SQL` |
+| F-10 | Negotiation: at most `MAX_NEGOTIATION_ROUNDS` (3) offers including the proposal; one more counter cancels. A counter may change only stake and threshold. A denied answer, or a flow that ends without an action, cancels | `lifecycle.rs` `respond_one`, `reasoner.rs` `validate` |
+| F-11 | Settlement and refunds are contract execution, not agent intents: they are not re-authorized, so a paused or stop-lossed agent's open challenge still settles | `lifecycle.rs` `settle_locked` |
+| F-12 | Rule-based reasoner: conviction `5000 + 5 x spot move in bps` (contrarian if the strategy text says so), clamped 500-9500; proposes at the current market value; stake = approval threshold (max per interaction at >= 8000 bps conviction), halved for low risk tolerance, capped by available; counter = half the stake | `reasoner.rs` |
+| F-13 | Counterparty = the oldest other active agent with a `trigger.challenge_received` flow and no open challenge on that market. An agent holds one open challenge per market. An agent without that flow answers counters with a built-in flow: accept at or above `policy.min_conviction_bps`, else reject | `lifecycle.rs` `pick_counterparty`, `graph_exec.rs` `default_response_graph` |
+| F-14 | Market choice: the open Gemini prediction-market contract on the trigger's asset priced closest to 0.50 (within 0.05-0.95), in the soonest event expiring after the funding deadline; else spot price, labelled with the reason | `market/mod.rs` `discover` |
+| F-15 | Negotiation reasons over the market snapshot taken at proposal; resolution always reads the market again | `lifecycle.rs` `respond_one` |
+
+### Deviations from `docs/architecture.md`
+
+- Terms use an absolute integer `threshold` in the formula's unit, not `threshold_bps`; the market is a `MarketRef`, not an `asset` symbol (needed for prediction-market contracts, D-14).
+- The graph executor returns `PlannedIntent { intent, terms, ask_owner, summary }`, not a bare `Vec<Intent>`: `core::Intent` carries only the stake and stays the thing `authorize()` judges; terms are data, validated separately.
+- No `Funded` dwell: `Accepted -> Funded -> Active` happen in one transaction (simulated funds, no deposit confirmation to wait for).
+- Every POST now needs a JSON content type and body (`{}` for approve / reject / tick) because of SEC-01. **Frontend: `web/lib/api/client.ts` only sets the header when there is a body, so it must send `{}` on those calls.**
+- New dependency: `reqwest` (rustls) for the Gemini client.
+
+### Known limitations / unfinished
+
+- `GrokReasoner` is not implemented; the rule-based reasoner is the only one. Co-captain not started.
+- No cooldown: after a cancelled negotiation or a settlement the same agents may propose again on the next tick (bounded by exposure, balance and stop-loss, but noisy with the 15 s scheduler).
+- `trigger.challenge_received` is not event-driven: answers happen on the next tick.
+- Only `resolutionSide: "yes"` was observed live; `"no"` is assumed symmetric (see the research file).
+- The simulated clock (`/dev/tick` `now`) writes real `ts` on ledger and activity rows; only interaction timestamps follow it.
+- Collaboration interactions, `arc_testnet` funds and `/webhooks/quicknode` are not started (chain work is blocked on D-3).
+- `/dev/*` is mounted by default and unauthenticated like everything else (D-9); the server binds loopback only.
+
+### Next steps
+
+1. `GrokReasoner` behind `Reasoner` (xAI chat completions, JSON-schema output, `XAI_API_KEY`), falling back to `RuleBasedReasoner` on any error; test with a local mock like `market/gemini.rs` does.
+2. A proposal cooldown per (agent, market).
+3. Frontend: interactions list / detail, approvals inbox, portfolio charts from `/stats/portfolio`.
+4. Lead: copy F-1..F-15 into `docs/decisions.md`; fill `docs/demo.md` from the README script.
