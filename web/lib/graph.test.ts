@@ -16,18 +16,25 @@ const graph: Graph = {
 };
 
 describe("graph conversion", () => {
-  it("round-trips contract graph through canvas form", () => {
+  it("round-trips contract graph through canvas form, adding ui positions", () => {
     const c = graphToCanvas(graph, {});
-    expect(canvasToGraph(c.nodes, c.edges)).toEqual(graph);
+    const back = canvasToGraph(c.nodes, c.edges);
+    expect(back.edges).toEqual(graph.edges);
+    expect(back.nodes.map(({ ui, ...n }) => n)).toEqual(graph.nodes);
+    expect(back.nodes.every((n) => n.ui)).toBe(true);
   });
-  it("uses stored positions, falls back to auto layout", () => {
-    const c = graphToCanvas(graph, { n1: { x: 5, y: 6 } });
+  it("prefers node ui, then stored positions, then auto layout", () => {
+    const g = { ...graph, nodes: graph.nodes.map((n, i) => (i === 1 ? { ...n, ui: { x: 9, y: 8 } } : n)) };
+    const c = graphToCanvas(g, { n1: { x: 5, y: 6 }, n2: { x: 1, y: 1 } });
     expect(c.nodes[0].position).toEqual({ x: 5, y: 6 });
+    expect(c.nodes[1].position).toEqual({ x: 9, y: 8 });
     expect(c.nodes[2].position).toEqual({ x: 600, y: 0 });
   });
-  it("serialized graph carries no position data", () => {
+  it("serialized graph uses ui, not react-flow position", () => {
     const c = graphToCanvas(graph, { n1: { x: 5, y: 6 } });
-    expect(JSON.stringify(canvasToGraph(c.nodes, c.edges))).not.toContain("position");
+    const s = JSON.stringify(canvasToGraph(c.nodes, c.edges));
+    expect(s).not.toContain("position");
+    expect(canvasToGraph(c.nodes, c.edges).nodes[0].ui).toEqual({ x: 5, y: 6 });
   });
 });
 
