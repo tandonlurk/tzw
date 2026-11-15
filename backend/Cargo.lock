@@ -26,6 +26,7 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "sqlx",
+ "thiserror",
  "tokio",
  "tower",
  "tower-http",

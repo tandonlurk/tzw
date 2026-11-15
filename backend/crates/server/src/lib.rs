@@ -4,8 +4,10 @@ pub mod agents;
 pub mod error;
 pub mod extract;
 pub mod ledger_db;
+pub mod market;
 pub mod misc;
 pub mod models;
+pub mod reasoner;
 
 use axum::Router;
 use axum::http::HeaderValue;

@@ -9,6 +9,7 @@ aen-core = { path = "../core" }
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
+thiserror.workspace = true
 axum = { version = "0.8", features = ["macros"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres", "macros", "migrate", "json", "uuid", "chrono"] }
