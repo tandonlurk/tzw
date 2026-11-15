@@ -7,13 +7,18 @@ import { formatMoney, parseMoney } from "@/lib/money";
 import { useAsync } from "@/lib/useAsync";
 import { Async, Empty, ErrorBanner, EnvBadge, Money, StatusBadge, Tile } from "@/components/ui";
 import { LedgerTable } from "@/components/LedgerTable";
+import { InteractionCard } from "@/components/Interactions";
+import { isOpen } from "@/lib/interactions";
 
 export default function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const agent = useAsync(() => api.getAgent(id), `agent:${id}`);
   const ledger = useAsync(() => api.getAgentLedger(id), `ledger:${id}`);
 
+  const interactions = useAsync(() => api.listInteractions({ agent_id: id }), `interactions:${id}`);
+
   function refresh() {
+    interactions.reload();
     agent.reload();
     ledger.reload();
   }
@@ -22,6 +27,19 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
     <div>
       <Async state={agent} what="agent">
         {(a) => <Detail agent={a} onChanged={refresh} />}
+      </Async>
+      <h2>Challenges</h2>
+      <Async state={interactions} what="challenges">
+        {(list) => {
+          const open = list.filter((i) => isOpen(i.state));
+          const past = list.filter((i) => !isOpen(i.state));
+          return list.length === 0 ? <Empty>This agent has no challenges yet.</Empty> : (
+            <div className="stack">
+              {open.length > 0 && <><h3>Active and in progress</h3>{open.map((i) => <InteractionCard key={i.id} i={i} />)}</>}
+              {past.length > 0 && <><h3>History</h3>{past.map((i) => <InteractionCard key={i.id} i={i} />)}</>}
+            </div>
+          );
+        }}
       </Async>
       <h2>Ledger</h2>
       <Async state={ledger} what="ledger">{(entries) => <LedgerTable entries={entries} />}</Async>

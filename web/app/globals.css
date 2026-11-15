@@ -137,3 +137,26 @@ pre { background: var(--bg); padding: .6rem; border-radius: 6px; overflow-x: aut
 .bnode .ports { display: flex; justify-content: space-between; color: var(--text-dim); font-size: .7rem; padding: .2rem .6rem; position: relative; }
 .bnode .node-errors { color: var(--negative); padding: 0 .6rem .4rem; font-size: .75rem; }
 @media (max-width: 720px) { .builder { grid-template-columns: 1fr; height: auto; } .canvas { height: 480px; } }
+
+/* M2: interactions, approvals, charts */
+.badge.pos { color: var(--positive); }
+.badge.neg { color: var(--negative); }
+.badge.pend { color: var(--pending); }
+.badge.info { color: var(--neutral); }
+.badge.dim { color: var(--text-dim); }
+.kv td:first-child { color: var(--text-dim); width: 10rem; white-space: nowrap; }
+.notice.info { border-color: var(--neutral); color: var(--neutral); }
+.notice.bad { border-color: var(--negative); color: var(--negative); }
+.chart svg { width: 100%; height: auto; display: block; }
+.chart .axis { stroke: var(--border); stroke-width: 1; }
+.chart .line { fill: none; stroke: var(--neutral); stroke-width: 2; }
+.chart .dot { fill: var(--neutral); }
+.bar-row { display: grid; grid-template-columns: 7rem minmax(50px, 1fr) minmax(8rem, 12rem); gap: .5rem; align-items: center; font-size: .85rem; margin: .3rem 0; }
+.bar-track { background: var(--bg); border-radius: 4px; height: 12px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--neutral); }
+.bar-fill.pos { background: var(--positive); }
+.bar-fill.neg { background: var(--negative); }
+.bar-fill.pend { background: var(--pending); }
+.dev-box { border: 1px dashed var(--pending); border-radius: 8px; padding: .6rem .8rem; }
+.timeline { border-left: 2px solid var(--border); padding-left: .8rem; }
+.timeline > div { margin-bottom: .6rem; }

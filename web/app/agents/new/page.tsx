@@ -64,7 +64,7 @@ export default function NewAgentPage() {
                   <AgentForm
                     key={picked.id}
                     blocks={defs}
-                    initial={{ name: "", description: "", config: picked.config, policy: picked.policy, graph: picked.graph }}
+                    initial={{ name: "", description: picked.description, config: picked.config, policy: picked.policy, graph: picked.graph }}
                     storageId="new"
                     submitLabel="Create agent"
                     onSubmit={create}
