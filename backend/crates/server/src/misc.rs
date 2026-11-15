@@ -112,6 +112,7 @@ const MAX_ACTIVITY_LIMIT: i64 = 200;
 #[derive(Deserialize)]
 pub struct ActivityParams {
     agent_id: Option<String>,
+    interaction_id: Option<String>,
     limit: Option<String>,
 }
 
@@ -125,6 +126,13 @@ pub async fn activity(
         }
         None => None,
     };
+    let interaction_id = match params.interaction_id.as_deref().filter(|s| !s.is_empty()) {
+        Some(s) => Some(
+            Uuid::parse_str(s)
+                .map_err(|_| ApiError::bad_request("interaction_id must be a UUID"))?,
+        ),
+        None => None,
+    };
     let limit = match params.limit.as_deref().filter(|s| !s.is_empty()) {
         Some(s) => s
             .parse::<i64>()
@@ -135,11 +143,13 @@ pub async fn activity(
         None => DEFAULT_ACTIVITY_LIMIT,
     };
     let rows: Vec<ActivityItem> = sqlx::query_as(
-        "SELECT id, ts, agent_id, kind, summary, detail FROM activity \
-         WHERE ($1::uuid IS NULL OR agent_id = $1) ORDER BY seq DESC LIMIT $2",
+        "SELECT id, ts, agent_id, interaction_id, kind, summary, detail FROM activity \
+         WHERE ($1::uuid IS NULL OR agent_id = $1) \
+           AND ($3::uuid IS NULL OR interaction_id = $3) ORDER BY seq DESC LIMIT $2",
     )
     .bind(agent_id)
     .bind(limit)
+    .bind(interaction_id)
     .fetch_all(&pool)
     .await?;
     Ok(Json(rows))

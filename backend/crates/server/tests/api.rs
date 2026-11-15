@@ -31,7 +31,7 @@ async fn setup() -> Ctx {
     });
     let pool = PgPool::connect(&url).await.expect("connect to test db");
     MIGRATOR.run(&pool).await.expect("run migrations");
-    sqlx::query("TRUNCATE activity, ledger_entries, agent_versions, agents")
+    sqlx::query("TRUNCATE activity, ledger_entries, agent_runs, approvals, negotiation_rounds, interactions, agent_versions, agents")
         .execute(&pool)
         .await
         .expect("clean tables");

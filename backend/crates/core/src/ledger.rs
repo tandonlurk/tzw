@@ -311,12 +311,15 @@ pub fn deallocate(
 }
 
 /// An agent locks its stake for an interaction.
+///
+/// The idempotency key of `commit_stake`, `settle` and `refund` is derived
+/// from the interaction (and agent), never chosen by the caller, so a store
+/// that deduplicates on the key cannot apply any of them twice (SEC-03).
 pub fn commit_stake(
     env: Env,
     agent: Uuid,
     interaction: Uuid,
     stake: Money,
-    key: &str,
 ) -> Result<PostingSet, LedgerError> {
     let stake = positive(stake)?;
     let postings = transfer(
@@ -327,7 +330,7 @@ pub fn commit_stake(
     PostingSet::new(
         env,
         Reason::CommitStake,
-        key,
+        &format!("commit_stake:{interaction}:{agent}"),
         Some(interaction),
         postings.into(),
     )
@@ -342,7 +345,6 @@ pub fn settle(
     winner: Uuid,
     loser: Uuid,
     stake: Money,
-    key: &str,
 ) -> Result<PostingSet, LedgerError> {
     let stake = positive(stake)?;
     if winner == loser {
@@ -354,7 +356,13 @@ pub fn settle(
     postings.extend(transfer(Account::AgentCommitted(loser), escrow, stake));
     postings.extend(transfer(Account::AgentCommitted(winner), escrow, stake));
     postings.extend(transfer(escrow, Account::AgentAvailable(winner), pot));
-    PostingSet::new(env, Reason::Settle, key, Some(interaction), postings)
+    PostingSet::new(
+        env,
+        Reason::Settle,
+        &format!("settle:{interaction}"),
+        Some(interaction),
+        postings,
+    )
 }
 
 /// An agent's stake returns to its available balance (cancellation or timeout).
@@ -363,7 +371,6 @@ pub fn refund(
     agent: Uuid,
     interaction: Uuid,
     stake: Money,
-    key: &str,
 ) -> Result<PostingSet, LedgerError> {
     let stake = positive(stake)?;
     let postings = transfer(
@@ -371,7 +378,13 @@ pub fn refund(
         Account::AgentAvailable(agent),
         stake,
     );
-    PostingSet::new(env, Reason::Refund, key, Some(interaction), postings.into())
+    PostingSet::new(
+        env,
+        Reason::Refund,
+        &format!("refund:{interaction}:{agent}"),
+        Some(interaction),
+        postings.into(),
+    )
 }
 
 #[cfg(test)]
@@ -450,9 +463,9 @@ mod tests {
             deposit(ENV, m(100), "k1").unwrap(),
             allocate(ENV, a, m(100), "k2").unwrap(),
             deallocate(ENV, a, m(100), "k3").unwrap(),
-            commit_stake(ENV, a, i, m(100), "k4").unwrap(),
-            settle(ENV, i, a, b, m(100), "k5").unwrap(),
-            refund(ENV, a, i, m(100), "k6").unwrap(),
+            commit_stake(ENV, a, i, m(100)).unwrap(),
+            settle(ENV, i, a, b, m(100)).unwrap(),
+            refund(ENV, a, i, m(100)).unwrap(),
         ];
         for set in &sets {
             assert_eq!(sum(set), 0, "{:?}", set.reason());
@@ -472,12 +485,9 @@ mod tests {
         assert_eq!(deposit(ENV, z, "k"), Err(LedgerError::ZeroAmount));
         assert_eq!(allocate(ENV, a, z, "k"), Err(LedgerError::ZeroAmount));
         assert_eq!(deallocate(ENV, a, z, "k"), Err(LedgerError::ZeroAmount));
-        assert_eq!(
-            commit_stake(ENV, a, i, z, "k"),
-            Err(LedgerError::ZeroAmount)
-        );
-        assert_eq!(settle(ENV, i, a, b, z, "k"), Err(LedgerError::ZeroAmount));
-        assert_eq!(refund(ENV, a, i, z, "k"), Err(LedgerError::ZeroAmount));
+        assert_eq!(commit_stake(ENV, a, i, z), Err(LedgerError::ZeroAmount));
+        assert_eq!(settle(ENV, i, a, b, z), Err(LedgerError::ZeroAmount));
+        assert_eq!(refund(ENV, a, i, z), Err(LedgerError::ZeroAmount));
     }
 
     #[test]
@@ -541,11 +551,8 @@ mod tests {
     #[test]
     fn settle_rejects_same_party_and_overflowing_pot() {
         let (a, b, i) = (id(1), id(2), id(9));
-        assert_eq!(settle(ENV, i, a, a, m(1), "k"), Err(LedgerError::SameParty));
-        assert_eq!(
-            settle(ENV, i, a, b, Money::MAX, "k"),
-            Err(LedgerError::Overflow)
-        );
+        assert_eq!(settle(ENV, i, a, a, m(1)), Err(LedgerError::SameParty));
+        assert_eq!(settle(ENV, i, a, b, Money::MAX), Err(LedgerError::Overflow));
     }
 
     #[test]
@@ -589,37 +596,29 @@ mod tests {
 
         // Cannot commit more than available.
         assert_eq!(
-            commit_stake(ENV, a, i, m(301), "c0")
+            commit_stake(ENV, a, i, m(301))
                 .unwrap()
                 .check_balances(&balances),
             Err(LedgerError::InsufficientFunds {
                 account: Account::AgentAvailable(a)
             })
         );
-        apply(
-            &mut balances,
-            &commit_stake(ENV, a, i, m(100), "ca").unwrap(),
-        )
-        .unwrap();
+        apply(&mut balances, &commit_stake(ENV, a, i, m(100)).unwrap()).unwrap();
 
         // Cannot settle before both sides have committed.
         assert_eq!(
-            settle(ENV, i, a, b, m(100), "s0")
+            settle(ENV, i, a, b, m(100))
                 .unwrap()
                 .check_balances(&balances),
             Err(LedgerError::InsufficientFunds {
                 account: Account::AgentCommitted(b)
             })
         );
-        apply(
-            &mut balances,
-            &commit_stake(ENV, b, i, m(100), "cb").unwrap(),
-        )
-        .unwrap();
+        apply(&mut balances, &commit_stake(ENV, b, i, m(100)).unwrap()).unwrap();
         assert_eq!(bal(&balances, Account::AgentAvailable(a)), 200);
         assert_eq!(bal(&balances, Account::AgentCommitted(a)), 100);
 
-        let set = settle(ENV, i, a, b, m(100), "s").unwrap();
+        let set = settle(ENV, i, a, b, m(100)).unwrap();
         apply(&mut balances, &set).unwrap();
         // Winner: stake back plus the loser's stake. Loser: stake gone.
         assert_eq!(bal(&balances, Account::AgentAvailable(a)), 400);
@@ -655,21 +654,15 @@ mod tests {
         let mut balances = BTreeMap::new();
         apply(&mut balances, &deposit(ENV, m(500), "d").unwrap()).unwrap();
         apply(&mut balances, &allocate(ENV, a, m(500), "al").unwrap()).unwrap();
-        apply(
-            &mut balances,
-            &commit_stake(ENV, a, i, m(200), "c").unwrap(),
-        )
-        .unwrap();
+        apply(&mut balances, &commit_stake(ENV, a, i, m(200)).unwrap()).unwrap();
 
         assert_eq!(
-            refund(ENV, a, i, m(201), "r0")
-                .unwrap()
-                .check_balances(&balances),
+            refund(ENV, a, i, m(201)).unwrap().check_balances(&balances),
             Err(LedgerError::InsufficientFunds {
                 account: Account::AgentCommitted(a)
             })
         );
-        apply(&mut balances, &refund(ENV, a, i, m(200), "r").unwrap()).unwrap();
+        apply(&mut balances, &refund(ENV, a, i, m(200)).unwrap()).unwrap();
         assert_eq!(bal(&balances, Account::AgentAvailable(a)), 500);
         assert_eq!(bal(&balances, Account::AgentCommitted(a)), 0);
     }

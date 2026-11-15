@@ -33,7 +33,7 @@ async fn setup() -> Ctx {
         .await
         .expect("connect to test db");
     MIGRATOR.run(&pool).await.expect("run migrations");
-    sqlx::query("TRUNCATE activity, ledger_entries, agent_versions, agents")
+    sqlx::query("TRUNCATE activity, ledger_entries, agent_runs, approvals, negotiation_rounds, interactions, agent_versions, agents")
         .execute(&pool)
         .await
         .unwrap();
@@ -48,7 +48,10 @@ async fn raw(app: &Router, req: Request<Body>) -> (StatusCode, Value) {
     let res = app.clone().oneshot(req).await.unwrap();
     let status = res.status();
     let bytes = res.into_body().collect().await.unwrap().to_bytes();
-    (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
 }
 
 async fn send(app: &Router, path: &str, body: Value, key: Option<&str>) -> (StatusCode, Value) {
@@ -86,12 +89,22 @@ async fn agent(app: &Router, name: &str) -> String {
 }
 
 async fn deposit(app: &Router, units: &str) -> (StatusCode, Value) {
-    send(app, "/api/wallet/simulated-deposit", json!({"amount": units}), None).await
+    send(
+        app,
+        "/api/wallet/simulated-deposit",
+        json!({"amount": units}),
+        None,
+    )
+    .await
 }
 
 async fn put(app: &Router, path: &str, body: Value) -> (StatusCode, Value) {
-    let req = Request::builder().method("PUT").uri(path).header("content-type", "application/json")
-        .body(Body::from(body.to_string())).unwrap();
+    let req = Request::builder()
+        .method("PUT")
+        .uri(path)
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
     raw(app, req).await
 }
 
@@ -100,14 +113,23 @@ async fn ledger_and_versions_are_append_only_at_the_database_level() {
     let c = setup().await;
     let a = agent(&c.app, "A").await;
     deposit(&c.app, "100").await;
-    send(&c.app, &format!("/api/agents/{a}/allocate"), json!({"amount": "10"}), None).await;
+    send(
+        &c.app,
+        &format!("/api/agents/{a}/allocate"),
+        json!({"amount": "10"}),
+        None,
+    )
+    .await;
     for sql in [
         "UPDATE ledger_entries SET delta = delta + 1",
         "DELETE FROM ledger_entries",
         "UPDATE agent_versions SET config = '{}'::jsonb",
         "DELETE FROM agent_versions",
     ] {
-        assert!(sqlx::query(sql).execute(&c.pool).await.is_err(), "{sql} must be refused");
+        assert!(
+            sqlx::query(sql).execute(&c.pool).await.is_err(),
+            "{sql} must be refused"
+        );
     }
     // Direct forged insert that does not balance is not stopped by the DB
     // (balance is enforced in application code only): documented as SEC-08.
@@ -122,16 +144,31 @@ async fn concurrent_edits_get_distinct_consecutive_versions_and_keep_history() {
         let app = c.app.clone();
         let a = a.clone();
         tasks.push(tokio::spawn(async move {
-            put(&app, &format!("/api/agents/{a}"), agent_input(&format!("edit{i}"))).await.0
+            put(
+                &app,
+                &format!("/api/agents/{a}"),
+                agent_input(&format!("edit{i}")),
+            )
+            .await
+            .0
         }));
     }
     for t in tasks {
         assert_eq!(t.await.unwrap(), StatusCode::OK);
     }
-    let versions: Vec<i32> = sqlx::query_scalar("SELECT version FROM agent_versions WHERE agent_id = $1::uuid ORDER BY version")
-        .bind(&a).fetch_all(&c.pool).await.unwrap();
+    let versions: Vec<i32> = sqlx::query_scalar(
+        "SELECT version FROM agent_versions WHERE agent_id = $1::uuid ORDER BY version",
+    )
+    .bind(&a)
+    .fetch_all(&c.pool)
+    .await
+    .unwrap();
     assert_eq!(versions, (1..=13).collect::<Vec<_>>());
-    let name: String = sqlx::query_scalar("SELECT name FROM agents WHERE id = $1::uuid").bind(&a).fetch_one(&c.pool).await.unwrap();
+    let name: String = sqlx::query_scalar("SELECT name FROM agents WHERE id = $1::uuid")
+        .bind(&a)
+        .fetch_one(&c.pool)
+        .await
+        .unwrap();
     assert!(name.starts_with("edit"));
 }
 
@@ -147,7 +184,10 @@ async fn extreme_and_inconsistent_policies_are_rejected_on_write() {
         ("approval_threshold", json!("999999999999")), // above max_per_interaction
         ("max_aggregate_exposure", json!("1")),        // below max_per_interaction
         ("allowed_interaction_types", json!([])),
-        ("allowed_interaction_types", json!(["challenge", "challenge"])),
+        (
+            "allowed_interaction_types",
+            json!(["challenge", "challenge"]),
+        ),
         ("allowed_interaction_types", json!(["withdraw"])),
         ("min_conviction_bps", json!(10001)),
         ("min_conviction_bps", json!(-1)),
@@ -161,7 +201,10 @@ async fn extreme_and_inconsistent_policies_are_rejected_on_write() {
         let (s, body) = put(&c.app, &format!("/api/agents/{a}"), input).await;
         assert!(s.is_client_error(), "{field}: {s} {body}");
     }
-    let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM agent_versions").fetch_one(&c.pool).await.unwrap();
+    let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM agent_versions")
+        .fetch_one(&c.pool)
+        .await
+        .unwrap();
     assert_eq!(n, 1, "rejected edits must not create versions");
 }
 
@@ -169,8 +212,20 @@ async fn extreme_and_inconsistent_policies_are_rejected_on_write() {
 async fn status_endpoint_rejects_unknown_values() {
     let c = setup().await;
     let a = agent(&c.app, "A").await;
-    for body in [json!({"status": "deleted"}), json!({"status": ""}), json!({"status": null}), json!({}), json!({"status": "ACTIVE"})] {
-        let (s, _) = send(&c.app, &format!("/api/agents/{a}/status"), body.clone(), None).await;
+    for body in [
+        json!({"status": "deleted"}),
+        json!({"status": ""}),
+        json!({"status": null}),
+        json!({}),
+        json!({"status": "ACTIVE"}),
+    ] {
+        let (s, _) = send(
+            &c.app,
+            &format!("/api/agents/{a}/status"),
+            body.clone(),
+            None,
+        )
+        .await;
         assert!(s.is_client_error(), "{body} -> {s}");
     }
 }
@@ -180,10 +235,13 @@ async fn status_endpoint_rejects_unknown_values() {
 /// CORS only stops the page from READING the response. Expected secure behaviour: reject non-JSON
 /// content types with 415.
 #[tokio::test]
-#[ignore = "BUG SEC-01: POST endpoints accept text/plain bodies, so cross-site forms can move (simulated) funds without a CORS preflight"]
 async fn state_changing_posts_must_require_a_json_content_type() {
     let c = setup().await;
-    for ct in ["text/plain", "application/x-www-form-urlencoded", "multipart/form-data; boundary=x"] {
+    for ct in [
+        "text/plain",
+        "application/x-www-form-urlencoded",
+        "multipart/form-data; boundary=x",
+    ] {
         let req = Request::builder()
             .method("POST")
             .uri("/api/wallet/simulated-deposit")
@@ -192,10 +250,17 @@ async fn state_changing_posts_must_require_a_json_content_type() {
             .body(Body::from(r#"{"amount":"1000000"}"#))
             .unwrap();
         let (s, _) = raw(&c.app, req).await;
-        assert_eq!(s, StatusCode::UNSUPPORTED_MEDIA_TYPE, "content-type {ct} was accepted: {s}");
+        assert_eq!(
+            s,
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "content-type {ct} was accepted: {s}"
+        );
     }
     // no Content-Type at all
-    let req = Request::builder().method("POST").uri("/api/wallet/simulated-deposit")
-        .body(Body::from(r#"{"amount":"1000000"}"#)).unwrap();
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/wallet/simulated-deposit")
+        .body(Body::from(r#"{"amount":"1000000"}"#))
+        .unwrap();
     assert_eq!(raw(&c.app, req).await.0, StatusCode::UNSUPPORTED_MEDIA_TYPE);
 }
