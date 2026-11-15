@@ -167,3 +167,172 @@ export interface Wallet {
   committed: Money;
   entries: LedgerEntry[];
 }
+
+// ---- M2: challenges (docs/api.md "M2: challenges") ----
+
+export type MarketRef =
+  | { kind: "gemini_prediction_contract"; event_ticker: string; instrument_symbol: string }
+  | { kind: "gemini_spot"; symbol: string };
+
+export interface ChallengeTerms {
+  market: MarketRef;
+  direction: "above" | "below"; // the proposer's side
+  threshold: number;
+  start_ts: number;
+  end_ts: number;
+  stake: Money; // per side
+  resolution_source: "gemini_prediction_markets" | "gemini_spot_ticker";
+  formula: "pm_yes_price_bps_v1" | "spot_last_price_micros_v1";
+}
+
+export type InteractionState =
+  | "proposed" | "negotiating" | "accepted" | "awaiting_approval" | "funded" | "active"
+  | "resolving" | "settled" | "cancelled" | "disputed" | "failed";
+
+export interface Interaction {
+  id: string;
+  kind: "challenge";
+  env: Env;
+  state: InteractionState;
+  proposer_id: string;
+  proposer_name: string;
+  counterparty_id: string;
+  counterparty_name: string;
+  terms: ChallengeTerms;
+  stake: Money;
+  market_title: string;
+  market_source: "gemini" | "fake" | null;
+  claim: string;
+  turn: string | null;
+  rounds: number;
+  max_rounds: number;
+  pending_approvals: number;
+  outcome: "a" | "b" | "void" | null;
+  winner_id: string | null;
+  observed: number | null;
+  observed_display: string | null;
+  observed_at: string | null;
+  status_reason: string | null;
+  resolution: "backend_administered";
+  start_at: string;
+  end_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NegotiationRound {
+  seq: number;
+  agent_id: string;
+  action: "propose" | "counter" | "accept" | "reject";
+  terms: ChallengeTerms | null;
+  summary: string;
+  ts: string;
+}
+
+export interface RunIntent {
+  intent: { type: string; stake?: Money };
+  terms: ChallengeTerms | null;
+  ask_owner: boolean;
+  summary: string;
+}
+
+export interface Run {
+  id: string;
+  ts: string;
+  agent_id: string;
+  agent_version: number;
+  trigger: string;
+  status: "ok" | "no_action" | "error";
+  error: string | null;
+  reasoner: string;
+  trace: { node_id: string; node_type: string; summary: string }[];
+  intents: RunIntent[];
+}
+
+export type ApprovalStatus = "pending" | "approved" | "rejected" | "expired" | "superseded";
+
+export interface Approval {
+  id: string;
+  interaction_id: string;
+  agent_id: string;
+  agent_name: string;
+  stake: Money;
+  status: ApprovalStatus;
+  reason: string;
+  requested_at: string;
+  decided_at: string | null;
+  expires_at: string;
+  market_title: string;
+  env: Env;
+}
+
+export interface InteractionDetail extends Interaction {
+  negotiation: NegotiationRound[];
+  runs: Run[];
+  approvals: Approval[];
+  ledger: LedgerEntry[];
+  activity: ActivityItem[];
+}
+
+export interface ApprovalDecision {
+  approval: Approval;
+  interaction: Interaction;
+}
+
+export interface TickReport {
+  now: string;
+  proposed: number;
+  denied: number;
+  countered: number;
+  accepted: number;
+  rejected: number;
+  approvals_requested: number;
+  funded: number;
+  resolving: number;
+  settled: number;
+  voided: number;
+  cancelled: number;
+  errors: string[];
+}
+
+export interface Portfolio {
+  env: Env;
+  as_of: string;
+  totals: {
+    unallocated: Money;
+    available: Money;
+    committed: Money;
+    allocated: Money;
+    at_risk: Money;
+    realized_pnl: Money;
+    unrealized_pnl: Money | null;
+  };
+  pnl_over_time: {
+    ts: string;
+    interaction_id: string;
+    agent_id: string;
+    delta: Money;
+    agent_cumulative: Money;
+    portfolio_cumulative: Money;
+  }[];
+  allocation: { agent_id: string; name: string; available: Money; committed: Money }[];
+  agents: {
+    agent_id: string;
+    name: string;
+    realized_pnl: Money;
+    settled: number;
+    wins: number;
+    losses: number;
+    win_rate_bps: number | null;
+  }[];
+  outcomes: {
+    settled: number;
+    voided: number;
+    cancelled: number;
+    failed: number;
+    open: number;
+    active: number;
+    by_state: Record<string, number>;
+  };
+  formulas: Record<string, string>;
+}
