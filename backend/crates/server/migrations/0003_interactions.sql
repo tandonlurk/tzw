@@ -93,3 +93,14 @@ CREATE INDEX agent_runs_interaction_idx ON agent_runs (interaction_id);
 
 ALTER TABLE activity ADD COLUMN interaction_id UUID REFERENCES interactions (id);
 CREATE INDEX activity_interaction_idx ON activity (interaction_id);
+
+-- SEC-03: a stake enters an agent's committed account once per interaction
+-- and leaves it once (by settlement or by refund), whatever idempotency key a
+-- writer uses. The lifecycle also holds a row lock on the interaction and
+-- checks its state; these indexes are the last line of defence.
+CREATE UNIQUE INDEX ledger_one_commit_per_interaction
+    ON ledger_entries (interaction_id, account)
+    WHERE reason = 'commit_stake' AND delta > 0;
+CREATE UNIQUE INDEX ledger_one_release_per_interaction
+    ON ledger_entries (interaction_id, account)
+    WHERE reason IN ('settle', 'refund') AND delta < 0 AND account LIKE 'agent:%:committed';

@@ -140,7 +140,12 @@ fn overflowing_exposure_is_denied_not_wrapped() {
     assert!(denied(&d, DenyReason::AmountOverflow), "{d:?}");
     // stake == MAX with zero exposure is arithmetically fine
     s.exposure = Money::ZERO;
-    let d = authorize(&Intent::ProposeChallenge { stake: Money::MAX }, &p, &s, None);
+    let d = authorize(
+        &Intent::ProposeChallenge { stake: Money::MAX },
+        &p,
+        &s,
+        None,
+    );
     assert_eq!(d, Decision::Allow);
 }
 
@@ -183,7 +188,12 @@ fn paused_agent_can_do_nothing_including_reject() {
     let mut s = snap();
     s.status = AgentStatus::Paused;
     assert!(denied(
-        &authorize(&Intent::Reject, &policy(), &s, Some(InteractionState::Proposed)),
+        &authorize(
+            &Intent::Reject,
+            &policy(),
+            &s,
+            Some(InteractionState::Proposed)
+        ),
         DenyReason::AgentPaused
     ));
 }
@@ -230,7 +240,10 @@ fn every_intent_in_every_illegal_state_is_denied() {
         for st in ALL_STATES.iter().copied().map(Some).chain([None]) {
             let d = authorize(&i, &p, &s, st);
             if !i.legal_in(st) {
-                assert!(denied(&d, DenyReason::IllegalInteractionState), "{i:?} {st:?}");
+                assert!(
+                    denied(&d, DenyReason::IllegalInteractionState),
+                    "{i:?} {st:?}"
+                );
             }
         }
     }
@@ -264,10 +277,18 @@ fn randomized_allow_never_violates_policy() {
                 _ => vec![InteractionType::Challenge, InteractionType::Collaboration],
             },
             min_conviction_bps: 0,
-            stop_loss: if rng.below(2) == 0 { None } else { Some(rng.money()) },
+            stop_loss: if rng.below(2) == 0 {
+                None
+            } else {
+                Some(rng.money())
+            },
         };
         let s = Snapshot {
-            status: if rng.below(5) == 0 { AgentStatus::Paused } else { AgentStatus::Active },
+            status: if rng.below(5) == 0 {
+                AgentStatus::Paused
+            } else {
+                AgentStatus::Active
+            },
             available: rng.money(),
             exposure: rng.money(),
             realized_pnl: SignedMoney::from_minor(match rng.below(3) {
@@ -277,13 +298,34 @@ fn randomized_allow_never_violates_policy() {
             }),
         };
         let stake = rng.money();
-        let kind = if rng.below(2) == 0 { InteractionType::Challenge } else { InteractionType::Collaboration };
+        let kind = if rng.below(2) == 0 {
+            InteractionType::Challenge
+        } else {
+            InteractionType::Collaboration
+        };
         let (intent, state) = match rng.below(5) {
             0 => (Intent::ProposeChallenge { stake }, None),
-            1 => (Intent::ProposeCollaboration { contribution: stake }, None),
-            2 => (Intent::AcceptChallenge { stake }, Some(InteractionState::Proposed)),
-            3 => (Intent::CommitFunds { interaction_type: kind, stake }, Some(InteractionState::Accepted)),
-            _ => (Intent::CounterOffer { stake }, Some(InteractionState::Negotiating)),
+            1 => (
+                Intent::ProposeCollaboration {
+                    contribution: stake,
+                },
+                None,
+            ),
+            2 => (
+                Intent::AcceptChallenge { stake },
+                Some(InteractionState::Proposed),
+            ),
+            3 => (
+                Intent::CommitFunds {
+                    interaction_type: kind,
+                    stake,
+                },
+                Some(InteractionState::Accepted),
+            ),
+            _ => (
+                Intent::CounterOffer { stake },
+                Some(InteractionState::Negotiating),
+            ),
         };
         let d = authorize(&intent, &p, &s, state);
         if matches!(d, Decision::Allow | Decision::RequireApproval) {
@@ -294,7 +336,10 @@ fn randomized_allow_never_violates_policy() {
             assert!(stake <= s.available);
             let total = s.exposure.checked_add(stake).expect("no overflow on allow");
             assert!(total <= p.max_aggregate_exposure);
-            assert!(p.allowed_interaction_types.contains(&intent.interaction_type().unwrap()));
+            assert!(
+                p.allowed_interaction_types
+                    .contains(&intent.interaction_type().unwrap())
+            );
             if let Some(limit) = p.stop_loss {
                 assert!(s.realized_pnl > limit.debit());
             }
@@ -316,7 +361,12 @@ fn unvalidated_policy_with_inverted_limits_still_enforces_each_limit() {
         stop_loss: Some(Money::ZERO),
     };
     assert!(!p.validate().is_empty());
-    let d = authorize(&Intent::ProposeChallenge { stake: m(200) }, &p, &snap(), None);
+    let d = authorize(
+        &Intent::ProposeChallenge { stake: m(200) },
+        &p,
+        &snap(),
+        None,
+    );
     assert!(denied(&d, DenyReason::ExceedsAggregateExposure));
 }
 
@@ -325,8 +375,26 @@ fn unvalidated_policy_with_inverted_limits_still_enforces_each_limit() {
 #[test]
 fn money_rejects_malformed_strings() {
     for bad in [
-        "", " ", "-1", "+1", "01", "1.0", "1e3", "0x10", " 1", "1 ", "1\n", "١٢٣", "１２", "9223372036854775808",
-        "99999999999999999999999999", "NaN", "null", "1_000", "--1", "-",
+        "",
+        " ",
+        "-1",
+        "+1",
+        "01",
+        "1.0",
+        "1e3",
+        "0x10",
+        " 1",
+        "1 ",
+        "1\n",
+        "١٢٣",
+        "１２",
+        "9223372036854775808",
+        "99999999999999999999999999",
+        "NaN",
+        "null",
+        "1_000",
+        "--1",
+        "-",
     ] {
         assert!(bad.parse::<Money>().is_err(), "accepted {bad:?}");
     }
@@ -336,19 +404,36 @@ fn money_rejects_malformed_strings() {
 
 #[test]
 fn signed_money_rejects_noncanonical_negatives() {
-    for bad in ["-0", "-01", "-", "--1", "-+1", "- 1", "-9223372036854775809", "+0"] {
+    for bad in [
+        "-0",
+        "-01",
+        "-",
+        "--1",
+        "-+1",
+        "- 1",
+        "-9223372036854775809",
+        "+0",
+    ] {
         assert!(bad.parse::<SignedMoney>().is_err(), "accepted {bad:?}");
     }
     assert_eq!(
-        "-9223372036854775808".parse::<SignedMoney>().unwrap().minor(),
+        "-9223372036854775808"
+            .parse::<SignedMoney>()
+            .unwrap()
+            .minor(),
         i64::MIN
     );
 }
 
 #[test]
 fn money_json_must_be_a_string() {
-    for bad in ["5", "5.5", "-5", "null", "true", "[]", "{}", "\"-5\"", "\"5.0\"", "\"\""] {
-        assert!(serde_json::from_str::<Money>(bad).is_err(), "accepted {bad}");
+    for bad in [
+        "5", "5.5", "-5", "null", "true", "[]", "{}", "\"-5\"", "\"5.0\"", "\"\"",
+    ] {
+        assert!(
+            serde_json::from_str::<Money>(bad).is_err(),
+            "accepted {bad}"
+        );
     }
     let intent: Result<Intent, _> =
         serde_json::from_str(r#"{"type":"propose_challenge","stake":-1}"#);
@@ -363,7 +448,9 @@ fn randomized_money_parse_never_panics_and_round_trips() {
     let alphabet: Vec<char> = "0123456789-+. eE_x\u{0663}\u{ff11}\n".chars().collect();
     for _ in 0..50_000 {
         let len = rng.below(25) as usize;
-        let s: String = (0..len).map(|_| alphabet[rng.below(alphabet.len() as u64) as usize]).collect();
+        let s: String = (0..len)
+            .map(|_| alphabet[rng.below(alphabet.len() as u64) as usize])
+            .collect();
         if let Ok(v) = s.parse::<Money>() {
             assert_eq!(v.to_string(), s);
             assert!(v.minor() >= 0);

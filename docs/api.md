@@ -4,6 +4,10 @@ Backend owns this file. Frontend builds against it. Change it in the same commit
 
 Conventions: base `http://localhost:8080/api`; JSON; ids are UUID strings; timestamps RFC 3339; **money is a string of integer USDC minor units** (6 decimals, `"1500000"` = 1.5 USDC); `env` is `"arc_testnet"` or `"simulated"`; ratios are integer basis points (0–10000). Errors: HTTP 4xx/5xx with `{"error":{"code":"...","message":"...","details":[...]}}`. Single demo user, no auth (D-9).
 
+Request bodies: every endpoint that takes a body requires `Content-Type: application/json` (optionally with `; charset=...`); anything else is **415** `unsupported_media_type` (browsers can send other types cross-site without a CORS preflight). A body over the size limit is **413** `payload_too_large`. Malformed JSON is 400; well-formed JSON of the wrong shape is 422.
+
+Validation errors (422 `validation_failed`): `details` is `[{path, code, message}]`. `path` is a **dotted** field path into the request body: `name`, `config.horizon_secs`, `policy.max_per_interaction`, `graph` (whole-graph problems) or `graph.nodes.<node id>`; it is `""` when the body as a whole has the wrong shape.
+
 ## Types
 
 ```
