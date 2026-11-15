@@ -38,3 +38,9 @@ Run against the real backend; charts (M2); approvals and interactions views.
 ## QA against real backend (qa-web)
 - Positions now via node `ui {x,y}` (localStorage fallback). 422 graph paths mapped to nodes. Report: `reports/qa-m1.md`.
 - Not browser-tested: add/connect/incompatible connection (unit-tested only).
+
+## M2 (frontend-m2)
+- Added: typed M2 client/types, `/approvals` (approve/reject; approve returning cancelled shows a clear "authorization denied" notice), `/interactions` list + detail (terms, negotiation, approvals, decision trace, timeline, ledger), Activity with links + raw details, dashboard charts from `/stats/portfolio` only (SVG components in `components/charts`), agent detail challenges, labelled "Dev: run tick" (hidden on 404), template description prefill.
+- Helpers with tests: `lib/interactions.ts`, `lib/charts.ts` (21 tests total).
+- Browser-verified against real backend: approvals approve flow, dashboard numbers vs API, interaction detail, builder add block / incompatible connection rejected / compatible connection drawn.
+- Not browser-verified: reject path, approve -> cancelled notice, agent detail challenges section, create-form prefill.
