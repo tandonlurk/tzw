@@ -856,7 +856,13 @@ Do not leave critical setup steps only in agent conversation history.
 
 ## 9.4 Running the project
 
-TODO — once the application exists, the lead documents here how to install, run, test, and exercise the full demo flow end-to-end.
+Prerequisites: Rust (`~/.cargo/bin`), Foundry (`~/.foundry/bin`), PostgreSQL 17 (Homebrew service, `/opt/homebrew/opt/postgresql@17/bin`), Node 22. If not on PATH: `export PATH="$HOME/.cargo/bin:$HOME/.foundry/bin:/opt/homebrew/opt/postgresql@17/bin:$PATH"`.
+
+- **Repo location:** keep it OUTSIDE iCloud-synced folders (`~/dev/hackathongs/tzw2`). See `reports/handoffs/2026-11-15-recovery.md`.
+- **Backend:** `cd backend && DATABASE_URL="postgres://$USER@localhost/aen_dev" cargo run -p aen-server` (port 8080, migrations run on startup). Tests: `cargo test --workspace` (database `aen_test`; set `TEST_DATABASE_URL` if needed). Regenerate schemas: `cargo run -p aen-core --example export_schemas`.
+- **Frontend:** `cd web && npm ci && npm run dev` (port 3000, backend at `http://localhost:8080/api`). Tests: `npm test`, `npm run build`.
+- **Contracts:** `git submodule update --init && cd contracts && forge test`. Not deployed anywhere yet.
+- **End-to-end demo flow:** TODO once M2 (challenge lifecycle) is merged. Target script: `docs/demo.md`.
 
 ---
 

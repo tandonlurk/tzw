@@ -1,0 +1,103 @@
+{
+  "$defs": {
+    "Edge": {
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "from_port": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "to_port": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "from_port",
+        "to",
+        "to_port"
+      ],
+      "type": "object"
+    },
+    "Node": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "params": {
+          "default": {},
+          "description": "Must satisfy the block's `params_schema`."
+        },
+        "type": {
+          "description": "A block type from the catalog, e.g. `trigger.schedule`.",
+          "type": "string"
+        },
+        "ui": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeUi"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Canvas position, owned by the builder. Stored and returned as-is;\nthe validator ignores it."
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "type": "object"
+    },
+    "NodeUi": {
+      "description": "Presentation only (not money): where the node sits on the canvas.",
+      "properties": {
+        "x": {
+          "format": "double",
+          "type": "number"
+        },
+        "y": {
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "edges": {
+      "items": {
+        "$ref": "#/$defs/Edge"
+      },
+      "type": "array"
+    },
+    "nodes": {
+      "items": {
+        "$ref": "#/$defs/Node"
+      },
+      "type": "array"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "nodes",
+    "edges"
+  ],
+  "title": "Graph",
+  "type": "object"
+}

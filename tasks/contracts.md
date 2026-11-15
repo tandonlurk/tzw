@@ -1,0 +1,54 @@
+# Smart Contracts
+
+- **Objective:** ChallengeEscrow on Arc testnet with tests and deploy docs.
+- **Scope:** contracts/ only. See docs/architecture.md §7, decisions D-3, D-5, D-6, D-15.
+- **Dependencies:** Owner approval of D-3 (custody) before any deploy; Arc facts in docs/research/sponsors.md; Foundry installed.
+- **Assigned agent:** Smart Contracts specialist (branch `contracts`)
+- **Status:** contract, tests, deploy script and README done. Local tests only. Not deployed.
+
+## Files changed
+- `.gitmodules`, `contracts/lib/forge-std` (git submodule, pinned to v1.17.0)
+- `contracts/foundry.toml`, `contracts/.gitignore`, `contracts/.env.example`, `contracts/README.md`
+- `contracts/src/ChallengeEscrow.sol`
+- `contracts/script/Deploy.s.sol`
+- `contracts/test/ChallengeEscrow.t.sol`, `ChallengeEscrow.invariant.t.sol`, `Deploy.t.sol`, `mocks/MockTokens.sol`
+
+## Work completed
+- Escrow: `create`, `deposit`, `resolve`, `resolveVoid`, `refund`, `claim`, `getChallenge`. Interface table and state diagram in `contracts/README.md`.
+- Deploy script reads `USDC_ADDRESS` / `RESOLVER_ADDRESS` from env, key via keystore only, refuses chains other than Arc testnet and local.
+
+## Tests run and results
+- `forge test` (stock forge 1.9, solc 0.8.28, evm prague): 72 passed, 0 failed (69 unit/fuzz, 1 invariant suite with 4 invariants, 2 deploy script).
+- Coverage of `ChallengeEscrow.sol`: 100% lines, 97.6% branches.
+- Not run: `arc-forge test --network arc` (Arc fork not installed), any deployment.
+
+## Decisions made (testnet defaults, for owner review; candidates for docs/decisions.md)
+- `create` is resolver-only; parties consent by depositing themselves.
+- `resolve` allowed any time while Active (before or after `resolveDeadline`) until the timeout refund is used.
+- `resolveVoid` also works before funding completes (backend cancel).
+- `GRACE` = 1 hour, constant.
+- Failed payouts (USDC blocklist) are parked in `owed` and collected with `claim`, instead of reverting. Adds `PayoutDeferred` and `Claimed` events beyond the six in the brief.
+- Resolver is immutable; no transfer.
+- `deposit` requires the balance to rise by exactly `stake` (rejects fee-on-transfer / non-standard tokens).
+- OpenZeppelin not used; a small inline reentrancy lock and low-level token calls were enough.
+
+## Assumptions
+- Stake token is standard USDC. Arc USDC at `0x3600…0000` has bytecode (checked with `eth_getCode` on the public testnet RPC).
+- Deadlines are minutes or longer (Arc timestamps have 1s granularity).
+
+## Blockers
+- D-3 (custody) approval before deploying; Arc Foundry fork install source unverified.
+
+## Unresolved questions
+- Required `evm_version` on Arc; whether stock `forge` can deploy there.
+- Exact failure mode of a transfer to a blocklisted address on Arc (revert vs false). Both are handled.
+
+## Integration requirements
+- After merging: `git submodule update --init --recursive` in each checkout.
+- Backend indexer: handle `PayoutDeferred` (settled, unpaid) and `Claimed`; `Deposited` then `Activated` are emitted in the same tx on the second deposit.
+- Backend must not call `resolve` before the proposition's end time; the contract does not enforce it.
+- Each agent wallet must `approve` the escrow for `stake` before `deposit`.
+
+## Recommended next steps
+- Install `arc-forge`, run the suite with `--network arc`, then deploy to Arc testnet following `contracts/README.md`.
+- Export the ABI (`contracts/out/ChallengeEscrow.sol/ChallengeEscrow.json`) for the backend.

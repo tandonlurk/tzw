@@ -1,0 +1,415 @@
+[
+  {
+    "description": "Runs the flow at a fixed interval.",
+    "inputs": [],
+    "kind": "trigger",
+    "label": "On a schedule",
+    "outputs": [
+      {
+        "data_type": "event",
+        "port": "out"
+      }
+    ],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "every_secs": {
+          "maximum": 86400,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "every_secs"
+      ],
+      "type": "object"
+    },
+    "type": "trigger.schedule"
+  },
+  {
+    "description": "Runs when a market moves by at least the threshold within the window.",
+    "inputs": [],
+    "kind": "trigger",
+    "label": "On a market move",
+    "outputs": [
+      {
+        "data_type": "event",
+        "port": "out"
+      }
+    ],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "symbol": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "threshold_bps": {
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "window_secs": {
+          "maximum": 604800,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "symbol",
+        "threshold_bps",
+        "window_secs"
+      ],
+      "type": "object"
+    },
+    "type": "trigger.market_move"
+  },
+  {
+    "description": "Runs when another agent proposes a challenge to this agent.",
+    "inputs": [],
+    "kind": "trigger",
+    "label": "On a challenge received",
+    "outputs": [
+      {
+        "data_type": "proposal",
+        "port": "out"
+      }
+    ],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "type": "trigger.challenge_received"
+  },
+  {
+    "description": "Assesses the triggering event against the agent's goals and strategy.",
+    "inputs": [
+      {
+        "data_type": "event",
+        "port": "in"
+      }
+    ],
+    "kind": "reasoning",
+    "label": "Evaluate opportunity",
+    "outputs": [
+      {
+        "data_type": "assessment",
+        "port": "out"
+      }
+    ],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "instructions": {
+          "maxLength": 2000,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "type": "reason.evaluate_opportunity"
+  },
+  {
+    "description": "Assesses a received challenge proposal.",
+    "inputs": [
+      {
+        "data_type": "proposal",
+        "port": "in"
+      }
+    ],
+    "kind": "reasoning",
+    "label": "Evaluate proposal",
+    "outputs": [
+      {
+        "data_type": "assessment",
+        "port": "out"
+      }
+    ],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "instructions": {
+          "maxLength": 2000,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "type": "reason.evaluate_proposal"
+  },
+  {
+    "description": "Turns an assessment into explicit, measurable challenge terms.",
+    "inputs": [
+      {
+        "data_type": "assessment",
+        "port": "in"
+      }
+    ],
+    "kind": "reasoning",
+    "label": "Generate proposal",
+    "outputs": [
+      {
+        "data_type": "proposal",
+        "port": "out"
+      }
+    ],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "instructions": {
+          "maxLength": 2000,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "type": "reason.generate_proposal"
+  },
+  {
+    "description": "Passes when the assessment's conviction is at least the minimum.",
+    "inputs": [
+      {
+        "data_type": "assessment",
+        "port": "in"
+      }
+    ],
+    "kind": "condition",
+    "label": "Conviction at least",
+    "outputs": [
+      {
+        "data_type": "assessment",
+        "port": "true"
+      },
+      {
+        "data_type": "assessment",
+        "port": "false"
+      }
+    ],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "min_bps": {
+          "maximum": 10000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "min_bps"
+      ],
+      "type": "object"
+    },
+    "type": "cond.conviction_gte"
+  },
+  {
+    "description": "Passes when the agent's current exposure is at most the maximum. A preference only: the agent's policy is always enforced separately.",
+    "inputs": [
+      {
+        "data_type": "assessment",
+        "port": "in"
+      }
+    ],
+    "kind": "condition",
+    "label": "Exposure within",
+    "outputs": [
+      {
+        "data_type": "assessment",
+        "port": "true"
+      },
+      {
+        "data_type": "assessment",
+        "port": "false"
+      }
+    ],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "max": {
+          "description": "USDC minor units (6 decimals)",
+          "pattern": "^(0|[1-9][0-9]{0,17})$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "max"
+      ],
+      "type": "object"
+    },
+    "type": "cond.exposure_within"
+  },
+  {
+    "description": "Passes when the assessment fits the agent's stated strategy.",
+    "inputs": [
+      {
+        "data_type": "assessment",
+        "port": "in"
+      }
+    ],
+    "kind": "condition",
+    "label": "Matches strategy",
+    "outputs": [
+      {
+        "data_type": "assessment",
+        "port": "true"
+      },
+      {
+        "data_type": "assessment",
+        "port": "false"
+      }
+    ],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "type": "cond.matches_strategy"
+  },
+  {
+    "description": "Passes when the proposal's stake is at most the maximum.",
+    "inputs": [
+      {
+        "data_type": "proposal",
+        "port": "in"
+      }
+    ],
+    "kind": "condition",
+    "label": "Stake at most",
+    "outputs": [
+      {
+        "data_type": "proposal",
+        "port": "true"
+      },
+      {
+        "data_type": "proposal",
+        "port": "false"
+      }
+    ],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "max": {
+          "description": "USDC minor units (6 decimals)",
+          "pattern": "^(0|[1-9][0-9]{0,17})$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "max"
+      ],
+      "type": "object"
+    },
+    "type": "cond.stake_lte"
+  },
+  {
+    "description": "Proposes the challenge to a counterparty.",
+    "inputs": [
+      {
+        "data_type": "proposal",
+        "port": "in"
+      }
+    ],
+    "kind": "action",
+    "label": "Propose challenge",
+    "outputs": [],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "type": "action.propose_challenge"
+  },
+  {
+    "description": "Accepts the assessed proposal.",
+    "inputs": [
+      {
+        "data_type": "assessment",
+        "port": "in"
+      }
+    ],
+    "kind": "action",
+    "label": "Accept",
+    "outputs": [],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "type": "action.accept"
+  },
+  {
+    "description": "Responds to the assessed proposal with different terms.",
+    "inputs": [
+      {
+        "data_type": "assessment",
+        "port": "in"
+      }
+    ],
+    "kind": "action",
+    "label": "Counter-offer",
+    "outputs": [],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "type": "action.counter"
+  },
+  {
+    "description": "Declines and ends the flow.",
+    "inputs": [
+      {
+        "data_type": "any",
+        "port": "in"
+      }
+    ],
+    "kind": "action",
+    "label": "Reject",
+    "outputs": [],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "maxLength": 500,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "type": "action.reject"
+  },
+  {
+    "description": "Sends the proposal or assessment to the owner for a decision.",
+    "inputs": [
+      {
+        "data_type": "any",
+        "port": "in"
+      }
+    ],
+    "kind": "action",
+    "label": "Ask owner",
+    "outputs": [],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "maxLength": 500,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "type": "action.request_approval"
+  }
+]
