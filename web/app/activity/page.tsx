@@ -1,17 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 import { Async, Empty, formatTs } from "@/components/ui";
 
 export default function ActivityPage() {
-  const activity = useAsync(() => api.listActivity({ limit: 100 }), "activity");
+  const activity = useAsync(() => api.listActivity({ limit: 200 }), "activity");
   const agents = useAsync(api.listAgents, "agents");
   const names = new Map((agents.data ?? []).map((a) => [a.id, a.name]));
 
   return (
     <div>
-      <div className="page-head"><div><h1>Activity</h1><div className="dim">Newest first.</div></div></div>
+      <div className="page-head"><div><h1>Activity</h1><div className="dim">Newest first. Open Details for the raw record.</div></div>
+        <button className="sm" onClick={() => activity.reload()}>Refresh</button></div>
       <Async state={activity} what="activity">
         {(items) =>
           items.length === 0 ? (
@@ -25,8 +27,9 @@ export default function ActivityPage() {
                     <span className="dim">{formatTs(it.ts)}</span>
                   </div>
                   <div className="row dim" style={{ fontSize: ".8rem" }}>
-                    <span className="badge neutral">{it.kind}</span>
-                    {it.agent_id && <span>{names.get(it.agent_id) ?? it.agent_id}</span>}
+                    <span className="badge neutral">{it.kind.replace(/_/g, " ")}</span>
+                    {it.agent_id && <Link href={`/agents/${it.agent_id}`}>{names.get(it.agent_id) ?? it.agent_id}</Link>}
+                    {it.interaction_id && <Link href={`/interactions/${it.interaction_id}`}>challenge</Link>}
                   </div>
                   {it.detail && (
                     <details style={{ marginTop: ".4rem" }}>

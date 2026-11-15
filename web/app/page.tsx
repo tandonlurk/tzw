@@ -5,6 +5,8 @@ import { api, type Agent, type Env } from "@/lib/api";
 import { sumMoney } from "@/lib/money";
 import { useAsync } from "@/lib/useAsync";
 import { Async, Empty, EnvBadge, Money, Tile } from "@/components/ui";
+import { PortfolioCharts } from "@/components/PortfolioCharts";
+import { DevTick } from "@/components/DevTick";
 
 function byEnv(agents: Agent[]) {
   const envs = Array.from(new Set(agents.map((a) => a.env))) as Env[];
@@ -25,10 +27,15 @@ function byEnv(agents: Agent[]) {
 export default function Dashboard() {
   const agents = useAsync(api.listAgents, "agents");
   const wallet = useAsync(api.getWallet, "wallet");
+  const portfolio = useAsync(api.getPortfolio, "portfolio");
+  const reloadAll = () => { agents.reload(); wallet.reload(); portfolio.reload(); };
 
   return (
     <div>
-      <div className="page-head"><div><h1>Dashboard</h1><div className="dim">Totals computed from your agents and wallet.</div></div></div>
+      <div className="page-head"><div><h1>Dashboard</h1><div className="dim">Totals computed from your agents and wallet.</div></div><DevTick onDone={reloadAll} /></div>
+
+      <h2>Challenges and performance</h2>
+      <Async state={portfolio} what="portfolio">{(p) => <PortfolioCharts p={p} />}</Async>
 
       <h2>Wallet</h2>
       <Async state={wallet} what="wallet">
