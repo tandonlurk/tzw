@@ -332,3 +332,360 @@ impl MarketData for GeminiClient {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! No test here reaches the internet: the client talks to a local server
+    //! that replays bodies captured from the live API on 2026-11-15 (trimmed
+    //! to the fields this client reads, plus a few it must ignore).
+
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    use aen_core::challenge::{FormulaId, MarketRef};
+    use axum::Router;
+    use axum::extract::{Path, Query, State};
+    use axum::http::StatusCode;
+    use axum::routing::get;
+
+    use super::*;
+    use crate::market::{discover, observe};
+
+    const TICKER: &str = r#"{"bid":"65016.06000","ask":"65016.07000","last":"65029.83000","volume":{"BTC":"306.59686938","USD":"19937942.2943136054","timestamp":1794775740000}}"#;
+    const CANDLES: &str = "[[1794775680000,64993.3,65033.76,64993.3,65033.76,0.09677628],[1794775620000,64962.62,64993.3,64962.62,64993.3,0.00747382],[1794772080000,63758.59,63760,63750.1,63758.59,0.5]]";
+    const OPEN_EVENT: &str = r##"{"id":"461869","title":"HYPE price on November 15","slug":"hype-price-on-november-15","type":"categorical","category":"Crypto","ticker":"HYPE2611152200","status":"active","createdAt":"2026-11-14T20:56:28.719Z","contracts":[{"id":"461869-1148971","label":"$59 or above","description":{"data":{},"content":[]},"prices":{"buy":{"yes":"0.99","no":"0.05"},"sell":{"yes":"0.95","no":"0.01"},"bestBid":"0.95","lastTradePrice":"0.99"},"status":"active","ticker":"HI59","instrumentSymbol":"GEMI-HYPE2611152200-HI59","marketState":"open","expiryDate":"2026-11-15T22:00:00.000Z","strike":{"type":"above","value":"59"},"source":"LS-LRRR-HYPE22USD","isCombo":false},{"id":"461869-1148977","label":"$65 or above","prices":{"buy":{"yes":"0.58","no":"0.45"},"sell":{"yes":"0.55","no":"0.42"},"bestBid":"0.55","bestAsk":"0.58","lastTradePrice":"0.56"},"status":"active","ticker":"HI65","instrumentSymbol":"GEMI-HYPE2611152200-HI65","marketState":"open","expiryDate":"2026-11-15T22:00:00.000Z","strike":{"type":"above","value":"65"}}],"isLive":true,"volume":"30028.86","expiryDate":"2026-11-15T22:00:00.000Z","startTime":"2026-11-14T21:00:00.000Z","sourceDetails":{"agency":"lukka","index":"LS-LRRR-HYPE22USD"}}"##;
+    const SETTLED_EVENT: &str = r##"{"id":"466649","title":"XRP price today at 3:45pm EST","type":"binary","category":"Crypto","ticker":"XRP15M2611152045","status":"settled","contracts":[{"id":"466649-1164264","label":"Up","prices":{"buy":{},"sell":{}},"status":"settled","ticker":"UP","instrumentSymbol":"GEMI-XRP15M2611152045-UP","marketState":"closed","expiryDate":"2026-11-15T20:45:00.000Z","resolutionSide":"yes","resolvedAt":"2026-11-15T20:45:05.897Z","strike":{"type":"reference","value":"0.95996973755","availableAt":"2026-11-15T20:30:00.000Z"},"settlementValue":"0.9625122158833334"}],"resolvedAt":"2026-11-15T20:45:05.897Z","expiryDate":"2026-11-15T20:45:00.000Z","settlement":{"value":"0.9625122158833334"}}"##;
+
+    #[derive(Default)]
+    struct Hits {
+        flaky: AtomicU32,
+        down: AtomicU32,
+        missing: AtomicU32,
+        last_query: std::sync::Mutex<HashMap<String, String>>,
+    }
+
+    async fn ticker_route(
+        State(hits): State<Arc<Hits>>,
+        Path(symbol): Path<String>,
+    ) -> (StatusCode, String) {
+        match symbol.as_str() {
+            "btcusd" => (StatusCode::OK, TICKER.into()),
+            // Fails twice, then answers.
+            "flaky" => {
+                if hits.flaky.fetch_add(1, Ordering::SeqCst) < 2 {
+                    (StatusCode::INTERNAL_SERVER_ERROR, "oops".into())
+                } else {
+                    (StatusCode::OK, TICKER.into())
+                }
+            }
+            "down" => {
+                hits.down.fetch_add(1, Ordering::SeqCst);
+                (StatusCode::SERVICE_UNAVAILABLE, "maintenance".into())
+            }
+            "slow" => {
+                tokio::time::sleep(Duration::from_millis(400)).await;
+                (StatusCode::OK, TICKER.into())
+            }
+            "garbage" => (StatusCode::OK, "<html>not json</html>".into()),
+            "badprice" => (
+                StatusCode::OK,
+                r#"{"bid":"1","ask":"1","last":"NaN"}"#.into(),
+            ),
+            other => {
+                hits.missing.fetch_add(1, Ordering::SeqCst);
+                // The live API answers plain text here.
+                (
+                    StatusCode::NOT_FOUND,
+                    format!("'{other}' does not have available data yet"),
+                )
+            }
+        }
+    }
+
+    async fn events_route(
+        State(hits): State<Arc<Hits>>,
+        Query(query): Query<HashMap<String, String>>,
+    ) -> String {
+        *hits.last_query.lock().unwrap() = query;
+        format!(r#"{{"data":[{OPEN_EVENT}],"pagination":{{"limit":20,"offset":0,"total":1}}}}"#)
+    }
+
+    async fn event_route(Path(ticker): Path<String>) -> (StatusCode, String) {
+        match ticker.as_str() {
+            "HYPE2611152200" => (StatusCode::OK, OPEN_EVENT.into()),
+            "XRP15M2611152045" => (StatusCode::OK, SETTLED_EVENT.into()),
+            _ => (
+                StatusCode::NOT_FOUND,
+                r#"{"error": "Event not found"}"#.into(),
+            ),
+        }
+    }
+
+    /// Starts the stand-in server and a client with short timings.
+    async fn server() -> (GeminiClient, Arc<Hits>) {
+        let hits = Arc::new(Hits::default());
+        let app = Router::new()
+            .route("/v1/pubticker/{symbol}", get(ticker_route))
+            .route("/v2/candles/{symbol}/{frame}", get(|| async { CANDLES }))
+            .route("/v1/prediction-markets/events", get(events_route))
+            .route("/v1/prediction-markets/events/{ticker}", get(event_route))
+            .with_state(hits.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let client = GeminiClient::with_options(
+            &base,
+            Duration::from_millis(150),
+            3,
+            Duration::from_millis(5),
+        )
+        .unwrap();
+        (client, hits)
+    }
+
+    #[test]
+    fn parses_observed_shapes_without_floats() {
+        let t = parse_ticker(TICKER).unwrap();
+        assert_eq!(
+            (t.bid, t.ask, t.last),
+            (65_016_060_000, 65_016_070_000, 65_029_830_000)
+        );
+
+        let c = parse_candles(CANDLES).unwrap();
+        assert_eq!(c.len(), 3);
+        assert_eq!(c[0].ts_ms, 1_794_775_680_000);
+        assert_eq!((c[0].open, c[0].close), (64_993_300_000, 65_033_760_000));
+
+        let e = parse_event(OPEN_EVENT).unwrap();
+        assert_eq!(
+            (e.ticker.as_str(), e.category.as_str(), e.status.as_str()),
+            ("HYPE2611152200", "Crypto", "active")
+        );
+        assert_eq!(e.expiry_ts, Some(1_794_780_000));
+        assert_eq!(e.contracts.len(), 2);
+        assert_eq!(e.contracts[0].instrument_symbol, "GEMI-HYPE2611152200-HI59");
+        assert_eq!(e.contracts[0].last_trade_price_bps, Some(9900));
+        assert_eq!(e.contracts[0].market_state.as_deref(), Some("open"));
+        assert_eq!(e.contracts[1].last_trade_price_bps, Some(5600));
+
+        let s = parse_event(SETTLED_EVENT).unwrap();
+        assert_eq!(s.contracts[0].resolution_side.as_deref(), Some("yes"));
+        // A settled contract has empty price objects: no price, not zero.
+        assert_eq!(s.contracts[0].last_trade_price_bps, None);
+
+        let list = format!(r#"{{"data":[{OPEN_EVENT},{SETTLED_EVENT}]}}"#);
+        assert_eq!(parse_event_list(&list).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn malformed_bodies_are_decode_errors() {
+        for bad in [
+            "",
+            "[]",
+            r#"{"bid":"1"}"#,
+            r#"{"bid":"1","ask":"1","last":"1e5"}"#,
+        ] {
+            assert!(
+                matches!(parse_ticker(bad), Err(MarketError::Decode(_))),
+                "{bad}"
+            );
+        }
+        assert!(parse_candles("[[1,2]]").is_err());
+        assert!(parse_candles(r#"[["a",1,2,3,4,5]]"#).is_err());
+        assert!(parse_event(r#"{"ticker":"X"}"#).is_err());
+        let over = OPEN_EVENT.replace(r#""lastTradePrice":"0.99""#, r#""lastTradePrice":"1.50""#);
+        assert!(matches!(parse_event(&over), Err(MarketError::Decode(_))));
+        let bad_date = OPEN_EVENT.replace("2026-11-15T22:00:00.000Z", "tomorrow");
+        assert!(parse_event(&bad_date).is_err());
+    }
+
+    #[tokio::test]
+    async fn reads_spot_and_prediction_markets_over_http() {
+        let (client, hits) = server().await;
+        assert_eq!(
+            client.spot_ticker("BTCUSD").await.unwrap().last,
+            65_029_830_000
+        );
+        assert_eq!(
+            client
+                .spot_candles("btcusd", TimeFrame::OneMinute)
+                .await
+                .unwrap()
+                .len(),
+            3
+        );
+
+        let query = EventQuery {
+            search: Some("HYPE".into()),
+            category: Some("Crypto".into()),
+            status: Some("active".into()),
+            limit: 20,
+        };
+        let events = client.list_events(&query).await.unwrap();
+        assert_eq!(events.len(), 1);
+        let sent = hits.last_query.lock().unwrap().clone();
+        assert_eq!(sent["search"], "HYPE");
+        assert_eq!(sent["category"], "Crypto");
+        assert_eq!(sent["status"], "active");
+        assert_eq!(sent["limit"], "20");
+
+        let event = client.get_event("XRP15M2611152045").await.unwrap();
+        assert_eq!(event.status, "settled");
+    }
+
+    #[tokio::test]
+    async fn discovery_and_resolution_work_on_real_shapes() {
+        let (client, _) = server().await;
+        // The contested contract (0.56) is chosen over the one-sided one (0.99).
+        let view = discover(&client, "hypeusd", 3600, 1_794_700_000)
+            .await
+            .unwrap();
+        assert_eq!(
+            view.market,
+            MarketRef::GeminiPredictionContract {
+                event_ticker: "HYPE2611152200".into(),
+                instrument_symbol: "GEMI-HYPE2611152200-HI65".into(),
+            }
+        );
+        assert_eq!(view.title, "HYPE price on November 15: $65 or above");
+        assert_eq!((view.value, view.source.as_str()), (5600, "gemini"));
+        // 63758.59 -> 65033.76 over the hour.
+        assert_eq!(view.move_bps, 199);
+        assert_eq!(view.fallback_reason, None);
+
+        // An event that expires before the challenge could be funded is not
+        // used: discovery falls back to the spot price and says why.
+        let view = discover(&client, "btcusd", 3600, 1_794_780_001)
+            .await
+            .unwrap();
+        assert_eq!(
+            view.market,
+            MarketRef::GeminiSpot {
+                symbol: "btcusd".into()
+            }
+        );
+        assert_eq!(view.value, 65_029_830_000);
+        assert!(view.fallback_reason.is_some());
+    }
+
+    #[tokio::test]
+    async fn observes_open_price_and_published_resolution() {
+        let (client, _) = server().await;
+        let open = MarketRef::GeminiPredictionContract {
+            event_ticker: "HYPE2611152200".into(),
+            instrument_symbol: "GEMI-HYPE2611152200-HI65".into(),
+        };
+        let obs = observe(&client, &open, FormulaId::PmYesPriceBpsV1)
+            .await
+            .unwrap();
+        assert_eq!((obs.value, obs.source), (5600, "gemini"));
+
+        let settled = MarketRef::GeminiPredictionContract {
+            event_ticker: "XRP15M2611152045".into(),
+            instrument_symbol: "GEMI-XRP15M2611152045-UP".into(),
+        };
+        let obs = observe(&client, &settled, FormulaId::PmYesPriceBpsV1)
+            .await
+            .unwrap();
+        assert_eq!(obs.value, 10_000);
+
+        let unknown_contract = MarketRef::GeminiPredictionContract {
+            event_ticker: "HYPE2611152200".into(),
+            instrument_symbol: "GEMI-HYPE2611152200-NOPE".into(),
+        };
+        let err = observe(&client, &unknown_contract, FormulaId::PmYesPriceBpsV1)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, MarketError::NoData(_)));
+
+        let spot = MarketRef::GeminiSpot {
+            symbol: "btcusd".into(),
+        };
+        let obs = observe(&client, &spot, FormulaId::SpotLastPriceMicrosV1)
+            .await
+            .unwrap();
+        assert_eq!(obs.value, 65_029_830_000);
+    }
+
+    #[tokio::test]
+    async fn transient_failures_are_retried_with_backoff() {
+        let (client, hits) = server().await;
+        // Two 500s, then success on the third and last attempt.
+        assert_eq!(
+            client.spot_ticker("flaky").await.unwrap().last,
+            65_029_830_000
+        );
+        assert_eq!(hits.flaky.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn persistent_failures_surface_after_the_last_attempt() {
+        let (client, hits) = server().await;
+        assert_eq!(
+            client.spot_ticker("down").await.unwrap_err(),
+            MarketError::Http(503)
+        );
+        assert_eq!(hits.down.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn not_found_is_not_retried() {
+        let (client, hits) = server().await;
+        assert_eq!(
+            client.spot_ticker("nopeusd").await.unwrap_err(),
+            MarketError::NotFound
+        );
+        assert_eq!(hits.missing.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            client.get_event("NOPE123").await.unwrap_err(),
+            MarketError::NotFound
+        );
+    }
+
+    #[tokio::test]
+    async fn slow_and_malformed_answers_are_errors() {
+        let (client, _) = server().await;
+        assert_eq!(
+            client.spot_ticker("slow").await.unwrap_err(),
+            MarketError::Timeout
+        );
+        assert!(matches!(
+            client.spot_ticker("garbage").await,
+            Err(MarketError::Decode(_))
+        ));
+        assert!(matches!(
+            client.spot_ticker("badprice").await,
+            Err(MarketError::Decode(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn unreachable_host_and_bad_identifiers_are_errors() {
+        // Port 9 (discard) on loopback: connection refused, no internet.
+        let client = GeminiClient::with_options(
+            "http://127.0.0.1:9",
+            Duration::from_millis(150),
+            2,
+            Duration::from_millis(1),
+        )
+        .unwrap();
+        let err = client.spot_ticker("btcusd").await.unwrap_err();
+        assert!(
+            matches!(err, MarketError::Transport(_) | MarketError::Timeout),
+            "{err:?}"
+        );
+
+        let (client, _) = server().await;
+        for bad in ["", "btc/usd", "../v1/order", "btc usd", "btc?x=1"] {
+            assert!(
+                matches!(client.spot_ticker(bad).await, Err(MarketError::NoData(_))),
+                "{bad}"
+            );
+            assert!(
+                matches!(client.get_event(bad).await, Err(MarketError::NoData(_))),
+                "{bad}"
+            );
+        }
+    }
+}
