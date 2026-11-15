@@ -110,7 +110,7 @@ async fn ledger_and_versions_are_append_only_at_the_database_level() {
         assert!(sqlx::query(sql).execute(&c.pool).await.is_err(), "{sql} must be refused");
     }
     // Direct forged insert that does not balance is not stopped by the DB
-    // (balance is enforced in application code only): documented as SEC-04.
+    // (balance is enforced in application code only): documented as SEC-08.
 }
 
 #[tokio::test]

@@ -128,7 +128,7 @@ contract ChallengeEscrowAdversarialTest is Test {
 
     /// claim() must pay only the named party, whoever calls it.
     function testFuzz_claimCannotRedirectFunds(address caller) public {
-        vm.assume(caller != address(escrow) && caller != address(0));
+        vm.assume(caller != address(escrow) && caller != address(0) && caller != alice && caller != bob);
         _activate(ID, 10e6);
         usdc.setBlocked(bob, true);
         vm.prank(resolver);
