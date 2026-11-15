@@ -28,6 +28,8 @@ export interface GraphNode {
   id: string;
   type: string;
   params: Record<string, unknown>;
+  /** Optional canvas position, persisted by the backend. */
+  ui?: { x: number; y: number };
 }
 
 export interface GraphEdge {

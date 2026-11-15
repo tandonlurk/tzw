@@ -6,6 +6,7 @@ import type {
   AgentInput,
   AgentPolicy,
   ApiError,
+  GraphError,
   BlockDef,
   Graph,
   InteractionType,
@@ -98,15 +99,38 @@ function toInput(s: FormState, graph: Graph): { input?: AgentInput; errors: Reco
   return { input: { name: s.name.trim(), description: s.description, config, policy, graph }, errors };
 }
 
-/** Map server 422 details to field paths. Unmatched details stay in the top banner. */
+function detailPath(d: unknown): string | null {
+  if (!d || typeof d !== "object") return null;
+  const o = d as Record<string, unknown>;
+  const f = typeof o.path === "string" ? o.path : typeof o.field === "string" ? o.field : null;
+  return f ? f.replace(/^\$?\.?/, "") : null;
+}
+
+function detailMessage(d: unknown): string {
+  const o = d as Record<string, unknown>;
+  const code = typeof o.code === "string" ? `${o.code}: ` : "";
+  return typeof o.message === "string" ? code + o.message : detailText(d);
+}
+
+/** Map server 422 details (path like "policy.max_per_interaction") to form fields. graph.* details go to the builder. */
 function serverFieldErrors(err: ApiError | null): Record<string, string> {
-  const out: Record<string, string> = {};
+  const acc: Record<string, string[]> = {};
   for (const d of err?.details ?? []) {
-    if (d && typeof d === "object") {
-      const o = d as Record<string, unknown>;
-      const f = typeof o.field === "string" ? o.field : typeof o.path === "string" ? o.path : null;
-      if (f) out[f.replace(/^\$?\.?/, "")] = detailText(d).replace(/^[^:]*: /, "");
-    }
+    const f = detailPath(d);
+    if (f && !f.startsWith("graph")) (acc[f] ??= []).push(detailMessage(d));
+  }
+  return Object.fromEntries(Object.entries(acc).map(([k, v]) => [k, v.join("; ")]));
+}
+
+/** graph.nodes.<id> -> node error; any other graph path -> graph-level error. */
+export function serverGraphErrors(err: ApiError | null): GraphError[] {
+  const out: GraphError[] = [];
+  for (const d of err?.details ?? []) {
+    const f = detailPath(d);
+    if (!f || !f.startsWith("graph")) continue;
+    const m = /^graph\.nodes\.([^.]+)/.exec(f);
+    const o = d as Record<string, unknown>;
+    out.push({ code: String(o.code ?? "invalid"), message: String(o.message ?? ""), node_id: m ? m[1] : null });
   }
   return out;
 }
@@ -218,8 +242,7 @@ export function AgentForm({ blocks, initial, storageId, submitLabel, onSubmit, s
         <div className="dim" style={{ marginBottom: ".5rem" }}>
           Blocks express your preferences. They are not security: the policy above is enforced regardless of this graph.
         </div>
-        <GraphBuilder blocks={blocks} initialGraph={initial.graph} storageId={storageId} onChange={setGraph} />
-        {fieldErrs["graph"] && <div className="field-error">{fieldErrs["graph"]}</div>}
+        <GraphBuilder blocks={blocks} initialGraph={initial.graph} storageId={storageId} onChange={setGraph} serverErrors={serverGraphErrors(serverError)} />
       </fieldset>
 
       <div className="row">
