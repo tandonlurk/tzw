@@ -6,6 +6,7 @@ import type {
   AgentInput,
   AgentPolicy,
   ApiError,
+  GraphError,
   BlockDef,
   Graph,
   InteractionType,
