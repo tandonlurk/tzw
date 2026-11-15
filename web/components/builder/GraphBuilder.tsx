@@ -37,6 +37,8 @@ interface Props {
   /** localStorage key for UI-only node positions: the agent id, or "new". */
   storageId: string;
   onChange: (graph: Graph) => void;
+  /** Errors from a rejected save (422), shown until the next Validate. */
+  serverErrors?: GraphError[];
 }
 
 export function GraphBuilder(props: Props) {
@@ -47,7 +49,7 @@ export function GraphBuilder(props: Props) {
   );
 }
 
-function Inner({ blocks, initialGraph, storageId, onChange }: Props) {
+function Inner({ blocks, initialGraph, storageId, onChange, serverErrors }: Props) {
   const blockMap = useMemo(() => new Map(blocks.map((b) => [b.type, b])), [blocks]);
   const rf = useReactFlow<FlowNode, Edge>();
 
@@ -151,12 +153,13 @@ function Inner({ blocks, initialGraph, storageId, onChange }: Props) {
     }
   }
 
+  const shownErrors = validation === "idle" ? (serverErrors ?? []) : errors;
   const errorsByNode = useMemo(() => {
     const m: Record<string, string[]> = {};
-    for (const e of errors) if (e.node_id) (m[e.node_id] ??= []).push(`${e.code}: ${e.message}`);
+    for (const e of shownErrors) if (e.node_id) (m[e.node_id] ??= []).push(`${e.code}: ${e.message}`);
     return m;
-  }, [errors]);
-  const graphErrors = errors.filter((e) => !e.node_id);
+  }, [shownErrors]);
+  const graphErrors = shownErrors.filter((e) => !e.node_id);
 
   const ctx = useMemo(() => ({ blocks: blockMap, errors: errorsByNode, setParams, remove }), [blockMap, errorsByNode, setParams, remove]);
 

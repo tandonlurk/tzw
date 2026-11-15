@@ -34,7 +34,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [x] `core`: behavior-graph schema + validator, JSON Schema export (backend, P0)
 - [x] Postgres schema + migrations; agent CRUD with versioned config/policy/graph; templates. 101 Rust tests pass (backend, P0)
 - [x] `ChallengeEscrow.sol` + Foundry tests: 72 passing, local only, not deployed (contracts, P0)
-- [~] Web shell, pages, creation form and basic builder: build/lint/15 unit tests passed before the data loss; NOT yet tested against the real backend (frontend, P0)
+- [x] Web shell, pages, creation form and basic builder: 15 unit tests, lint, build pass; browser-tested against the real backend 2026-11-15 (`reports/qa-m1.md`). Not browser-tested: add/connect blocks, incompatible-connection rejection (frontend, P0)
 
 ## M2 — Economic interaction (Mon Nov 16)
 
@@ -55,8 +55,10 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 ## M4 — QA and security (Tue–Wed, continuous)
 
-- [ ] Permission-engine and ledger failure-case tests; contract fuzz tests (qa, P0)
-- [ ] Threat model: keys, webhook auth, LLM output validation, agent/user isolation → `docs/security/` (qa, P0)
+- [x] Permission-engine and ledger failure-case tests; contract fuzz tests: +35 Rust, +8 Foundry adversarial tests, findings in `reports/security-m1.md` (qa, P0)
+- [x] Threat model → `docs/security/threat-model.md` (webhook, sandbox, custody are design-level only: features not built) (qa, P0)
+- [~] Fix SEC-01 (CSRF, POST ignores Content-Type) and SEC-03 (double settle) in backend: routed to backend-m2 (backend, P0)
+- [ ] SEC-04/SEC-07 cap escrow `resolveDeadline` before first Arc deploy; SEC-02 auth + Host check before exposing any tunnel (contracts/backend, P1)
 
 ## M5 — Custom-code agents (Tue eve – Wed Nov 18) — committed, not optional
 

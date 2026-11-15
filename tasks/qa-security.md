@@ -4,7 +4,7 @@
 - **Scope:** Tests across modules; docs/security/.
 - **Dependencies:** M1 code exists.
 - **Assigned agent:** QA / Security specialist (branch `qa`)
-- **Status:** not started
+- **Status:** M1 pass done on branch `security-tests` (see log); sandbox/webhook tests wait for those features
 
 ## Files changed
 
@@ -22,3 +22,10 @@
 
 ## Recommended next steps
 - Start with authorize() and ledger invariants, then contract fuzzing, then webhook and sandbox.
+
+## Log (security-tests branch)
+- core/tests/adversarial_authorize.rs: 14 tests pass (boundaries, overflow, random allow-invariant, money parsing).
+- server/tests/adversarial_api.rs (11) + adversarial_integrity.rs (4) pass; db aen_sec_test. No real bug found in allocate concurrency. Next: contracts adversarial, threat model, report.
+- contracts/test/ChallengeEscrow.Adversarial.t.sol 8 pass. SEC-01 (CSRF text/plain) repro ignored test in adversarial_integrity.rs. Next: threat-model.md, reports/security-m1.md, cleanup.
+- DONE: threat-model.md, reports/security-m1.md. Totals: cargo 138 pass + 1 ignored (SEC-01); forge 80 pass.
+- Next: when M2 lands, re-test SEC-03 (settle per interaction); write webhook signature/replay tests and sandbox escape tests when those exist; run escrow tests under arc-forge.

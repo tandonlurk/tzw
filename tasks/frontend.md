@@ -4,7 +4,7 @@
 - **Scope:** web/ only. No financial logic. Palette in AGENTS.md 4.4 as CSS variables.
 - **Dependencies:** `docs/api.md` (v0).
 - **Assigned agent:** Frontend / UI specialist (branch `frontend`)
-- **Status:** M1 done against the contract, verified only against a dev mock (real backend not yet available)
+- **Status:** M1 done against the contract, verified against the real backend (see reports/qa-m1.md)
 
 ## Files changed
 `web/` (new). Key: `lib/api`, `lib/money.ts`, `lib/graph.ts`, `components/builder/*`, `components/AgentForm.tsx`, `app/**`, `scripts/dev-mock-server.mjs` (throwaway).
@@ -34,3 +34,7 @@ Real backend not run yet.
 
 ## Recommended next steps
 Run against the real backend; charts (M2); approvals and interactions views.
+
+## QA against real backend (qa-web)
+- Positions now via node `ui {x,y}` (localStorage fallback). 422 graph paths mapped to nodes. Report: `reports/qa-m1.md`.
+- Not browser-tested: add/connect/incompatible connection (unit-tested only).

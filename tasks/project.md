@@ -12,7 +12,12 @@ Lead-owned. `TODO.md` is the user-facing list; this file holds status detail, ri
 
 Token discipline: read sections, not whole files; delegate web research and bulk implementation to subagents (cheaper model for routine work) with reports capped at ~200 words; keep facts in `docs/`, not in conversation.
 
-## Status (2026-11-14, Sat)
+## Status (2026-11-15, Sun)
+
+- Phase: **M1 done (web unverified), M2 in progress.** Three specialists running in worktrees: `qa-web`, `backend-m2`, `security-tests`. Live state and resume steps: `reports/handoffs/2026-11-15-m2-orchestration.md`.
+- Default branch `recovery`; baseline backend 101 / contracts 72 tests pass.
+
+## Status (2026-11-14, Sat) — historical
 
 - Phase: **M0 planning. Awaiting owner approval before implementation.**
 - Repo: empty apart from `AGENTS.md`. Branch `planning` holds the planning docs.
@@ -66,3 +71,4 @@ Interfaces between specialists: the REST API in `docs/architecture.md` §9, the 
 ## Log
 
 - 2026-11-14: Kickoff. Inspected repo and machine. Launched two research tasks. Wrote architecture, decisions, TODO, trackers.
+- 2026-11-15: Recovery from iCloud data loss (see handoff). Verified baseline; launched qa-web, backend-m2, security-tests in `~/dev/hackathongs/worktrees/`.

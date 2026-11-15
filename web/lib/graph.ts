@@ -1,6 +1,6 @@
 // Pure helpers for the visual builder: contract Graph <-> canvas state. No React here.
 // React Flow's own object is never persisted; only the contract's Graph is sent to the backend.
-// Node positions are UI-only (the contract Graph has no position field) and live in localStorage.
+// Node positions travel in the contract's optional per-node `ui: {x, y}`; localStorage is only a fallback for graphs without it.
 
 import type { BlockDef, Graph, GraphEdge, GraphNode } from "./api";
 
@@ -59,7 +59,7 @@ export function graphToCanvas(graph: Graph, positions: PositionMap): { nodes: Ca
       id: n.id,
       type: n.type,
       params: { ...n.params },
-      position: positions[n.id] ?? fallback[n.id],
+      position: n.ui ? { x: n.ui.x, y: n.ui.y } : (positions[n.id] ?? fallback[n.id]),
     })),
     edges: graph.edges.map((e) => ({
       source: e.from,
@@ -73,7 +73,7 @@ export function graphToCanvas(graph: Graph, positions: PositionMap): { nodes: Ca
 export function canvasToGraph(nodes: CanvasNode[], edges: CanvasEdge[]): Graph {
   return {
     schema_version: 1,
-    nodes: nodes.map((n) => ({ id: n.id, type: n.type, params: n.params })),
+    nodes: nodes.map((n) => ({ id: n.id, type: n.type, params: n.params, ui: { x: n.position.x, y: n.position.y } })),
     edges: edges.map((e) => ({ from: e.source, from_port: e.sourceHandle, to: e.target, to_port: e.targetHandle })),
   };
 }
