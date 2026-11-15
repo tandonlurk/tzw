@@ -174,3 +174,28 @@ async fn status_endpoint_rejects_unknown_values() {
         assert!(s.is_client_error(), "{body} -> {s}");
     }
 }
+
+/// CSRF: `ApiJson` reads the body bytes and ignores Content-Type, so a hostile web page can make the
+/// user's browser send a "simple" cross-origin POST (`text/plain`, no preflight) that mutates state.
+/// CORS only stops the page from READING the response. Expected secure behaviour: reject non-JSON
+/// content types with 415.
+#[tokio::test]
+#[ignore = "BUG SEC-01: POST endpoints accept text/plain bodies, so cross-site forms can move (simulated) funds without a CORS preflight"]
+async fn state_changing_posts_must_require_a_json_content_type() {
+    let c = setup().await;
+    for ct in ["text/plain", "application/x-www-form-urlencoded", "multipart/form-data; boundary=x"] {
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/wallet/simulated-deposit")
+            .header("content-type", ct)
+            .header("origin", "https://evil.example")
+            .body(Body::from(r#"{"amount":"1000000"}"#))
+            .unwrap();
+        let (s, _) = raw(&c.app, req).await;
+        assert_eq!(s, StatusCode::UNSUPPORTED_MEDIA_TYPE, "content-type {ct} was accepted: {s}");
+    }
+    // no Content-Type at all
+    let req = Request::builder().method("POST").uri("/api/wallet/simulated-deposit")
+        .body(Body::from(r#"{"amount":"1000000"}"#)).unwrap();
+    assert_eq!(raw(&c.app, req).await.0, StatusCode::UNSUPPORTED_MEDIA_TYPE);
+}
