@@ -18,7 +18,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [?] D-11 custom code = JavaScript in a Wasmtime/QuickJS sandbox
 - [?] D-17 main track "Agentic Payments & AI" + Arc award + all bounties
 - [?] Ask at sponsor office hours (Nov 16-19): what "Grok Bot" means for the xAI bounty
-- [?] Push to GitHub (`origin` = tandonlurk/tzw): not done yet, ask when ready
+- [x] Pushed to GitHub `tandonlurk/tzw`; `recovery` is the default branch. Repo is PUBLIC: make it private if you do not want the docs visible
 
 ## M0 — Planning and research (Sat Nov 14)
 
