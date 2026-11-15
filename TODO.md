@@ -55,8 +55,10 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 ## M4 — QA and security (Tue–Wed, continuous)
 
-- [ ] Permission-engine and ledger failure-case tests; contract fuzz tests (qa, P0)
-- [ ] Threat model: keys, webhook auth, LLM output validation, agent/user isolation → `docs/security/` (qa, P0)
+- [x] Permission-engine and ledger failure-case tests; contract fuzz tests: +35 Rust, +8 Foundry adversarial tests, findings in `reports/security-m1.md` (qa, P0)
+- [x] Threat model → `docs/security/threat-model.md` (webhook, sandbox, custody are design-level only: features not built) (qa, P0)
+- [~] Fix SEC-01 (CSRF, POST ignores Content-Type) and SEC-03 (double settle) in backend: routed to backend-m2 (backend, P0)
+- [ ] SEC-04/SEC-07 cap escrow `resolveDeadline` before first Arc deploy; SEC-02 auth + Host check before exposing any tunnel (contracts/backend, P1)
 
 ## M5 — Custom-code agents (Tue eve – Wed Nov 18) — committed, not optional
 

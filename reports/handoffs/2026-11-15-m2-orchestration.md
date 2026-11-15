@@ -11,7 +11,7 @@ Living file: the lead updates it as branches report. If the session died, trust 
 |---|---|---|---|---|---|
 | qa-web | `~/dev/hackathongs/worktrees/qa-web` | `qa-web` | `web/`, `reports/qa-m1.md` | `tasks/frontend.md` | MERGED, worktree removed |
 | backend-m2 | `~/dev/hackathongs/worktrees/backend-m2` | `backend-m2` | `backend/`, `schemas/`, `docs/api.md`, `docs/research/gemini-prediction-markets.md` | `tasks/backend.md` | running |
-| security-tests | `~/dev/hackathongs/worktrees/security-tests` | `security-tests` | `docs/security/`, new test files, `reports/security-m1.md` | `tasks/qa-security.md` | running |
+| security-tests | `~/dev/hackathongs/worktrees/security-tests` | `security-tests` | `docs/security/`, new test files, `reports/security-m1.md` | `tasks/qa-security.md` | MERGED, worktree removed |
 
 Each commits after every working step and logs progress in its task file ON ITS BRANCH. Cargo target dirs: `~/dev/hackathongs/.cargo-target/<name>`. Dbs: `aen_qa`, `aen_m2_dev`, `aen_m2_test`, `aen_sec_test`. Ports: qa backend 8090, qa web 3010.
 
@@ -29,4 +29,5 @@ D-3 custody/signing, any chain deploy or transaction, real API keys, mainnet, tr
 
 ## Merge log
 - qa-web merged into `recovery`. Lead re-ran in `web/`: `npm test` 15 pass, `npm run lint` 0 errors / 2 warnings, `npm run build` ok. No backend bugs found. Left over (for frontend-m2): browser-test add block / connect / incompatible-connection rejection (unit-tested only); prefill template description in create form; document dotted 422 `details[].path` in `docs/api.md` (backend-m2 owns that file, do after its merge).
+- security-tests merged into `recovery`. Lead re-ran: `cargo test --workspace` 136 pass + 1 ignored (SEC-01 repro); `forge test` 80 pass. Adversarial server tests need db `aen_sec_test` (`createdb aen_sec_test`). Findings in `reports/security-m1.md`. SEC-01 (CSRF via text/plain POST), SEC-03 (double settle across interactions), SEC-05 (413) and the dotted 422 path doc were SENT to backend-m2 to fix on its branch: verify they are in its final report before merging. Still open, owner/contract work: SEC-04 + SEC-07 (cap `resolveDeadline`, before first Arc deploy), SEC-02 (auth/Host check before any tunnel).
 (lead appends here)
