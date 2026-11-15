@@ -25,3 +25,4 @@
 
 ## Log (security-tests branch)
 - core/tests/adversarial_authorize.rs: 14 tests pass (boundaries, overflow, random allow-invariant, money parsing).
+- server/tests/adversarial_api.rs (11) + adversarial_integrity.rs (4) pass; db aen_sec_test. No real bug found in allocate concurrency. Next: contracts adversarial, threat model, report.
