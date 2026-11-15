@@ -3,6 +3,7 @@
 pub mod agents;
 pub mod error;
 pub mod extract;
+pub mod graph_exec;
 pub mod ledger_db;
 pub mod market;
 pub mod misc;
