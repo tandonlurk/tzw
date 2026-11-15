@@ -4,7 +4,7 @@
 - **Scope:** backend/, schemas/. See docs/architecture.md §2-6, §8-9.
 - **Dependencies:** Rust + Postgres installed; crate versions in docs/research/runtime-and-sandbox.md.
 - **Assigned agent:** Backend / Agent Runtime specialist (branch `backend`)
-- **Status:** M1 done (2026-11-14), awaiting lead review. M2 not started.
+- **Status:** M1 done (2026-11-14). M2 in progress on branch `backend-m2` (see "M2 log" at the end).
 
 ## Files changed
 - `backend/` (new): workspace, `crates/core`, `crates/server`, `.env.example`, `README.md`.
@@ -47,3 +47,26 @@
 - M2: interactions table + state transitions using `core::interaction`, `Reasoner` trait with the deterministic fallback, graph executor emitting `Intent`s through `authorize()`, approvals endpoints, Gemini market data.
 - Add a settlement integration test as soon as interactions exist.
 - Lead: copy the decisions above into `docs/decisions.md`.
+
+## M2 log (branch `backend-m2`, worktree `worktrees/backend-m2`)
+
+Env for every command: `export PATH="$HOME/.cargo/bin:/opt/homebrew/opt/postgresql@17/bin:$PATH" CARGO_TARGET_DIR=$HOME/dev/hackathongs/.cargo-target/backend-m2 TEST_DATABASE_URL="postgres://$USER@localhost/aen_m2_test"`; dev db `aen_m2_dev`. If a migration file is edited after being applied, `dropdb`/`createdb` the db.
+
+Done (all committed):
+- `core/src/challenge.rs`: `MarketRef`, `ChallengeTerms` (+`validate`), `FormulaId`, pure `resolve() -> A | B | Void`, exact `parse_decimal_scaled`.
+- Security fixes from the lead's review: SEC-03 (commit/settle/refund ledger keys derived from the interaction; unique partial indexes `ledger_one_commit_per_interaction`, `ledger_one_release_per_interaction`; settlement under a row lock + state check), SEC-01 (`ApiJson` answers 415 unless `application/json`; bodiless POSTs such as approve/reject/tick take `{}`), SEC-05 (413). Merged `recovery` to get the adversarial tests; `state_changing_posts_must_require_a_json_content_type` is un-ignored; `settle_twice_...` now asserts rejection.
+- `server/src/market/`: `MarketData` trait, `discover` / `observe` built on it, deterministic `FakeMarket`, `GeminiClient` (reqwest, 5 s timeout, 3 attempts with doubling backoff).
+- `server/src/reasoner.rs`: `Reasoner` trait, strict `ReasonerOutput` validation, `RuleBasedReasoner`.
+- `server/src/graph_exec.rs`: walks a validated graph, emits `PlannedIntent`s (an `Intent` + terms), stores a trace.
+- `server/src/lifecycle.rs`: `tick` (expire, discover, respond, commit, resolve), `try_commit`, `decide_approval`, `settle_locked`. Migration `0003_interactions.sql`.
+- `server/src/interactions.rs` + routes: `/interactions`, `/interactions/{id}`, `/approvals`, approve / reject, `/stats/portfolio`, `/dev/tick`, `/dev/fake-market`. Interval scheduler in `main.rs` (`TICK_INTERVAL_SECS`, 0 disables).
+- Tests: `cargo test --workspace` green (core 94 + 14 + 6 + 2; server 22 unit, 11 + 5 adversarial, 17 api, 25 lifecycle).
+
+Next steps (in order):
+1. `docs/api.md`: document the M2 endpoints and types.
+2. `docs/research/gemini-prediction-markets.md`: write up the live spike (shapes are already modelled in `market/gemini.rs`).
+3. Gemini client tests against a local mock HTTP server (parse, retry, timeout, 404).
+4. `.env.example` / README: `MARKET_DATA`, `TICK_INTERVAL_SECS`, lifecycle settings.
+5. Curl-driven lifecycle against a running server; paste numbers here.
+6. `GrokReasoner` only if time allows.
+7. Financial defaults list for the lead (below, to be completed).
