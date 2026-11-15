@@ -289,10 +289,7 @@ mod tests {
 
     #[test]
     fn serializes_as_decimal_string() {
-        assert_eq!(
-            serde_json::to_string(&m(1_500_000)).unwrap(),
-            "\"1500000\""
-        );
+        assert_eq!(serde_json::to_string(&m(1_500_000)).unwrap(), "\"1500000\"");
         assert_eq!(
             serde_json::to_string(&SignedMoney::from_minor(-42)).unwrap(),
             "\"-42\""

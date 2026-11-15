@@ -120,9 +120,9 @@ pub async fn activity(
     ApiQuery(params): ApiQuery<ActivityParams>,
 ) -> Result<Json<Vec<ActivityItem>>, ApiError> {
     let agent_id = match params.agent_id.as_deref().filter(|s| !s.is_empty()) {
-        Some(s) => Some(
-            Uuid::parse_str(s).map_err(|_| ApiError::bad_request("agent_id must be a UUID"))?,
-        ),
+        Some(s) => {
+            Some(Uuid::parse_str(s).map_err(|_| ApiError::bad_request("agent_id must be a UUID"))?)
+        }
         None => None,
     };
     let limit = match params.limit.as_deref().filter(|s| !s.is_empty()) {

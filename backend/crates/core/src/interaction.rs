@@ -88,14 +88,7 @@ mod tests {
     #[test]
     fn happy_path_without_approval() {
         let mut s = Proposed;
-        for next in [
-            Negotiating,
-            Accepted,
-            Funded,
-            Active,
-            Resolving,
-            Settled,
-        ] {
+        for next in [Negotiating, Accepted, Funded, Active, Resolving, Settled] {
             s = s.transition(next).unwrap();
         }
         assert_eq!(s, Settled);
@@ -105,7 +98,14 @@ mod tests {
     #[test]
     fn happy_path_with_approval() {
         let mut s = Proposed;
-        for next in [Accepted, AwaitingApproval, Funded, Active, Resolving, Settled] {
+        for next in [
+            Accepted,
+            AwaitingApproval,
+            Funded,
+            Active,
+            Resolving,
+            Settled,
+        ] {
             s = s.transition(next).unwrap();
         }
         assert_eq!(s, Settled);

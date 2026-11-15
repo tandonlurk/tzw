@@ -555,10 +555,7 @@ mod tests {
     #[test]
     fn intent_json_is_tagged() {
         let json = serde_json::json!({"type": "propose_challenge", "stake": "10"});
-        assert_eq!(
-            serde_json::from_value::<Intent>(json).unwrap(),
-            propose(10)
-        );
+        assert_eq!(serde_json::from_value::<Intent>(json).unwrap(), propose(10));
         // A numeric stake (e.g. from an LLM) is not accepted.
         let bad = serde_json::json!({"type": "propose_challenge", "stake": 10});
         assert!(serde_json::from_value::<Intent>(bad).is_err());

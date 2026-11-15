@@ -279,7 +279,12 @@ pub fn deposit(env: Env, amount: Money, key: &str) -> Result<PostingSet, LedgerE
 }
 
 /// Owner assigns unallocated funds to an agent.
-pub fn allocate(env: Env, agent: Uuid, amount: Money, key: &str) -> Result<PostingSet, LedgerError> {
+pub fn allocate(
+    env: Env,
+    agent: Uuid,
+    amount: Money,
+    key: &str,
+) -> Result<PostingSet, LedgerError> {
     let amount = positive(amount)?;
     let postings = transfer(
         Account::UserUnallocated,
@@ -427,7 +432,13 @@ mod tests {
             Account::AgentAvailable(a).to_string(),
             "agent:00000000-0000-0000-0000-000000000001:available"
         );
-        for bad in ["", "user", "agent:x:available", "agent::committed", "escrow:"] {
+        for bad in [
+            "",
+            "user",
+            "agent:x:available",
+            "agent::committed",
+            "escrow:",
+        ] {
             assert!(bad.parse::<Account>().is_err(), "{bad:?}");
         }
     }
@@ -461,7 +472,10 @@ mod tests {
         assert_eq!(deposit(ENV, z, "k"), Err(LedgerError::ZeroAmount));
         assert_eq!(allocate(ENV, a, z, "k"), Err(LedgerError::ZeroAmount));
         assert_eq!(deallocate(ENV, a, z, "k"), Err(LedgerError::ZeroAmount));
-        assert_eq!(commit_stake(ENV, a, i, z, "k"), Err(LedgerError::ZeroAmount));
+        assert_eq!(
+            commit_stake(ENV, a, i, z, "k"),
+            Err(LedgerError::ZeroAmount)
+        );
         assert_eq!(settle(ENV, i, a, b, z, "k"), Err(LedgerError::ZeroAmount));
         assert_eq!(refund(ENV, a, i, z, "k"), Err(LedgerError::ZeroAmount));
     }
@@ -527,10 +541,7 @@ mod tests {
     #[test]
     fn settle_rejects_same_party_and_overflowing_pot() {
         let (a, b, i) = (id(1), id(2), id(9));
-        assert_eq!(
-            settle(ENV, i, a, a, m(1), "k"),
-            Err(LedgerError::SameParty)
-        );
+        assert_eq!(settle(ENV, i, a, a, m(1), "k"), Err(LedgerError::SameParty));
         assert_eq!(
             settle(ENV, i, a, b, Money::MAX, "k"),
             Err(LedgerError::Overflow)
@@ -585,7 +596,11 @@ mod tests {
                 account: Account::AgentAvailable(a)
             })
         );
-        apply(&mut balances, &commit_stake(ENV, a, i, m(100), "ca").unwrap()).unwrap();
+        apply(
+            &mut balances,
+            &commit_stake(ENV, a, i, m(100), "ca").unwrap(),
+        )
+        .unwrap();
 
         // Cannot settle before both sides have committed.
         assert_eq!(
@@ -596,7 +611,11 @@ mod tests {
                 account: Account::AgentCommitted(b)
             })
         );
-        apply(&mut balances, &commit_stake(ENV, b, i, m(100), "cb").unwrap()).unwrap();
+        apply(
+            &mut balances,
+            &commit_stake(ENV, b, i, m(100), "cb").unwrap(),
+        )
+        .unwrap();
         assert_eq!(bal(&balances, Account::AgentAvailable(a)), 200);
         assert_eq!(bal(&balances, Account::AgentCommitted(a)), 100);
 
@@ -636,7 +655,11 @@ mod tests {
         let mut balances = BTreeMap::new();
         apply(&mut balances, &deposit(ENV, m(500), "d").unwrap()).unwrap();
         apply(&mut balances, &allocate(ENV, a, m(500), "al").unwrap()).unwrap();
-        apply(&mut balances, &commit_stake(ENV, a, i, m(200), "c").unwrap()).unwrap();
+        apply(
+            &mut balances,
+            &commit_stake(ENV, a, i, m(200), "c").unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(
             refund(ENV, a, i, m(201), "r0")

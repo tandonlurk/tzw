@@ -18,7 +18,11 @@ pub struct Detail {
 }
 
 impl Detail {
-    pub fn new(path: impl Into<String>, code: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn new(
+        path: impl Into<String>,
+        code: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
         Detail {
             path: path.into(),
             message: message.into(),
@@ -46,7 +50,11 @@ impl ApiError {
     }
 
     pub fn not_found(what: &str) -> Self {
-        Self::new(StatusCode::NOT_FOUND, "not_found", format!("{what} not found"))
+        Self::new(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            format!("{what} not found"),
+        )
     }
 
     pub fn bad_request(message: impl Into<String>) -> Self {
@@ -115,9 +123,9 @@ impl From<LedgerError> for ApiError {
             LedgerError::InsufficientFunds { .. } => {
                 ApiError::unprocessable("insufficient_funds", e.to_string())
             }
-            LedgerError::ZeroAmount | LedgerError::Overflow => ApiError::validation(vec![
-                Detail::new("amount", "invalid_amount", e.to_string()),
-            ]),
+            LedgerError::ZeroAmount | LedgerError::Overflow => {
+                ApiError::validation(vec![Detail::new("amount", "invalid_amount", e.to_string())])
+            }
             // Anything else means the server built a bad posting set.
             other => ApiError::internal(other),
         }
