@@ -15,6 +15,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [?] Provide when ready (in `.env`, never in chat): xAI API key, QuickNode key, Arc testnet faucet funds, ElevenLabs key
 - [?] Confirm the event is the University Blockchain Conference 2026 hackathon (UT Austin) and the deadline is Nov 20, 12 PM CST (D-18)
 - [?] D-14 base challenges on Gemini prediction-market events (the $4k Gemini bounty requires it)
+- [?] Review financial defaults D-22..D-31 in `docs/decisions.md` (resolution rule, void/refund, funding window, negotiation cap, exposure)
 - [?] D-11 custom code = JavaScript in a Wasmtime/QuickJS sandbox
 - [?] D-17 main track "Agentic Payments & AI" + Arc award + all bounties
 - [?] Ask at sponsor office hours (Nov 16-19): what "Grok Bot" means for the xAI bounty
@@ -38,10 +39,11 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 ## M2 — Economic interaction (Mon Nov 16)
 
-- [ ] Graph executor + agent runtime (event-driven + scheduled tick) (backend, P0)
-- [ ] Gemini exchange market data: discovery signal and resolution price (backend, P0)
-- [ ] Reasoner trait: rule-based fallback, then Grok (backend, P0/P1, needs D-8)
-- [ ] Challenge proposal, bounded negotiation, approvals queue (backend, P0)
+- [x] Graph executor + agent runtime (interval tick + `POST /api/dev/tick`), simulated env (backend, P0)
+- [x] Gemini exchange market data incl. prediction-market contracts, spot fallback, deterministic fake; shapes in `docs/research/gemini-prediction-markets.md` (backend, P0)
+- [~] Reasoner trait: rule-based done; Grok wired behind `XAI_API_KEY` but only mock-tested, endpoint/model unverified (backend, P0/P1, needs D-8 + key)
+- [x] Challenge proposal, bounded negotiation, approvals, resolve, settle/void in the simulated ledger; 211 backend tests (backend, P0)
+- [ ] Proposal cooldown (agents currently re-propose every tick); extend `schemas/` for challenge terms (backend, P1)
 - [ ] Deploy escrow to Arc testnet; signer + chain executor (contracts/backend, P0, needs D-3 + faucet funds)
 - [ ] Visual logic builder: canvas, block palette from schema, save/validate/reuse (frontend, P0)
 - [ ] Agent detail + config/policy editing (frontend, P0)
@@ -57,7 +59,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 - [x] Permission-engine and ledger failure-case tests; contract fuzz tests: +35 Rust, +8 Foundry adversarial tests, findings in `reports/security-m1.md` (qa, P0)
 - [x] Threat model → `docs/security/threat-model.md` (webhook, sandbox, custody are design-level only: features not built) (qa, P0)
-- [~] Fix SEC-01 (CSRF, POST ignores Content-Type) and SEC-03 (double settle) in backend: routed to backend-m2 (backend, P0)
+- [x] Fixed SEC-01 (415 unless JSON), SEC-03 (double settle rejected), SEC-05 (413); repro tests now pass (backend, P0)
 - [ ] SEC-04/SEC-07 cap escrow `resolveDeadline` before first Arc deploy; SEC-02 auth + Host check before exposing any tunnel (contracts/backend, P1)
 
 ## M5 — Custom-code agents (Tue eve – Wed Nov 18) — committed, not optional
