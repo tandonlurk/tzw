@@ -168,6 +168,7 @@ pub struct ActivityItem {
     pub id: Uuid,
     pub ts: DateTime<Utc>,
     pub agent_id: Option<Uuid>,
+    pub interaction_id: Option<Uuid>,
     pub kind: String,
     pub summary: String,
     pub detail: Option<Value>,

@@ -410,7 +410,7 @@ pub(crate) mod tests {
             move_bps,
             window_secs: 3600,
             spot_symbol: "btcusd".into(),
-            source: "fake",
+            source: "fake".into(),
             fallback_reason: None,
         }
     }

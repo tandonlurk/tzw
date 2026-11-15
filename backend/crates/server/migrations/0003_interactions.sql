@@ -16,6 +16,9 @@ CREATE TABLE interactions (
     stake                  BIGINT NOT NULL CHECK (stake > 0),
     market_key             TEXT NOT NULL,
     market_title           TEXT NOT NULL,
+    -- What the proposer saw (market::MarketView). Negotiation reasons over
+    -- this snapshot; resolution always reads the market again.
+    market_view            JSONB NOT NULL,
     start_ts               TIMESTAMPTZ NOT NULL,
     end_ts                 TIMESTAMPTZ NOT NULL,
     -- Whose move it is while Proposed / Negotiating.

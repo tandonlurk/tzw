@@ -15,7 +15,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use aen_core::challenge::{FormulaId, MarketRef};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub type BoxFut<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -132,7 +132,7 @@ pub trait MarketData: Send + Sync {
 }
 
 /// What an agent sees when it looks for an opportunity.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MarketView {
     pub market: MarketRef,
     pub title: String,
@@ -145,7 +145,8 @@ pub struct MarketView {
     pub move_bps: i64,
     pub window_secs: i64,
     pub spot_symbol: String,
-    pub source: &'static str,
+    /// `gemini` or `fake`.
+    pub source: String,
     /// Set when no prediction-market contract was usable and the view fell
     /// back to the spot price.
     pub fallback_reason: Option<String>,
@@ -248,7 +249,7 @@ pub async fn discover(
                         move_bps: moved,
                         window_secs,
                         spot_symbol: symbol.to_lowercase(),
-                        source: market.name(),
+                        source: market.name().to_owned(),
                         fallback_reason: None,
                     });
                 }
@@ -269,7 +270,7 @@ pub async fn discover(
         move_bps: moved,
         window_secs,
         spot_symbol: symbol.to_lowercase(),
-        source: market.name(),
+        source: market.name().to_owned(),
         fallback_reason: Some(fallback_reason),
     })
 }

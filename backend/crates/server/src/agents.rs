@@ -112,7 +112,10 @@ LEFT JOIN LATERAL (
 WHERE ($1::uuid IS NULL OR a.id = $1)
 ORDER BY a.created_at, a.id";
 
-async fn load<'e>(ex: impl PgExecutor<'e>, id: Option<Uuid>) -> Result<Vec<Agent>, ApiError> {
+pub(crate) async fn load<'e>(
+    ex: impl PgExecutor<'e>,
+    id: Option<Uuid>,
+) -> Result<Vec<Agent>, ApiError> {
     let rows: Vec<AgentRow> = sqlx::query_as(AGENTS_SQL).bind(id).fetch_all(ex).await?;
     rows.into_iter().map(Agent::try_from).collect()
 }

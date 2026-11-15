@@ -197,3 +197,18 @@ pub async fn account_entries<'e>(
     .await?;
     Ok(rows.into_iter().map(Into::into).collect())
 }
+
+/// Every entry of one interaction, oldest first.
+pub async fn interaction_entries<'e>(
+    ex: impl PgExecutor<'e>,
+    interaction_id: Uuid,
+) -> Result<Vec<LedgerEntry>, sqlx::Error> {
+    let rows: Vec<LedgerRow> = sqlx::query_as(
+        "SELECT id, ts, env, account, delta, reason, interaction_id, tx_hash \
+         FROM ledger_entries WHERE interaction_id = $1 ORDER BY seq",
+    )
+    .bind(interaction_id)
+    .fetch_all(ex)
+    .await?;
+    Ok(rows.into_iter().map(Into::into).collect())
+}
