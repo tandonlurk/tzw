@@ -529,6 +529,7 @@ mod tests {
         assert_eq!(sent["category"], "Crypto");
         assert_eq!(sent["status"], "active");
         assert_eq!(sent["limit"], "20");
+        assert!(!sent.contains_key("offset"));
 
         let event = client.get_event("XRP15M2611152045").await.unwrap();
         assert_eq!(event.status, "settled");

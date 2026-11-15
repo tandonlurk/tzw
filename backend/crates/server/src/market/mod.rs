@@ -164,7 +164,10 @@ pub struct Observation {
 /// from both ends.
 const MIN_OPEN_PRICE_BPS: i64 = 500;
 const MAX_OPEN_PRICE_BPS: i64 = 9500;
-const EVENT_PAGE: u32 = 20;
+/// Listings come back soonest-expiring first and an asset has dozens of
+/// 5 and 15 minute events, so a small page never reaches the longer-dated
+/// contracts. 100 was accepted live; a BTC search returned 24 events.
+const EVENT_PAGE: u32 = 100;
 
 /// Signed move of the latest close against the close `window_secs` earlier.
 pub fn move_bps(candles: &[Candle], window_secs: i64) -> Result<i64, MarketError> {

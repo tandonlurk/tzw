@@ -29,6 +29,8 @@ Prices in `pubticker` are decimal strings. We parse them to integer micro-USD wi
 | `GET /v1/prediction-markets/events?limit=2` | 200 | `{"data":[Event],"pagination":{"limit":2,"offset":0,"total":1002}}` |
 | `GET /v1/prediction-markets/events?limit=3&category=Crypto&status=active` | 200 | filters work (`total` 98); returned `BTC05M2611152050`, `ETH05M...`, `SOL05M...` |
 | `GET /v1/prediction-markets/events?limit=3&search=BTC` | 200 | search works; returned `BTC2611152200`, `BTC2611152100`, `BTC2611202200` |
+| `GET /v1/prediction-markets/events?limit=100&search=BTC&category=Crypto&status=active` | 200 | `limit=100` and `limit=500` accepted; `total` 24. **Sorted soonest-expiring first**: the first 20 were almost all 5 and 15 minute events (`BTC05M...`, `BTC15M...`), most with no trade yet. The longer ladders (`BTC2611202200`, `BTC2611302200`) came last |
+| `GET ...events?limit=20&offset=20&...` | 200 | `offset` works (returned the remaining 4) |
 | `GET /v1/prediction-markets/events/{ticker}` e.g. `HYPE2611152200` | 200 | one Event object (not wrapped in `data`) |
 | `GET /v1/prediction-markets/events/461869` (numeric id) | 404 | `{"error": "Event not found"}`: lookup is by **ticker**, not id |
 | `GET /v1/prediction-markets/events/recently-settled?limit=1` | 200 | same list shape, settled events |
@@ -44,7 +46,7 @@ Prices in `pubticker` are decimal strings. We parse them to integer micro-USD wi
 
 `id`, `label` (e.g. `"$59 or above"`, `"Up"`), `description` (rich-text object), `ticker` (e.g. `HI59`, `UP`), `instrumentSymbol` (e.g. `GEMI-HYPE2611152200-HI59`), `status`, `marketState` (`"open"`, `"closed"`), `createdAt`, `effectiveDate`, `expiryDate`, `abbreviatedName`, `color`, `sortOrder`, `isCombo`, `source`, `termsAndConditionsUrl`, `quantityIncrement`, `quantityMinimum`, `priceIncrement` (`"0.01"`), `priceMinimum`, `quoteAssetPrecision`, and:
 
-- `prices`: open contract `{"buy":{"yes":"0.99","no":"0.05"},"sell":{"yes":"0.95","no":"0.01"},"bestBid":"0.95","lastTradePrice":"0.99"}`; `bestAsk` appears on some contracts and not others. **Settled contract: `{"buy":{},"sell":{}}`**, so there is no last price after settlement.
+- `prices` (an open contract that has **not traded yet has no `lastTradePrice`**, seen on most upcoming 5 minute events and on the top strike of a ladder; we treat that as missing data): open contract `{"buy":{"yes":"0.99","no":"0.05"},"sell":{"yes":"0.95","no":"0.01"},"bestBid":"0.95","lastTradePrice":"0.99"}`; `bestAsk` appears on some contracts and not others. **Settled contract: `{"buy":{},"sell":{}}`**, so there is no last price after settlement.
 - `strike`: `{"type":"above","value":"59"}` on ladder contracts; `{"type":"reference","value":"0.95996973755","availableAt":"..."}` on up/down contracts.
 - Settled only: `resolutionSide` (`"yes"` seen), `resolvedAt`, `settlementValue` (e.g. `"0.9625122158833334"`).
 
@@ -55,7 +57,7 @@ Contract rules text seen: "If the price of HYPE is $59 or above on November 15, 
 | Step | Call | Field |
 |---|---|---|
 | Spot move (trigger, discovery signal) | `/v2/candles/{symbol}/1m` (`1hr` for windows over 24 h) | latest close vs the close one window earlier |
-| Find a contract | `/v1/prediction-markets/events?search={BASE}&category=Crypto&status=active&limit=20` | events whose `ticker` starts with the base asset, `expiryDate` after the funding deadline; the open contract whose `lastTradePrice` is closest to 0.50 and within 0.05 to 0.95 |
+| Find a contract | `/v1/prediction-markets/events?search={BASE}&category=Crypto&status=active&limit=100` | events whose `ticker` starts with the base asset, `expiryDate` after the funding deadline; the open contract whose `lastTradePrice` is closest to 0.50 and within 0.05 to 0.95 |
 | Resolve (formula `pm_yes_price_bps_v1`) | `/v1/prediction-markets/events/{event_ticker}` | the contract's `resolutionSide` (yes = 10000, no = 0) if settled, else `prices.lastTradePrice` × 10000; first successful read at or after `end_ts` |
 | Fallback (formula `spot_last_price_micros_v1`) | `/v1/pubticker/{symbol}` | `last` in micro-USD |
 
@@ -66,9 +68,7 @@ Client behaviour: 5 s timeout per request, 3 attempts, backoff 250 ms doubling, 
 ## Not verified (do not rely on)
 
 - `resolutionSide: "no"`: only `"yes"` was seen. We accept `"no"` by symmetry and treat anything else as missing data.
-- Pagination parameter names beyond `limit` (an `offset` appears in the response; sending it was not tested).
 - Other `status` values (e.g. suspended, cancelled) and how a cancelled contract is reported. An unknown state without a price or resolution ends in a void, which is the safe outcome.
-- Whether `lastTradePrice` can be absent on an open contract that has not traded (we treat absence as missing data).
 - `get-event-strike` endpoint, the WebSocket streams, and all authenticated endpoints.
 - Candle timeframes other than `1m` and `1hr`.
 - That `lastTradePrice` right after `end_ts` reflects the price at `end_ts`: it is the latest trade at read time. Stated as part of the formula ("first successful read at or after `end_ts`").
