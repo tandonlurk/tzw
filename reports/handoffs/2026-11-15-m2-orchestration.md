@@ -32,4 +32,15 @@ D-3 custody/signing, any chain deploy or transaction, real API keys, mainnet, tr
 - security-tests merged into `recovery`. Lead re-ran: `cargo test --workspace` 136 pass + 1 ignored (SEC-01 repro); `forge test` 80 pass. Adversarial server tests need db `aen_sec_test` (`createdb aen_sec_test`). Findings in `reports/security-m1.md`. SEC-01 (CSRF via text/plain POST), SEC-03 (double settle across interactions), SEC-05 (413) and the dotted 422 path doc were SENT to backend-m2 to fix on its branch: verify they are in its final report before merging. Still open, owner/contract work: SEC-04 + SEC-07 (cap `resolveDeadline`, before first Arc deploy), SEC-02 (auth/Host check before any tunnel).
 - backend-m2 merged into `recovery`. Lead re-ran after merge: `cargo fmt --check` ok, clippy 0 warnings, `cargo test --workspace` 211 pass / 0 ignored, `forge test` 80, web `npm test` 15. SEC-01/03/05 fixed. Financial defaults copied to `docs/decisions.md` D-22..D-31. Known gaps: no proposal cooldown (agents re-propose every tick); Grok endpoint/model unverified; only `resolutionSide: yes` seen live; `schemas/` not extended for challenge terms; all POSTs need a JSON body (`{}`).
 - NEXT: `frontend-m2` (worktree `~/dev/hackathongs/worktrees/frontend-m2`, branch `frontend-m2`, owns `web/`). If it is not merged: resume per steps 1-2 above. After it: backend follow-ups (proposal cooldown, schemas for terms), fill `docs/demo.md` from `backend/README.md`, AGENTS.md 9.4 demo line.
-(lead appends here)
+- frontend-m2 merged into `recovery`. Lead re-ran in `web/`: `npm test` 21 pass, lint 0 errors / 2 warnings, build ok. Browser-verified by the specialist: approve both sides -> active -> settled, dashboard = API numbers, builder add/connect/incompatible. NOT browser-verified: reject, approve-then-cancelled notice, agent-detail challenges list, template prefill. Backend gaps in `reports/qa-m2-web.md`.
+
+## State at end of session (all four branches merged, no worktrees left, nothing pushed since 2a6c7ed)
+Tests on `recovery`: backend 211 (`cargo test --workspace`, needs dbs `aen_test` + `aen_sec_test`), contracts 80, web 21.
+
+## Exact next actions
+1. Backend follow-ups (one specialist, owns `backend/`): proposal cooldown (agents re-propose every tick); negotiation summaries show raw minor units (repro in `reports/qa-m2-web.md`); approvals only trigger at high conviction and large simulated clock jumps cancel negotiations (decide if demo needs tuning); extend `schemas/` for challenge terms.
+2. Lead: run the lifecycle by hand once (`backend/README.md` curl script, `MARKET_DATA=fake`), fill `docs/demo.md`, replace the TODO in AGENTS.md 9.4, seed demo agents.
+3. Web: browser-verify the four unverified items above; look at the Next dev "1 Issue" badge; dashboard P&L line is flat because two own agents net to zero (real data, consider per-agent lines as the default view).
+4. Contracts: SEC-04/SEC-07 cap `resolveDeadline` (before any Arc deploy).
+5. Blocked on owner: D-3 custody (all chain work, QuickNode Streams ingestion), xAI key + D-8 (verify Grok endpoint/model), D-14, D-22..D-31 review.
+6. Then M3 (Streams webhook, needs SEC-02 auth first), M5 sandbox, M6 co-captain/voice/demo.

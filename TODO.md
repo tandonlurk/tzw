@@ -45,14 +45,15 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [x] Challenge proposal, bounded negotiation, approvals, resolve, settle/void in the simulated ledger; 211 backend tests (backend, P0)
 - [ ] Proposal cooldown (agents currently re-propose every tick); extend `schemas/` for challenge terms (backend, P1)
 - [ ] Deploy escrow to Arc testnet; signer + chain executor (contracts/backend, P0, needs D-3 + faucet funds)
-- [ ] Visual logic builder: canvas, block palette from schema, save/validate/reuse (frontend, P0)
+- [x] Visual logic builder: add/connect/delete blocks, incompatible connections rejected, validate, save with positions; browser-tested (frontend, P0)
 - [ ] Agent detail + config/policy editing (frontend, P0)
 
 ## M3 — Observability (Tue Nov 17)
 
 - [ ] QuickNode Streams webhook ingestion, idempotent (backend, P1)
 - [ ] Full lifecycle end to end on testnet: discover → negotiate → authorize → fund → resolve → settle (lead, P0)
-- [ ] Wallet overview, Activity view, Dashboard charts from real data (frontend, P0)
+- [x] Wallet overview, Activity view, approvals queue, interactions list/detail, Dashboard charts from `/stats/portfolio` only; 21 web tests. Not browser-verified: reject, approve-then-cancelled notice, agent-detail challenges, template prefill (frontend, P0)
+- [ ] Backend gaps from `reports/qa-m2-web.md`: raw units in negotiation summaries, approvals need high conviction, clock jumps cancel negotiations (backend, P1)
 - [ ] Collaboration: simple agreement + simulated payout split (backend/frontend, P2, first to cut)
 
 ## M4 — QA and security (Tue–Wed, continuous)

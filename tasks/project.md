@@ -73,3 +73,4 @@ Interfaces between specialists: the REST API in `docs/architecture.md` §9, the 
 - 2026-11-14: Kickoff. Inspected repo and machine. Launched two research tasks. Wrote architecture, decisions, TODO, trackers.
 - 2026-11-15: Recovery from iCloud data loss (see handoff). Verified baseline; launched qa-web, backend-m2, security-tests in `~/dev/hackathongs/worktrees/`.
 - 2026-11-15: Merged qa-web, security-tests, backend-m2 into `recovery` (backend 211, contracts 80, web 15 tests). Simulated challenge lifecycle works. Spawning frontend-m2.
+- 2026-11-15: Merged frontend-m2 (web 21 tests). All worktrees removed. Next actions in `reports/handoffs/2026-11-15-m2-orchestration.md`.
