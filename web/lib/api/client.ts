@@ -1,5 +1,11 @@
 import type {
   ActivityItem,
+  ApprovalDecision,
+  Approval,
+  Interaction,
+  InteractionDetail,
+  Portfolio,
+  TickReport,
   Agent,
   AgentInput,
   AgentStatus,
@@ -98,11 +104,25 @@ export const api = {
   getWallet: () => get<Wallet>("/wallet"),
   simulatedDeposit: (amount: Money) => post<Wallet>("/wallet/simulated-deposit", { amount }),
 
-  listActivity: (opts: { agent_id?: string; limit?: number } = {}) => {
+  listActivity: (opts: { agent_id?: string; interaction_id?: string; limit?: number } = {}) => {
     const q = new URLSearchParams();
+    if (opts.interaction_id) q.set("interaction_id", opts.interaction_id);
     if (opts.agent_id) q.set("agent_id", opts.agent_id);
     if (opts.limit) q.set("limit", String(opts.limit));
     const qs = q.toString();
     return get<ActivityItem[]>(`/activity${qs ? `?${qs}` : ""}`);
   },
+
+  listInteractions: (opts: { agent_id?: string; state?: string; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(opts)) if (v !== undefined && v !== "") q.set(k, String(v));
+    const qs = q.toString();
+    return get<Interaction[]>(`/interactions${qs ? `?${qs}` : ""}`);
+  },
+  getInteraction: (id: string) => get<InteractionDetail>(`/interactions/${encodeURIComponent(id)}`),
+  listApprovals: (status = "pending") => get<Approval[]>(`/approvals?status=${encodeURIComponent(status)}`),
+  approve: (id: string) => post<ApprovalDecision>(`/approvals/${encodeURIComponent(id)}/approve`, {}),
+  reject: (id: string) => post<ApprovalDecision>(`/approvals/${encodeURIComponent(id)}/reject`, {}),
+  getPortfolio: () => get<Portfolio>("/stats/portfolio"),
+  devTick: () => post<TickReport>("/dev/tick", {}),
 };

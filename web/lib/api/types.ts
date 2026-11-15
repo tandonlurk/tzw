@@ -154,6 +154,7 @@ export interface ActivityItem {
   id: string;
   ts: string;
   agent_id: string | null;
+  interaction_id?: string | null;
   kind: string;
   summary: string;
   detail: Record<string, unknown> | null;
