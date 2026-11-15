@@ -34,7 +34,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [x] `core`: behavior-graph schema + validator, JSON Schema export (backend, P0)
 - [x] Postgres schema + migrations; agent CRUD with versioned config/policy/graph; templates. 101 Rust tests pass (backend, P0)
 - [x] `ChallengeEscrow.sol` + Foundry tests: 72 passing, local only, not deployed (contracts, P0)
-- [~] Web shell, pages, creation form and basic builder: build/lint/15 unit tests passed before the data loss; NOT yet tested against the real backend (frontend, P0)
+- [x] Web shell, pages, creation form and basic builder: 15 unit tests, lint, build pass; browser-tested against the real backend 2026-11-15 (`reports/qa-m1.md`). Not browser-tested: add/connect blocks, incompatible-connection rejection (frontend, P0)
 
 ## M2 — Economic interaction (Mon Nov 16)
 

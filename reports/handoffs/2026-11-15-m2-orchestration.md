@@ -9,7 +9,7 @@ Living file: the lead updates it as branches report. If the session died, trust 
 
 | Name | Worktree | Branch | Owns | Task file | Status |
 |---|---|---|---|---|---|
-| qa-web | `~/dev/hackathongs/worktrees/qa-web` | `qa-web` | `web/`, `reports/qa-m1.md` | `tasks/frontend.md` | running |
+| qa-web | `~/dev/hackathongs/worktrees/qa-web` | `qa-web` | `web/`, `reports/qa-m1.md` | `tasks/frontend.md` | MERGED, worktree removed |
 | backend-m2 | `~/dev/hackathongs/worktrees/backend-m2` | `backend-m2` | `backend/`, `schemas/`, `docs/api.md`, `docs/research/gemini-prediction-markets.md` | `tasks/backend.md` | running |
 | security-tests | `~/dev/hackathongs/worktrees/security-tests` | `security-tests` | `docs/security/`, new test files, `reports/security-m1.md` | `tasks/qa-security.md` | running |
 
@@ -28,4 +28,5 @@ Each commits after every working step and logs progress in its task file ON ITS 
 D-3 custody/signing, any chain deploy or transaction, real API keys, mainnet, track/bounty changes, anything under "Needs you" in `TODO.md`. No push unless asked.
 
 ## Merge log
+- qa-web merged into `recovery`. Lead re-ran in `web/`: `npm test` 15 pass, `npm run lint` 0 errors / 2 warnings, `npm run build` ok. No backend bugs found. Left over (for frontend-m2): browser-test add block / connect / incompatible-connection rejection (unit-tested only); prefill template description in create form; document dotted 422 `details[].path` in `docs/api.md` (backend-m2 owns that file, do after its merge).
 (lead appends here)
