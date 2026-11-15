@@ -151,7 +151,7 @@ pre { background: var(--bg); padding: .6rem; border-radius: 6px; overflow-x: aut
 .chart .axis { stroke: var(--border); stroke-width: 1; }
 .chart .line { fill: none; stroke: var(--neutral); stroke-width: 2; }
 .chart .dot { fill: var(--neutral); }
-.bar-row { display: grid; grid-template-columns: 9rem 1fr auto; gap: .5rem; align-items: center; font-size: .85rem; margin: .3rem 0; }
+.bar-row { display: grid; grid-template-columns: 7rem minmax(50px, 1fr) minmax(8rem, 12rem); gap: .5rem; align-items: center; font-size: .85rem; margin: .3rem 0; }
 .bar-track { background: var(--bg); border-radius: 4px; height: 12px; overflow: hidden; }
 .bar-fill { height: 100%; background: var(--neutral); }
 .bar-fill.pos { background: var(--positive); }
