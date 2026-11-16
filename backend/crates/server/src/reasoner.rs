@@ -9,8 +9,9 @@ use aen_core::policy::{AgentPolicy, MAX_BPS};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::lifecycle::{format_value, side_phrase as side_word, stake_text};
 use crate::market::{BoxFut, MarketView};
-use crate::models::{AgentConfig, RiskTolerance};
+use crate::models::{AgentConfig, RiskTolerance, display_bps};
 
 pub const MAX_SUMMARY_LEN: usize = 500;
 /// Longest challenge a reasoner may propose.
@@ -227,11 +228,10 @@ fn proposal_stake(agent: &AgentCtx, conviction_bps: u32) -> Money {
     base.min(agent.available)
 }
 
-fn side_word(direction: Direction) -> &'static str {
-    match direction {
-        Direction::Above => "at or above",
-        Direction::Below => "below",
-    }
+/// A spot move for a summary: `300` -> `+3%`.
+fn move_text(move_bps: i64) -> String {
+    let sign = if move_bps > 0 { "+" } else { "" };
+    format!("{sign}{}", display_bps(move_bps))
 }
 
 impl RuleBasedReasoner {
@@ -250,7 +250,11 @@ impl RuleBasedReasoner {
         } else {
             (Direction::Below, (10_000 - up) as u32)
         };
-        let moved = market.move_bps;
+        // Summaries are read by the owner: amounts, prices and percentages are
+        // written out, never as minor units or basis points.
+        let moved = move_text(market.move_bps);
+        let formula = FormulaId::for_market(&market.market);
+        let pct = |bps: u32| display_bps(i64::from(bps));
 
         match req.task {
             Task::EvaluateOpportunity => Ok(ReasonerOutput {
@@ -259,13 +263,14 @@ impl RuleBasedReasoner {
                 matches_strategy: fits,
                 terms: None,
                 summary: format!(
-                    "{style} rule: the market moved {moved} bps, so I expect it to end {} \
-                     its current level ({conviction} bps conviction).",
-                    side_word(stance)
+                    "{style} rule: the market moved {moved}, so I expect it to end {} its \
+                     current level of {} ({} conviction).",
+                    side_word(stance),
+                    format_value(formula, market.value),
+                    pct(conviction)
                 ),
             }),
             Task::GenerateProposal => {
-                let formula = FormulaId::for_market(&market.market);
                 let (lo, hi) = formula.threshold_range();
                 let start_ts = req.now + req.funding_window_secs.max(1);
                 let horizon = i64::from(agent.config.horizon_secs).clamp(1, MAX_HORIZON_SECS);
@@ -285,10 +290,10 @@ impl RuleBasedReasoner {
                     stance,
                     matches_strategy: fits,
                     summary: format!(
-                        "I claim the market ends {} {} and stake {} minor units on it.",
+                        "I claim the market ends {} {} and stake {} on it.",
                         side_word(stance),
-                        terms.threshold,
-                        stake
+                        format_value(formula, terms.threshold),
+                        stake_text(stake)
                     ),
                     terms: Some(terms),
                 })
@@ -313,10 +318,11 @@ impl RuleBasedReasoner {
                     matches_strategy: fits,
                     terms: None,
                     summary: format!(
-                        "{style} rule: my side is \"{} {}\"; after a {moved} bps move I give \
-                         it {conviction} bps.",
+                        "{style} rule: my side is \"{} {}\"; after a {moved} move I give it \
+                         {} conviction.",
                         side_word(mine),
-                        incoming.threshold
+                        format_value(incoming.formula, incoming.threshold),
+                        pct(conviction)
                     ),
                 })
             }
@@ -335,8 +341,9 @@ impl RuleBasedReasoner {
                     stance,
                     matches_strategy: fits,
                     summary: format!(
-                        "I am not convinced enough for the full stake; I offer {stake} minor \
-                         units per side instead."
+                        "I am not convinced enough for the full stake; I offer {} per side \
+                         instead.",
+                        stake_text(stake)
                     ),
                     terms: Some(ChallengeTerms {
                         stake,
@@ -647,5 +654,47 @@ pub(crate) mod tests {
         ] {
             assert!(ReasonerOutput::from_json(bad).is_err(), "{bad}");
         }
+    }
+
+    /// Summaries are shown to the owner as they are: no minor units, no raw
+    /// basis points. The structured terms keep the exact integers.
+    #[test]
+    fn summaries_are_human_readable() {
+        let view = market(300);
+        let bull = agent("Follow momentum.");
+        let skeptic = agent("Most sharp moves revert.");
+        let say = |task, agent: &AgentCtx, incoming: Option<&ChallengeTerms>| {
+            let req = request(task, agent, &view, incoming);
+            let out = RuleBasedReasoner::decide(&req).unwrap();
+            out.validate(&req).unwrap();
+            out
+        };
+        let opinion = say(Task::EvaluateOpportunity, &bull, None);
+        assert_eq!(
+            opinion.summary,
+            "momentum rule: the market moved +3%, so I expect it to end at or above its current \
+             level of 0.55 (YES price) (65% conviction)."
+        );
+        let proposal = say(Task::GenerateProposal, &bull, None);
+        assert_eq!(
+            proposal.summary,
+            "I claim the market ends at or above 0.55 (YES price) and stake 5.00 USDC \
+             (simulated) on it."
+        );
+        let terms = proposal.terms.unwrap();
+        assert_eq!((terms.stake, terms.threshold), (m(5_000_000), 5500));
+        let judged = say(Task::EvaluateProposal, &skeptic, Some(&terms));
+        assert_eq!(
+            judged.summary,
+            "contrarian rule: my side is \"below 0.55 (YES price)\"; after a +3% move I give it \
+             65% conviction."
+        );
+        let counter = say(Task::GenerateCounter, &skeptic, Some(&terms));
+        assert_eq!(
+            counter.summary,
+            "I am not convinced enough for the full stake; I offer 2.50 USDC (simulated) per \
+             side instead."
+        );
+        assert_eq!(counter.terms.unwrap().stake, m(2_500_000));
     }
 }

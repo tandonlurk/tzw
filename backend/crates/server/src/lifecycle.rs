@@ -394,7 +394,7 @@ pub fn format_value(formula: FormulaId, value: i64) -> String {
     }
 }
 
-fn side_phrase(direction: Direction) -> &'static str {
+pub(crate) fn side_phrase(direction: Direction) -> &'static str {
     match direction {
         Direction::Above => "at or above",
         Direction::Below => "below",
@@ -410,7 +410,8 @@ pub fn claim_text(terms: &ChallengeTerms, title: &str) -> String {
     )
 }
 
-fn stake_text(stake: Money) -> String {
+/// Every stake this module handles is simulated, and is always labelled so.
+pub(crate) fn stake_text(stake: Money) -> String {
     format!("{} (simulated)", display_usdc(stake))
 }
 

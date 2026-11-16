@@ -202,9 +202,30 @@ pub fn display_usdc(amount: Money) -> String {
     format!("{whole}.{frac:0<2} USDC")
 }
 
+/// Basis points as a percentage for people: `6500` -> `65%`, `-350` ->
+/// `-3.5%`. Exact (integer arithmetic), at most two decimals.
+pub fn display_bps(bps: i64) -> String {
+    let sign = if bps < 0 { "-" } else { "" };
+    let abs = bps.unsigned_abs();
+    let frac = format!("{:02}", abs % 100);
+    let frac = frac.trim_end_matches('0');
+    let dot = if frac.is_empty() { "" } else { "." };
+    format!("{sign}{}{dot}{frac}%", abs / 100)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn display_bps_is_an_exact_percentage() {
+        assert_eq!(display_bps(6500), "65%");
+        assert_eq!(display_bps(-350), "-3.5%");
+        assert_eq!(display_bps(1), "0.01%");
+        assert_eq!(display_bps(0), "0%");
+        assert_eq!(display_bps(10_000), "100%");
+        assert_eq!(display_bps(i64::MIN), "-92233720368547758.08%");
+    }
 
     #[test]
     fn display_usdc_keeps_at_least_two_decimals() {
