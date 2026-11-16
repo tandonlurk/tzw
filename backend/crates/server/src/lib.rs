@@ -1,6 +1,7 @@
 //! HTTP API over the core domain logic. See docs/api.md for the contract.
 
 pub mod agents;
+pub mod cocaptain;
 pub mod demo;
 pub mod error;
 pub mod extract;
