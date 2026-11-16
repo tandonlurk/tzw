@@ -313,3 +313,32 @@ Status: done. Tests: `aen_m3_test` -> core 99, adversarial_authorize 14, adversa
 - Header names, signed-message layout and the logs payload are unverified: capture one real delivery (Filter Editor `console.log`) before relying on it.
 - No gzip support (configure the stream uncompressed); default 2 MB body limit.
 - Events are not decoded or linked to interactions / agents yet; there is no chain executor.
+
+
+## sandbox-host stage 2: `custom.code` in the runtime (2026-11-16, branch `sandbox-host`)
+
+Status: done. Tests (own dbs): `aen_sh_test` -> core 100 + 14 + 6 + 4, sandbox 3 + 24 (+1 ignored), server unit 72, api 17, collaborations 10, custom_code 6 (new), lifecycle 33, quicknode 8, suggestions 13; `aen_sh_sec` -> adversarial_api 16, adversarial_integrity 6. **332 passed, 1 ignored (latency).** fmt and clippy clean. README "Custom code" demo run verbatim on a fresh `aen_sh_dev`, port 8096.
+
+| What | Where |
+|---|---|
+| `custom.code` block (kind `action`, input any, `source` ≤ 64 KiB bytes); schemas exported (16 blocks) | `core/src/graph.rs`, `schemas/blocks.json` |
+| One `Sandbox` per process in `AppState.sandbox` (`None` if the guest is missing; logged with its SHA-256) | `server/src/custom_code.rs` `shared_sandbox`, `state.rs`, `main.rs` |
+| Executor: `ctx` -> `run_blocking` -> planned intents -> existing validation -> `authorize`; failures fail closed as `custom_code_failed`; runs record `reasoner = "custom_code"` | `graph_exec.rs` `run_code`, `plan_code_intent`; `lifecycle.rs` error paths |
+| `POST /agents/{id}/code/test-run` (writes nothing), dry run on save (422) | `custom_code.rs` `test_run`, `check_on_save`; `agents.rs` |
+| Dev compile of the guest 8.2 s -> 0.6 s (server boot measured 0.61 s): `opt-level = 3` for the Cranelift / wasmtime crates only | `backend/Cargo.toml` |
+
+### New defaults (proposals for docs/decisions.md)
+
+| # | Default | Rationale | Where |
+|---|---|---|---|
+| D-52 | Custom code chooses *whether* and *how much*, not the claim: a `propose_challenge` becomes the rule-based template terms (side, threshold, deadlines; shown to the code as `ctx.proposal`) with the code's stake. Answers: `accept_challenge` must use the stake on the table, `counter_offer` changes only the stake, `reject`. `commit_funds` and `propose_collaboration` are refused. Any unusable intent fails the whole run (no partial plans) | Keeps `core::Intent` unchanged (D-41) and every claim measurable; extending the output with direction/threshold is a later, reviewable change |
+| D-53 | `ctx` = trigger, `now_ms`, agent id/name/version/config, balances (available, exposure), market view, proposal template, incoming terms + own side. No policy limits, keys, addresses or other agents. Seed = first 4 bytes of SHA-256(agent id, now_ms, trigger) | Enough to write a strategy; nothing that helps probe or bypass limits; runs replay exactly |
+| D-54 | Save runs each source once on a sample `ctx` (`market.source = "sample"`, sample challenge for answering flows); any sandbox error is a 422. Skipped (save allowed) when the server has no sandbox. Explicitly not a security boundary: a test saves code that behaves only on the sample | Catches typos and throws early; the runtime limits are what protect the tick |
+| D-55 | Custom-code failures are recorded like reasoner errors: `agent_runs.status = error`, activity `custom_code_failed` via `record_once`, not rate-limited (D-38). A responder whose code fails leaves the challenge open to retry until the funding deadline | Consistent with existing failure handling; a persistent failure costs ~7 ms CPU per tick and is logged once |
+| D-56 | Test-run judges each intent as it would be used (proposal: new interaction; answer: state `proposed`; commit: `accepted`) against the agent's real balances and the current market, and writes nothing | The owner sees the verdict the tick would give, with no side effects |
+
+### Known limitations
+
+- The concurrency semaphore (4) is shared by ticks, test-runs and save checks; a burst of saves can make a tick wait up to ~0.5 s per queued run.
+- A graph with more than one `custom.code` node on one path runs each one; nothing caps that beyond the 64-step graph limit.
+- Javy builds are not byte-reproducible, so the recorded module SHA-256 identifies the built file, not the source (stage 1 note).

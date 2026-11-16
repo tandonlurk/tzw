@@ -299,3 +299,47 @@ Activity entry:
 Response **200** (QuickNode retries anything else): `{ received, inserted, duplicates, removed, rejected }`, e.g. `{"received":3,"inserted":3,"duplicates":0,"removed":0,"rejected":0}` and, for the same batch again, `{"received":3,"inserted":0,"duplicates":3,"removed":0,"rejected":0}`.
 
 Activity kinds (`agent_id` null; `detail`: `chain_event_id`, `source: "quicknode_streams"`, `env: "arc_testnet"`, `network`, `tx_hash`, `log_index`, `block_number`, `address`, `topic0`): `chain_event` ("Arc testnet event seen via QuickNode Streams: log 0 of transaction 0x88df0164…944b from contract 0x5fbdb231…0aa3 in block 436. Recorded only; nothing acts on it yet."), `chain_event_removed`, and `chain_events` (one summary row when a delivery has more than 50 new events).
+
+## Custom code (sandboxed JavaScript)
+
+Graph block `custom.code` (kind `action`, input port `in` accepts any type, no outputs), params `{source: string}` with 1 character to 64 KiB (UTF-8 bytes) of JavaScript defining `function decide(ctx)`. It runs in a QuickJS guest inside Wasmtime with no network, files, keys or real clock, and limits of 50M fuel (~7 ms CPU), 500 ms wall clock, 32 MiB memory and 64 KiB output. `Date` is fixed to `ctx.now_ms` and `Math.random` is seeded per agent and tick, so a run replays exactly. A graph may use it after any trigger, e.g. `trigger.schedule → custom.code` or `trigger.challenge_received → custom.code`.
+
+`decide` returns an array of at most 10 intents (money as digit strings, no leading zeros, at most 18 digits; unknown types or fields are rejected):
+
+```
+{type:"propose_challenge", stake}        // looking for opportunities
+{type:"accept_challenge", stake}         // answering: stake must equal the stake on the table
+{type:"counter_offer", stake}            // answering: same terms, different stake
+{type:"reject"}                          // do nothing / decline
+```
+
+`commit_funds` and `propose_collaboration` parse but are refused (the runtime commits stakes itself once both sides agree). Every usable intent then goes through `core::authorize` exactly like a built-in block's: over-limit stakes are denied (`proposal_denied`), stakes above `approval_threshold` wait for the owner. A proposal's claim (side, threshold, funding deadline, end) is the deterministic rule-based template shown in `ctx.proposal`; the code chooses whether to propose and the stake.
+
+`ctx` (no policy limits, keys, addresses or other agents' data):
+
+```
+{ trigger: "trigger.schedule"|"trigger.market_move"|"trigger.challenge_received", now_ms: int,
+  agent: { id, name, version, config: AgentConfig },
+  balances: { available: money, exposure: money },
+  market: { market: MarketRef, title, category, value: int, move_bps: int, window_secs, spot_symbol, source, fallback_reason },
+  proposal: { direction: "above"|"below", threshold: int, formula, start_ts, end_ts } | null,   // discovery only
+  incoming: { terms: ChallengeTerms, my_side: "above"|"below" } | null }                      // answering only
+```
+
+Failures never move funds. A sandbox error (CPU, time, memory, stack, a throw, invalid output, an unsupported feature such as `import()`), an intent the flow cannot use, or a server without the sandbox ends the run with no intents: `agent_runs` gets `status: "error"`, `reasoner: "custom_code"`, and the activity gets a `custom_code_failed` entry (logged once while it persists; `detail.code = {node_id, fuel_used, logs, error, module_sha256}`). Successful runs record `reasoner: "custom_code"` with the fuel and `console` lines in the trace.
+
+Save check: `POST /agents` and `PUT /agents/{id}` run every `custom.code` source once against a sample `ctx` (`market.source = "sample"`, plus a sample `incoming` challenge for a `trigger.challenge_received` flow). Any sandbox error is **422** `validation_failed` with `{path: "graph.nodes.<id>", code: "custom_code_failed", message}`. It is skipped when the server has no sandbox. It is a usability check, not a security boundary.
+
+| Method | Path | Body → Response | Notes |
+|---|---|---|---|
+| POST | `/agents/{id}/code/test-run` | `{source?: string}` → `TestRun` | Runs the agent's saved `custom.code` (or `source`) against the current market and its real balances. **Writes nothing** (no ledger, run, activity, interaction or approval). 404 unknown agent; 422 `no_custom_code` (no block and no `source`) or `validation_failed` (`source` empty or over 64 KiB); 503 `sandbox_unavailable`, `market_data_unavailable` |
+
+```
+TestRun { ok: bool,
+          error: { code: "out_of_fuel"|"timeout"|"memory_limit"|"stack_overflow"|"output_too_large"|"guest_error"
+                         |"bad_output"|"unsupported_feature"|"code_too_large"|"input_too_large"|"trap"|..., message } | null,
+          intents: [{ intent: Intent, decision: { result: "allow"|"require_approval"|"deny", reasons: DenyReason[] } }],
+          logs: string[], fuel_used: int|null, ctx: object, module_sha256: string, simulated: true }
+```
+
+The verdict is `core::authorize` as the intent would be judged when used: a proposal as a new interaction, an answer in state `proposed`, `commit_funds` in state `accepted`.

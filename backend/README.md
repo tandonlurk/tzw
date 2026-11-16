@@ -191,6 +191,77 @@ curl -sS "$API/activity?collaboration_id=$C" | jq -r '.[].summary'
 
 Endpoints, states, errors and example JSON: `docs/api.md` "Collaborations".
 
+## Custom code (sandboxed JavaScript)
+
+A `custom.code` graph block runs the owner's `function decide(ctx)` in a
+QuickJS guest inside Wasmtime (`crates/sandbox`, D-11): no network, files,
+keys or real clock; 50M fuel (~7 ms CPU), 500 ms wall clock, 32 MiB memory,
+64 KiB of source. It returns intents, which go through the same planning and
+`core::authorize` gate as built-in blocks; it can never move funds by itself.
+Build the guest once (checksum-verified Javy, gitignored):
+
+```sh
+./crates/sandbox/build-guest.sh   # writes crates/sandbox/guest/runner.wasm; or set AEN_SANDBOX_MODULE
+```
+
+Without it the server still starts; `custom.code` agents then record a
+`custom_code_failed` "sandbox is not available" entry and do nothing. With it,
+startup compiles the guest once (~0.6 s in a dev build).
+
+Demo (a fresh database, same server flags as the demo above; needs `jq`):
+
+```sh
+agent() {  # name, trigger, source -> AgentInput; 10.00 max per challenge, approval above 5.00
+  jq -n --arg name "$1" --arg trigger "$2" --arg src "$3" '{
+    name: $name, description: "sandboxed JavaScript strategy",
+    config: {goals: "demo", strategy: "Follow momentum.", categories: ["crypto"],
+             horizon_secs: 3600, risk_tolerance: "medium", schedule_secs: 60},
+    policy: {max_per_interaction: "10000000", max_aggregate_exposure: "50000000",
+             approval_threshold: "5000000", allowed_interaction_types: ["challenge"],
+             min_conviction_bps: 6000, stop_loss: null},
+    graph: {schema_version: 1,
+      nodes: [{id: "t", type: $trigger, params: (if $trigger == "trigger.schedule" then {every_secs: 60} else {} end)},
+              {id: "code", type: "custom.code", params: {source: $src}}],
+      edges: [{from: "t", from_port: "out", to: "code", to_port: "in"}]}}'
+}
+fund() { post /wallet/simulated-deposit '{"amount":"100000000"}' >/dev/null; post /agents/$1/allocate '{"amount":"100000000"}' >/dev/null; }
+
+# Saving code that fails on a sample ctx is refused:
+post /agents "$(agent Broken trigger.schedule 'function decide(ctx) { return ctx.nope.x; }')" | jq -c '.error.details[0] | {path, code}'
+# {"path":"graph.nodes.code","code":"custom_code_failed"}   (message: "... cannot read property 'x' of undefined")
+
+CODER=$(post /agents "$(agent Coder trigger.schedule '
+function decide(ctx) {
+  const move = ctx.market.move_bps;
+  console.log("move", move, "claim", ctx.proposal.direction);
+  if (Math.abs(move) < 200) return [];
+  return [{ type: "propose_challenge", stake: move > 500 ? "20000000" : "8000000" }];
+}')" | jq -r .id)
+ACCEPTER=$(post /agents "$(agent Accepter trigger.challenge_received '
+function decide(ctx) { return [{ type: "accept_challenge", stake: ctx.incoming.terms.stake }]; }')" | jq -r .id)
+fund $CODER; fund $ACCEPTER
+
+# Dry runs: nothing is written.
+post /dev/fake-market '{"move_bps":700,"yes_price_bps":5500,"resolution_side":"open"}' >/dev/null
+post /agents/$CODER/code/test-run '{}' | jq -c '[.intents[] | {stake: .intent.stake, verdict: .decision.result, reasons: .decision.reasons}]'
+# [{"stake":"20000000","verdict":"deny","reasons":["exceeds_max_per_interaction"]}]
+post /dev/fake-market '{"move_bps":300}' >/dev/null
+post /agents/$CODER/code/test-run '{}' | jq -c '{ok, intents: [.intents[] | {stake: .intent.stake, verdict: .decision.result}], logs, fuel_used}'
+# {"ok":true,"intents":[{"stake":"8000000","verdict":"require_approval"}],"logs":["move 300 claim above"],"fuel_used":1252292}
+post /agents/$CODER/code/test-run '{"source":"function decide(){ for(;;){} }"}' | jq -c '{ok, error}'
+# {"ok":false,"error":{"code":"out_of_fuel","message":"strategy used too much CPU"}}
+
+post /dev/tick '{}' | jq -c '{proposed, accepted, approvals_requested, funded}'
+# {"proposed":1,"accepted":1,"approvals_requested":2,"funded":0}   (8.00 is above both agents' 5.00 threshold)
+for A in $(curl -sS $API/approvals | jq -r '.[].id'); do post /approvals/$A/approve '{}' | jq -r .interaction.state; done
+# awaiting_approval, then active
+curl -sS "$API/activity?agent_id=$CODER" | jq -r '.[].summary'
+```
+
+Each run is in `agent_runs` with `reasoner = "custom_code"`, the trace
+(intent count, fuel, the strategy's `console` lines) and the planned intents.
+Endpoints, the `ctx` shape and errors: `docs/api.md` "Custom code".
+
 ## QuickNode Streams (local ingestion only)
 
 `server::quicknode`: `POST /api/webhooks/quicknode`, mounted only with

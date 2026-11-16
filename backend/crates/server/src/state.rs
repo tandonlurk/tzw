@@ -5,6 +5,8 @@ use std::sync::Arc;
 use axum::extract::FromRef;
 use sqlx::PgPool;
 
+use aen_sandbox::Sandbox;
+
 use crate::cocaptain::{CoCaptain, RuleBasedCoCaptain};
 use crate::guard::GuardConfig;
 use crate::market::MarketData;
@@ -64,12 +66,16 @@ pub struct AppState {
     pub reasoner: Arc<dyn Reasoner>,
     /// Advisory only: it is handed facts and returns text (see `cocaptain`).
     pub cocaptain: Arc<dyn CoCaptain>,
+    /// Runs `custom.code` blocks. Built once per process; `None` when the
+    /// guest module is missing (the server still runs, those agents record
+    /// that the sandbox is unavailable).
+    pub sandbox: Option<Arc<Sandbox>>,
     pub settings: Settings,
 }
 
 impl AppState {
-    /// Fake market data, the rule-based reasoner and the rule-based
-    /// co-captain: no network at all.
+    /// Fake market data, the rule-based reasoner, the rule-based co-captain
+    /// and the shared code sandbox (if built): no network at all.
     pub fn offline(pool: PgPool) -> AppState {
         let fake = Arc::new(FakeMarket::demo());
         AppState {
@@ -78,6 +84,7 @@ impl AppState {
             fake_market: Some(fake),
             reasoner: Arc::new(RuleBasedReasoner),
             cocaptain: Arc::new(RuleBasedCoCaptain),
+            sandbox: crate::custom_code::shared_sandbox(),
             settings: Settings::default(),
         }
     }
