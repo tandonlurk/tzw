@@ -336,3 +336,46 @@ export interface Portfolio {
   };
   formulas: Record<string, string>;
 }
+
+export type SuggestionStatus = "pending" | "accepted" | "dismissed" | "expired";
+export type SuggestionKind =
+  | "approval_expiring"
+  | "idle_funds"
+  | "lower_max_stake"
+  | "repeated_denials"
+  | "raise_approval_threshold"
+  | "agent_halted"
+  | "general";
+
+/** Only the fields a suggestion would change; nothing else can be named. */
+export interface ProposedChange {
+  policy?: {
+    max_per_interaction?: Money;
+    max_aggregate_exposure?: Money;
+    approval_threshold?: Money;
+    stop_loss?: Money;
+    min_conviction_bps?: number;
+  };
+  config?: { risk_tolerance?: "low" | "medium" | "high" };
+}
+
+export interface Suggestion {
+  id: string;
+  agent_id: string | null;
+  agent_name: string | null;
+  kind: SuggestionKind;
+  title: string;
+  body: string;
+  proposed_change: ProposedChange | null;
+  evidence: Record<string, unknown>;
+  loosens_control: boolean;
+  source: "rules" | "grok";
+  status: SuggestionStatus;
+  created_at: string;
+  decided_at: string | null;
+}
+
+export interface GenerateSuggestionsResult {
+  source: "rules" | "grok";
+  created: Suggestion[];
+}

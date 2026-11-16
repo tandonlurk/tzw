@@ -8,6 +8,7 @@ const ITEMS = [
   { href: "/agents", label: "My Agents" },
   { href: "/interactions", label: "Challenges" },
   { href: "/approvals", label: "Approvals" },
+  { href: "/cocaptain", label: "Co-captain" },
   { href: "/wallet", label: "Wallet" },
   { href: "/activity", label: "Activity" },
 ];
