@@ -9,7 +9,7 @@ Every file states what is real, what is simulated, what is unverified and what i
 | `main-track.md` | Agentic Payments & AI (D-17, owner to confirm) | Simulated lifecycle works end to end |
 | `arc.md` | Best use of Arc | Contract tested locally, not deployed (blocked on D-3 custody + faucet) |
 | `gemini.md` | Gemini Prediction Markets | Built on the public PM read API; live-probed once, tests use replayed fixtures |
-| `quicknode.md` | QuickNode Streams | Local webhook ingestion only; no stream configured, nothing exposed |
+| `quicknode.md` | QuickNode Streams | Webhook ingestion built and tested locally; no stream configured, nothing exposed, payload shape unverified |
 | `grok.md` | Grok Bot | Wired, mock-tested only; not called against the live API (no key yet) |
 | `elevenlabs.md` | ElevenLabs | Not built |
 
