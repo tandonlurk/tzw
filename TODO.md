@@ -67,7 +67,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 ## M5 — Custom-code agents (Tue eve – Wed Nov 18) — committed, not optional
 
 - [x] Sandbox host crate `aen-sandbox`: fuel, 500 ms epoch deadline, 32 MiB, no fs/network/env, strict intent output; spike GO (`docs/research/sandbox-spike.md`) (backend, P1)
-- [ ] `custom.code` block: JSON context in, `Intent`s out, validated then `authorize()` (backend, P1)
+- [x] `custom.code` block: JSON context in, `Intent`s out, validated then `authorize()`; test-run endpoint, 422 on save; 332 backend tests (D-52..D-56) (backend, P1)
 - [ ] Code editor in agent creation, versioned save, test-run (frontend, P1)
 - [x] Sandbox escape and resource-abuse tests: 27 in `aen-sandbox` (infinite loop, memory bomb, recursion, capability absence, bad output, concurrency); 293 backend tests (qa, P1)
 
