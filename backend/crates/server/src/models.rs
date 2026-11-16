@@ -160,6 +160,7 @@ pub struct LedgerEntry {
     pub delta: SignedMoney,
     pub reason: String,
     pub interaction_id: Option<Uuid>,
+    pub collaboration_id: Option<Uuid>,
     pub tx_hash: Option<String>,
 }
 
@@ -169,6 +170,7 @@ pub struct ActivityItem {
     pub ts: DateTime<Utc>,
     pub agent_id: Option<Uuid>,
     pub interaction_id: Option<Uuid>,
+    pub collaboration_id: Option<Uuid>,
     pub kind: String,
     pub summary: String,
     pub detail: Option<Value>,

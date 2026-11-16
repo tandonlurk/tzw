@@ -3,6 +3,7 @@
 
 pub mod authorize;
 pub mod challenge;
+pub mod collaboration;
 pub mod graph;
 pub mod interaction;
 pub mod ledger;

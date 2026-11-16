@@ -112,6 +112,12 @@ pub enum Reason {
     CommitStake,
     Settle,
     Refund,
+    /// A collaboration contribution is locked (available -> committed).
+    CollabCommit,
+    /// A completed collaboration pays out the pooled contributions.
+    CollabPayout,
+    /// A cancelled, funded collaboration returns a contribution.
+    CollabRefund,
 }
 
 impl Reason {
@@ -123,6 +129,9 @@ impl Reason {
             Reason::CommitStake => "commit_stake",
             Reason::Settle => "settle",
             Reason::Refund => "refund",
+            Reason::CollabCommit => "collab_commit",
+            Reason::CollabPayout => "collab_payout",
+            Reason::CollabRefund => "collab_refund",
         }
     }
 }
@@ -159,6 +168,7 @@ pub struct PostingSet {
     reason: Reason,
     idempotency_key: String,
     interaction_id: Option<Uuid>,
+    collaboration_id: Option<Uuid>,
     postings: Vec<Posting>,
 }
 
@@ -191,8 +201,19 @@ impl PostingSet {
             reason,
             idempotency_key: idempotency_key.to_owned(),
             interaction_id,
+            collaboration_id: None,
             postings,
         })
+    }
+
+    /// Marks the set as belonging to a collaboration.
+    pub fn for_collaboration(mut self, collaboration: Uuid) -> PostingSet {
+        self.collaboration_id = Some(collaboration);
+        self
+    }
+
+    pub fn collaboration_id(&self) -> Option<Uuid> {
+        self.collaboration_id
     }
 
     pub fn env(&self) -> Env {
@@ -387,11 +408,128 @@ pub fn refund(
     )
 }
 
+/// A collaboration party locks its contribution. The key is derived from the
+/// collaboration and agent, so it cannot be applied twice.
+pub fn collab_commit(
+    env: Env,
+    agent: Uuid,
+    collaboration: Uuid,
+    amount: Money,
+) -> Result<PostingSet, LedgerError> {
+    let amount = positive(amount)?;
+    let postings = transfer(
+        Account::AgentAvailable(agent),
+        Account::AgentCommitted(agent),
+        amount,
+    );
+    Ok(PostingSet::new(
+        env,
+        Reason::CollabCommit,
+        &format!("collab_commit:{collaboration}:{agent}"),
+        None,
+        postings.into(),
+    )?
+    .for_collaboration(collaboration))
+}
+
+/// Completion: both committed contributions move into the collaboration's
+/// escrow and the escrow pays each party its share. The shares must add up to
+/// the two contributions exactly (see `collaboration::split`); a zero share
+/// gets no posting.
+pub fn collab_payout(
+    env: Env,
+    collaboration: Uuid,
+    parties: [(Uuid, Money, Money); 2],
+) -> Result<PostingSet, LedgerError> {
+    let [(a, a_in, a_out), (b, b_in, b_out)] = parties;
+    if a == b {
+        return Err(LedgerError::SameParty);
+    }
+    let pool_in = positive(a_in)?
+        .checked_add(positive(b_in)?)
+        .ok_or(LedgerError::Overflow)?;
+    let pool_out = a_out.checked_add(b_out).ok_or(LedgerError::Overflow)?;
+    if pool_in != pool_out {
+        return Err(LedgerError::Unbalanced);
+    }
+    let escrow = Account::Escrow(collaboration);
+    let mut postings = Vec::with_capacity(8);
+    postings.extend(transfer(Account::AgentCommitted(a), escrow, a_in));
+    postings.extend(transfer(Account::AgentCommitted(b), escrow, b_in));
+    for (agent, share) in [(a, a_out), (b, b_out)] {
+        if !share.is_zero() {
+            postings.extend(transfer(escrow, Account::AgentAvailable(agent), share));
+        }
+    }
+    Ok(PostingSet::new(
+        env,
+        Reason::CollabPayout,
+        &format!("collab_payout:{collaboration}"),
+        None,
+        postings,
+    )?
+    .for_collaboration(collaboration))
+}
+
+/// Cancellation of a funded collaboration: a contribution goes back.
+pub fn collab_refund(
+    env: Env,
+    agent: Uuid,
+    collaboration: Uuid,
+    amount: Money,
+) -> Result<PostingSet, LedgerError> {
+    let amount = positive(amount)?;
+    let postings = transfer(
+        Account::AgentCommitted(agent),
+        Account::AgentAvailable(agent),
+        amount,
+    );
+    Ok(PostingSet::new(
+        env,
+        Reason::CollabRefund,
+        &format!("collab_refund:{collaboration}:{agent}"),
+        None,
+        postings.into(),
+    )?
+    .for_collaboration(collaboration))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const ENV: Env = Env::Simulated;
+
+    #[test]
+    fn collab_payout_balances_and_pays_the_split() {
+        let (a, b, c) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        let set = collab_payout(ENV, c, [(a, m(3), m(6)), (b, m(7), m(4))]).unwrap();
+        let net = set.net_deltas();
+        assert_eq!(net[&Account::AgentCommitted(a)], s(-3));
+        assert_eq!(net[&Account::AgentCommitted(b)], s(-7));
+        assert_eq!(net[&Account::AgentAvailable(a)], s(6));
+        assert_eq!(net[&Account::AgentAvailable(b)], s(4));
+        assert_eq!(net[&Account::Escrow(c)], s(0));
+        assert_eq!(set.collaboration_id(), Some(c));
+        assert_eq!(set.interaction_id(), None);
+        assert_eq!(set.idempotency_key(), format!("collab_payout:{c}"));
+        // A zero share is simply not paid.
+        let set = collab_payout(ENV, c, [(a, m(3), m(0)), (b, m(7), m(10))]).unwrap();
+        assert!(!set.net_deltas().contains_key(&Account::AgentAvailable(a)));
+        // Shares that do not add up to the pool are refused.
+        assert_eq!(
+            collab_payout(ENV, c, [(a, m(3), m(6)), (b, m(7), m(5))]),
+            Err(LedgerError::Unbalanced)
+        );
+        assert_eq!(
+            collab_payout(ENV, c, [(a, m(3), m(6)), (a, m(7), m(4))]),
+            Err(LedgerError::SameParty)
+        );
+        assert_eq!(
+            collab_payout(ENV, c, [(a, m(0), m(0)), (b, m(7), m(7))]),
+            Err(LedgerError::ZeroAmount)
+        );
+    }
 
     fn m(units: i64) -> Money {
         Money::from_minor(units).unwrap()

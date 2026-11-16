@@ -168,6 +168,29 @@ curl -s -X POST $B/suggestions/$ID/accept -H "$J" -d '{}'      # or /dismiss
 Rule suggestions are also generated at the end of every tick (no model call
 there). Endpoints and thresholds: `docs/api.md`.
 
+## Collaborations (simulated funds)
+
+`server::collaborations`, `core::collaboration` (states, split), ledger sets
+`collab_commit` / `collab_payout` / `collab_refund`. Owner-driven over REST;
+proposals, acceptances, rejections and funding go through `authorize`; the
+payout split rounds down for the proposer and gives the remainder to the
+partner, so no unit is created or lost. The seeded demo agents may collaborate
+(continue in the demo shell):
+
+```sh
+BULL=00000000-0000-4000-8000-0000000000d1; SKEPTIC=00000000-0000-4000-8000-0000000000d2
+C=$(post /collaborations "$(jq -nc --arg a $BULL --arg b $SKEPTIC '{proposer_id:$a, partner_id:$b,
+  objective:"Research ETH funding rates", proposer_share_bps:6000,
+  proposer_contribution:"3000000", partner_contribution:"5000000"}')" | jq -r .id)
+post /collaborations/$C/accept '{}' | jq -c '{state, actions}'      # {"state":"accepted","actions":["fund","cancel"]}
+post /collaborations/$C/fund '{}' | jq -r .error.code                # approval_required (skeptic's limit is 1.00)
+post /collaborations/$C/fund '{"owner_approved":true}' | jq -r .state   # funded
+post /collaborations/$C/complete '{}' | jq -c '[.proposer.net, .partner.net]'   # ["1800000","-1800000"]
+curl -sS "$API/activity?collaboration_id=$C" | jq -r '.[].summary'
+```
+
+Endpoints, states, errors and example JSON: `docs/api.md` "Collaborations".
+
 ## Schemas
 
 `../schemas/graph.schema.json`, `../schemas/challenge_terms.schema.json` and
