@@ -22,3 +22,4 @@ backend-m3 stages: 1 = proposal rate-limit for denied/no-counterparty + `pnl_ove
 
 ## Merge log
 - web-m3 stage 1 merged (c885a3e). Lead re-ran after merge: web 33 (specialist reported 36; actual is 30 + 3), lint 0 errors / 2 warnings, build ok; backend 254; contracts 84. Agent detail now has version history with diffs, per-agent activity, unrealized P&L "n/a, not computed", win rate, "Saved as version N" notice, "(config vN)" on decision traces. NOT browser-verified yet (stage 2 Chrome pass covers it). Worktree kept for stage 2.
+- backend-m3 stage 1 merged (2390662, 76d8c0e). Lead re-ran after merge: fmt ok, clippy 0 warnings, backend 256, contracts 84, web 33. Migration 0005 (`agent_runs.market_key/blocked`, `interactions.settled_at`). README demo gains two rounds: skeptic's third loss → rule-generated `lower_max_stake` (max_per_interaction 5.00) plus `raise_approval_threshold`; accept → version 2. D-38/D-39 copied to decisions. Worktree kept for stage 2.
