@@ -36,6 +36,14 @@ contract ChallengeEscrow {
     /// @notice Time after `resolveDeadline` before an unresolved Active challenge can be refunded by anyone.
     uint64 public constant GRACE = 1 hours;
 
+    /// @notice Max time from `create` to `fundDeadline`.
+    uint64 public constant MAX_FUND_WINDOW = 7 days;
+
+    /// @notice Max time from `fundDeadline` to `resolveDeadline`. Together with `MAX_FUND_WINDOW` and
+    ///         `GRACE` this bounds how long stakes can be locked without the resolver acting:
+    ///         at most 7 days + 30 days + 1 hour after `create`, after which `refund` is open.
+    uint64 public constant MAX_RESOLVE_WINDOW = 30 days;
+
     /// @notice Stake token. Immutable.
     address public immutable USDC;
     /// @notice Only address allowed to create, resolve and void challenges. Immutable (no transfer).
@@ -109,8 +117,11 @@ contract ChallengeEscrow {
     ///         Creating moves no funds; each party consents by calling `deposit` itself.
     /// @param id Caller-chosen unique id (the backend's challenge id).
     /// @param stake Amount each party must deposit, in token base units.
-    /// @param fundDeadline Deposits are accepted while `block.timestamp < fundDeadline`.
-    /// @param resolveDeadline Expected resolution time. Must be after `fundDeadline`.
+    /// @param fundDeadline Deposits are accepted while `block.timestamp < fundDeadline`. Must be in the
+    ///        future and at most `MAX_FUND_WINDOW` from now.
+    /// @param resolveDeadline Expected resolution time. Must be after `fundDeadline` and at most
+    ///        `MAX_RESOLVE_WINDOW` after it, so the timeout refund is always reachable.
+    /// @dev Reverts `InvalidParties` if either party is the resolver (it could otherwise award itself).
     function create(
         bytes32 id,
         address partyA,
@@ -123,7 +134,10 @@ contract ChallengeEscrow {
         if (stake == 0) revert ZeroStake();
         if (partyA == address(0) || partyB == address(0) || partyA == partyB) revert InvalidParties();
         if (partyA == address(this) || partyB == address(this)) revert InvalidParties();
+        if (partyA == RESOLVER || partyB == RESOLVER) revert InvalidParties();
         if (fundDeadline <= block.timestamp || resolveDeadline <= fundDeadline) revert InvalidDeadlines();
+        if (fundDeadline - block.timestamp > MAX_FUND_WINDOW) revert InvalidDeadlines();
+        if (resolveDeadline - fundDeadline > MAX_RESOLVE_WINDOW) revert InvalidDeadlines();
 
         _challenges[id] = Challenge({
             partyA: partyA,

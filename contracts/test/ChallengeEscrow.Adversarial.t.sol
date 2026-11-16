@@ -71,38 +71,69 @@ contract ChallengeEscrowAdversarialTest is Test {
 
     /// The resolver can also be a party and then decide its own challenge. This is inherent in the
     /// resolver-trust model, but the contract does not prevent a conflicted resolver.
-    function test_resolverCanBeAPartyAndResolveInItsOwnFavour() public {
-        _create(ID, resolver, bob, 10e6, uint64(block.timestamp + 1 hours), uint64(block.timestamp + 1 days));
-        usdc.mint(resolver, 10e6);
-        vm.prank(resolver);
-        usdc.approve(address(escrow), type(uint256).max);
-        vm.prank(resolver);
-        escrow.deposit(ID);
-        vm.prank(bob);
-        escrow.deposit(ID);
-        vm.prank(resolver);
-        escrow.resolve(ID, resolver);
-        assertEq(usdc.balanceOf(resolver), 20e6);
+    /// SEC-07: the resolver may not be a party, so it cannot award itself a challenge.
+    function test_resolverCannotBeAParty() public {
+        vm.startPrank(resolver);
+        vm.expectRevert(ChallengeEscrow.InvalidParties.selector);
+        escrow.create(ID, resolver, bob, 10e6, uint64(block.timestamp + 1 hours), uint64(block.timestamp + 1 days));
+        vm.expectRevert(ChallengeEscrow.InvalidParties.selector);
+        escrow.create(ID, alice, resolver, 10e6, uint64(block.timestamp + 1 hours), uint64(block.timestamp + 1 days));
+        vm.stopPrank();
     }
 
-    /// There is no upper bound on resolveDeadline. A resolver (or a bug in the backend) can create a
-    /// challenge whose timeout refund is effectively never available; the stakes are then only
-    /// released by the resolver. Parties must verify getChallenge() terms before depositing.
-    function test_unboundedResolveDeadline_removesTheTimeoutRefund() public {
-        _create(ID, alice, bob, 10e6, uint64(block.timestamp + 1 hours), type(uint64).max);
+    /// SEC-04: resolveDeadline is bounded, so an unbounded deadline is rejected.
+    function test_unboundedResolveDeadline_isRejected() public {
+        uint64 fund = uint64(block.timestamp + 1 hours);
+        vm.prank(resolver);
+        vm.expectRevert(ChallengeEscrow.InvalidDeadlines.selector);
+        escrow.create(ID, alice, bob, 10e6, fund, type(uint64).max);
+    }
+
+    function test_resolveWindow_boundary() public {
+        uint64 fund = uint64(block.timestamp + 1 hours);
+        uint64 cap = escrow.MAX_RESOLVE_WINDOW();
+        vm.startPrank(resolver);
+        vm.expectRevert(ChallengeEscrow.InvalidDeadlines.selector);
+        escrow.create(ID, alice, bob, 10e6, fund, fund + cap + 1);
+        escrow.create(ID, alice, bob, 10e6, fund, fund + cap); // exactly at the cap
+        vm.stopPrank();
+    }
+
+    function test_fundWindow_boundary() public {
+        uint64 cap = escrow.MAX_FUND_WINDOW();
+        uint64 nowTs = uint64(block.timestamp);
+        vm.startPrank(resolver);
+        vm.expectRevert(ChallengeEscrow.InvalidDeadlines.selector);
+        escrow.create(ID, alice, bob, 10e6, nowTs + cap + 1, nowTs + cap + 2);
+        escrow.create(ID, alice, bob, 10e6, nowTs + cap, nowTs + cap + 1);
+        vm.stopPrank();
+    }
+
+    /// With the cap, the timeout refund is always reachable within a bounded time of `create`.
+    function testFuzz_deadlinesBoundedAndRefundReachable(uint64 fundOff, uint64 resolveOff) public {
+        uint64 nowTs = uint64(block.timestamp);
+        fundOff = uint64(bound(fundOff, 1, escrow.MAX_FUND_WINDOW()));
+        resolveOff = uint64(bound(resolveOff, 1, escrow.MAX_RESOLVE_WINDOW()));
+        _create(ID, alice, bob, 10e6, nowTs + fundOff, nowTs + fundOff + resolveOff);
         vm.prank(alice);
         escrow.deposit(ID);
         vm.prank(bob);
         escrow.deposit(ID);
 
-        vm.warp(block.timestamp + 365 days * 100);
-        vm.expectRevert(ChallengeEscrow.RefundNotAvailable.selector);
+        vm.warp(nowTs + escrow.MAX_FUND_WINDOW() + escrow.MAX_RESOLVE_WINDOW() + escrow.GRACE());
         escrow.refund(ID);
-
-        // only the resolver can still release the funds
-        vm.prank(resolver);
-        escrow.resolveVoid(ID);
         assertEq(usdc.balanceOf(alice), BAL);
+        assertEq(usdc.balanceOf(bob), BAL);
+    }
+
+    function testFuzz_outOfBoundsDeadlinesRevert(uint64 fundOff, uint64 resolveOff) public {
+        uint64 nowTs = uint64(block.timestamp);
+        fundOff = uint64(bound(fundOff, 1, type(uint32).max));
+        resolveOff = uint64(bound(resolveOff, 1, type(uint32).max));
+        bool ok = fundOff <= escrow.MAX_FUND_WINDOW() && resolveOff <= escrow.MAX_RESOLVE_WINDOW();
+        vm.prank(resolver);
+        if (!ok) vm.expectRevert(ChallengeEscrow.InvalidDeadlines.selector);
+        escrow.create(ID, alice, bob, 10e6, nowTs + fundOff, nowTs + fundOff + resolveOff);
     }
 
     /// A stake so large that two deposits overflow totalHeld can never activate, and the single
