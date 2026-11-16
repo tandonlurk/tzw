@@ -51,3 +51,15 @@ Lead re-ran the whole README "Demo script" on a fresh db (port 8095). Steps abov
 | Portfolio | bull realized +7.50, 3 settled, 3 wins; skeptic -7.50, 3 settled, 0 wins (simulated) |
 
 `pnl_over_time` points now carry the simulated settlement times (D-39), so the dashboard chart spreads the three rounds over the simulated hours.
+
+## Full README demo after the M3 merges (verified by hand 2026-11-16, backend 332 tests)
+
+Lead re-ran every demo section of `backend/README.md` verbatim on fresh databases (port 8095, `MARKET_DATA=fake TICK_INTERVAL_SECS=0`, `AEN_SANDBOX_MODULE` set). All outputs matched the README comments.
+
+| Section | Observed |
+|---|---|
+| Challenge + co-captain | as above: bull +7.50 / skeptic -7.50 over 3 rounds; `lower_max_stake` accepted → skeptic v2, max 5.00 |
+| Collaboration (same db) | accept → `["fund","cancel"]`; fund → `approval_required`; fund with `owner_approved` → `funded`; complete → net `+1.80` / `-1.80` (60/40 of an 8.00 pool); six readable activity rows |
+| Custom code (fresh db) | broken code refused on save (422 `custom_code_failed`); test-run at +7%: stake 20.00 `deny` `exceeds_max_per_interaction`; at +3%: 8.00 `require_approval`, logs `move 300 claim above`, fuel 1,252,292; infinite loop → `out_of_fuel`; tick → proposed 1, accepted 1, approvals 2; both approved → `active` |
+
+Web views for all of the above were browser-checked by the web specialist (`reports/qa-m2-web.md`); the custom-code editor UI is in progress.
