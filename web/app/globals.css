@@ -109,6 +109,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .state.error { color: var(--negative); border-color: var(--negative); text-align: left; }
 .state.unreachable { color: var(--pending); border-color: var(--pending); text-align: left; }
 .notice { padding: .5rem .75rem; border-radius: 6px; border: 1px solid var(--pending); color: var(--pending); font-size: .85rem; }
+.notice.info { border-color: var(--neutral); color: var(--neutral); }
+.notice.bad { border-color: var(--negative); color: var(--negative); }
 .banner-error { padding: .6rem .8rem; border: 1px solid var(--negative); color: var(--negative); border-radius: 6px; margin-bottom: 1rem; }
 .banner-error ul { margin: .3rem 0 0 1.2rem; padding: 0; }
 details summary { cursor: pointer; color: var(--text-dim); }

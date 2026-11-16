@@ -15,6 +15,9 @@ import type {
   GraphValidation,
   LedgerEntry,
   Money,
+  Suggestion,
+  SuggestionStatus,
+  GenerateSuggestionsResult,
   Template,
   Wallet,
 } from "./types";
@@ -123,6 +126,17 @@ export const api = {
   listApprovals: (status = "pending") => get<Approval[]>(`/approvals?status=${encodeURIComponent(status)}`),
   approve: (id: string) => post<ApprovalDecision>(`/approvals/${encodeURIComponent(id)}/approve`, {}),
   reject: (id: string) => post<ApprovalDecision>(`/approvals/${encodeURIComponent(id)}/reject`, {}),
+
+  listSuggestions: (opts: { status?: SuggestionStatus; agent_id?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (opts.status) q.set("status", opts.status);
+    if (opts.agent_id) q.set("agent_id", opts.agent_id);
+    const qs = q.toString();
+    return get<Suggestion[]>(`/suggestions${qs ? `?${qs}` : ""}`);
+  },
+  generateSuggestions: () => post<GenerateSuggestionsResult>("/suggestions/generate", {}),
+  acceptSuggestion: (id: string) => post<Suggestion>(`/suggestions/${encodeURIComponent(id)}/accept`, {}),
+  dismissSuggestion: (id: string) => post<Suggestion>(`/suggestions/${encodeURIComponent(id)}/dismiss`, {}),
   getPortfolio: () => get<Portfolio>("/stats/portfolio"),
   devTick: () => post<TickReport>("/dev/tick", {}),
 };
