@@ -24,7 +24,9 @@ createdb aen_dev && createdb aen_test && createdb aen_sec_test
 git submodule update --init
 ```
 
-Environment: copy `backend/.env.example` and `web/.env.example` to `.env` (never commit them) and export the backend one (`set -a; source backend/.env; set +a`); the server does not read `.env` itself. No keys are needed for the simulated demo.
+Environment: copy `backend/.env.example` and `web/.env.example` to `.env` (never commit them) and export the backend one (`set -a; source backend/.env; set +a`); the server does not read `.env` itself. No keys are needed for the simulated demo. Optional, all documented in `backend/.env.example`: `XAI_API_KEY` (Grok, mock-tested only), `AEN_API_TOKEN` / `ALLOWED_HOSTS` / `BIND_ADDR` (request guard, D-42/D-43), `QUICKNODE_STREAMS_SECRET` (mounts the local Streams webhook).
+
+Custom-code sandbox (optional): `backend/crates/sandbox/build-guest.sh` downloads the checksum-verified Javy CLI into gitignored `tools/` and builds `runner.wasm`; without it the sandbox tests skip.
 
 ## Run
 
