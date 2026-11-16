@@ -89,3 +89,9 @@ export function outcomeText(i: Interaction): string | null {
   if (i.state === "failed") return `Failed${i.status_reason ? `: ${i.status_reason}` : ""}`;
   return null;
 }
+
+/** Reason text for a notice: trimmed, without a trailing period so callers can add punctuation. */
+export function reasonSuffix(reason: string | null | undefined): string {
+  const r = (reason ?? "").trim().replace(/\.+$/, "");
+  return r ? ` Reason: ${r}.` : "";
+}

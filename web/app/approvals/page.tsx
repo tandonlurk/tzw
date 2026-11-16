@@ -5,6 +5,7 @@ import { useState } from "react";
 import { api, isApiError, type Approval, type ApprovalDecision } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 import { Async, Empty, EnvBadge, ErrorBanner, Money, formatTs } from "@/components/ui";
+import { reasonSuffix } from "@/lib/interactions";
 import { DevTick } from "@/components/DevTick";
 import type { ApiError } from "@/lib/api";
 
@@ -59,7 +60,7 @@ function ResultNotice({ r }: { r: Result }) {
     return (
       <div className="notice bad" role="alert">
         Approved, but the challenge was cancelled: authorization was denied when re-checked against current balances and limits.
-        {i.status_reason ? ` Reason: ${i.status_reason}.` : ""} No funds moved. {link}
+        {reasonSuffix(i.status_reason)} No funds moved. {link}
       </div>
     );
   }
