@@ -1,0 +1,19 @@
+[package]
+name = "aen-sandbox"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Runs a user's JavaScript decide(ctx) in a QuickJS (Javy) guest inside Wasmtime and returns strictly validated intents (D-11)"
+
+[dependencies]
+aen-core = { path = "../core" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+sha2 = "0.10"
+tokio = { version = "1", features = ["rt", "sync"] }
+# Pinned (D-11): bump deliberately and re-run the escape tests.
+wasmtime = { version = "=50.0.1", default-features = false, features = ["cranelift", "runtime", "std", "parallel-compilation", "wat"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
