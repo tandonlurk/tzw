@@ -10,12 +10,14 @@
 //!   `observed < threshold`. There is therefore no tie.
 //! - No observation means `Void`: both stakes are refunded.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::money::Money;
 
 /// What the challenge is about. Only listed Gemini markets can be referenced.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum MarketRef {
     /// One contract of a Gemini prediction-market event.
@@ -42,7 +44,7 @@ impl MarketRef {
 }
 
 /// The side party A (the proposer) takes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Direction {
     Above,
@@ -60,7 +62,7 @@ impl Direction {
 
 /// Where the resolving observation is read from. Read by the backend: this is
 /// backend-administered resolution, not an oracle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ResolutionSource {
     /// `GET /v1/prediction-markets/events/{event_ticker}`.
@@ -71,7 +73,7 @@ pub enum ResolutionSource {
 
 /// How the observation is computed. The id is stored with the terms so a
 /// formula can change without rewriting old challenges.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum FormulaId {
     /// The contract's YES price in basis points (0-10000), first successful
@@ -107,7 +109,7 @@ impl FormulaId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ChallengeTerms {
     pub market: MarketRef,
@@ -124,6 +126,13 @@ pub struct ChallengeTerms {
     pub stake: Money,
     pub resolution_source: ResolutionSource,
     pub formula: FormulaId,
+}
+
+/// JSON Schema of `ChallengeTerms`, for `schemas/challenge_terms.schema.json`.
+/// The schema describes the shape only; `ChallengeTerms::validate` holds the
+/// cross-field rules.
+pub fn challenge_terms_json_schema() -> Value {
+    serde_json::to_value(schemars::schema_for!(ChallengeTerms)).unwrap_or(Value::Null)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, thiserror::Error)]
