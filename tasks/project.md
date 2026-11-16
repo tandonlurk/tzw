@@ -12,7 +12,12 @@ Lead-owned. `TODO.md` is the user-facing list; this file holds status detail, ri
 
 Token discipline: read sections, not whole files; delegate web research and bulk implementation to subagents (cheaper model for routine work) with reports capped at ~200 words; keep facts in `docs/`, not in conversation.
 
-## Status (2026-11-15, Sun)
+## Status (2026-11-16, Mon)
+
+- Phase: **M3/M5 done on simulated funds.** Merged today: blocked-proposal cooldown, settlement-time P&L, deterministic co-captain demo step, SEC-02/08/09, collaborations (backend + web), local QuickNode Streams webhook, `aen-sandbox` + `custom.code` block + code editor, agent detail/version history, dashboard suggestions banner. Tests: backend 332 (1 ignored), contracts 84, web 45. Full README demo hand-verified (`docs/demo.md`). Live state: `reports/handoffs/2026-11-16-m3-orchestration.md`.
+- Everything chain-side is blocked on D-3 (custody) + faucet funds; Grok live use on the xAI key + D-8; Streams on a QuickNode account + tunnel decision.
+
+## Status (2026-11-15, Sun) — historical
 
 - Phase: **M2 simulated lifecycle done and hand-verified (backend 254, contracts 84, web 30); co-captain backend and page merged.** Chain work blocked on D-3. Live state: `reports/handoffs/2026-11-15-m2b-orchestration.md`.
 - Default branch `recovery`; baseline backend 101 / contracts 72 tests pass.
@@ -74,3 +79,4 @@ Interfaces between specialists: the REST API in `docs/architecture.md` §9, the 
 - 2026-11-15: Recovery from iCloud data loss (see handoff). Verified baseline; launched qa-web, backend-m2, security-tests in `~/dev/hackathongs/worktrees/`.
 - 2026-11-15: Merged qa-web, security-tests, backend-m2 into `recovery` (backend 211, contracts 80, web 15 tests). Simulated challenge lifecycle works. Spawning frontend-m2.
 - 2026-11-15: Merged frontend-m2 (web 21 tests). All worktrees removed. Next actions in `reports/handoffs/2026-11-15-m2-orchestration.md`.
+- 2026-11-16: Lead ran backend-m3 (5 items), web-m3 (5 stages), sandbox-spike (D-11 GO), sandbox-host (crate + custom.code). All merged into `recovery`, all worktrees, target dirs and specialist dbs removed. Submission drafts in `docs/submission/`, root README added.

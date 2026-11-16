@@ -62,4 +62,4 @@ Lead re-ran every demo section of `backend/README.md` verbatim on fresh database
 | Collaboration (same db) | accept → `["fund","cancel"]`; fund → `approval_required`; fund with `owner_approved` → `funded`; complete → net `+1.80` / `-1.80` (60/40 of an 8.00 pool); six readable activity rows |
 | Custom code (fresh db) | broken code refused on save (422 `custom_code_failed`); test-run at +7%: stake 20.00 `deny` `exceeds_max_per_interaction`; at +3%: 8.00 `require_approval`, logs `move 300 claim above`, fuel 1,252,292; infinite loop → `out_of_fuel`; tick → proposed 1, accepted 1, approvals 2; both approved → `active` |
 
-Web views for all of the above were browser-checked by the web specialist (`reports/qa-m2-web.md`); the custom-code editor UI is in progress.
+Web views for all of the above were browser-checked by the web specialist (`reports/qa-m2-web.md`); the custom-code editor was browser-checked too.

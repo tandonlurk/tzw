@@ -15,10 +15,11 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [?] Provide when ready (in `.env`, never in chat): xAI API key, QuickNode key, Arc testnet faucet funds, ElevenLabs key
 - [?] Confirm the event is the University Blockchain Conference 2026 hackathon (UT Austin) and the deadline is Nov 20, 12 PM CST (D-18)
 - [?] D-14 base challenges on Gemini prediction-market events (the $4k Gemini bounty requires it)
-- [?] Review financial defaults D-22..D-37 in `docs/decisions.md` (resolution rule, void/refund, funding window, negotiation cap, exposure)
+- [?] Review defaults D-22..D-56 in `docs/decisions.md`. New on 2026-11-16: D-38/39 cooldown + P&L time, D-42..45 request guard / ledger hardening, D-46..48 collaborations (note: `/fund` takes `owner_approved: true` instead of the approvals queue), D-49..51 Streams webhook, D-52..56 custom code (code chooses whether/how much, not the claim)
 - [?] D-11 custom code = JavaScript in a Wasmtime/QuickJS sandbox: spike says GO (`docs/research/sandbox-spike.md`); also review D-40 (build `runner.wasm` locally vs commit it)
 - [?] D-17 main track "Agentic Payments & AI" + Arc award + all bounties
 - [?] Ask at sponsor office hours (Nov 16-19): what "Grok Bot" means for the xAI bounty
+- [?] Streams: create a QuickNode stream and expose the webhook through a tunnel (needs `AEN_API_TOKEN` + `ALLOWED_HOSTS`); capture one real delivery to confirm the header names and payload (all UNVERIFIED today)
 - [x] Pushed to GitHub `tandonlurk/tzw`; `recovery` is the default branch. Repo is PUBLIC: make it private if you do not want the docs visible
 
 ## M0 — Planning and research (Sat Nov 14)
@@ -68,7 +69,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 - [x] Sandbox host crate `aen-sandbox`: fuel, 500 ms epoch deadline, 32 MiB, no fs/network/env, strict intent output; spike GO (`docs/research/sandbox-spike.md`) (backend, P1)
 - [x] `custom.code` block: JSON context in, `Intent`s out, validated then `authorize()`; test-run endpoint, 422 on save; 332 backend tests (D-52..D-56) (backend, P1)
-- [ ] Code editor in agent creation, versioned save, test-run (frontend, P1)
+- [x] Code editor (textarea, 64 KiB counter, starter), versioned save with inline 422, dry-run test-run with verdicts; browser-verified incl. denial and infinite-loop failure 2026-11-16; 45 web tests (frontend, P1)
 - [x] Sandbox escape and resource-abuse tests: 27 in `aen-sandbox` (infinite loop, memory bomb, recursion, capability absence, bad output, concurrency); 293 backend tests (qa, P1)
 
 ## M6 — Co-captain, voice, demo (Wed Nov 18)
@@ -76,7 +77,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [x] Co-captain text suggestions: backend (6 rules, list/generate/accept/dismiss, D-36/D-37) and "Co-captain" page (accept, dismiss, loosens-control warning); 254 backend + 30 web tests. Grok variant mock-tested only; suggestions with a proposed change were browser-tested from inserted rows, not rule-generated ones (backend/frontend, P2)
 - [ ] ElevenLabs voice for co-captain (P3, last)
 - [~] Demo script, seeded demo agents, README run instructions, AGENTS.md 9.4 filled in: simulated run done and hand-verified (`docs/demo.md`); testnet version waits on D-3 (lead, P0)
-- [ ] Submission write-up per sponsor bounty (lead, P0)
+- [~] Submission write-ups drafted in `docs/submission/` (one per award, honest status); finalize after D-3 / keys and record the video (lead, P0)
 
 ## Notes from owner
 
