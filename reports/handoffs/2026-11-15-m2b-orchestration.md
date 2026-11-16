@@ -9,7 +9,7 @@ Lead ran: backend `cargo test --workspace` 211 pass, contracts `forge test` 80 p
 
 | Name | Worktree | Branch | Owns | Dbs / ports | Status |
 |---|---|---|---|---|---|
-| backend-m2b | `~/dev/hackathongs/worktrees/backend-m2b` | `backend-m2b` | `backend/`, `schemas/`, `docs/api.md`, `tasks/backend.md` | `aen_m2b_test`, `aen_m2b_sec`, `aen_m2b_dev`, port 8091 | running |
+| backend-m2b | `~/dev/hackathongs/worktrees/backend-m2b` | `backend-m2b` | `backend/`, `schemas/`, `docs/api.md`, `tasks/backend.md` | `aen_m2b_test`, `aen_m2b_sec`, `aen_m2b_dev`, port 8091 | MERGED, worktree removed |
 | web-m2b | `~/dev/hackathongs/worktrees/web-m2b` | `web-m2b` | `web/`, `tasks/frontend.md`, `reports/qa-m2-web.md` | `aen_qa`, ports 8090 / 3010 | MERGED, worktree removed |
 | contracts-sec | `~/dev/hackathongs/worktrees/contracts-sec` | `contracts-sec` | `contracts/`, `tasks/contracts.md` | none | MERGED, worktree removed |
 
@@ -24,3 +24,14 @@ Review diff vs AGENTS.md section 8, run its tests, `git merge --no-ff`, run all 
 - contracts-sec merged. Lead re-ran after merge: `forge test` 84, backend 211, web 21. SEC-04 caps + SEC-07 (resolver cannot be a party; the lead brief had mislabelled it). D-32 added.
 - web-m2b merged. Lead re-ran after merge: web `npm test` 25, lint 0 errors / 2 warnings, build ok; contracts 84; backend 211. Browser-verified by the specialist: reject, approve-then-cancelled notice, agent-detail challenges, template prefill. Dashboard defaults to per-agent lines from `agent_cumulative` in `/stats/portfolio`. The Next dev "1 Issue" badge was a browser-extension hydration mismatch on `<body>`, not an app bug.
 - Both remaining specialists were cut off once by the usage limit and resumed with SendMessage in the same worktree.
+- backend-m2b merged. Lead re-ran after merge: `cargo fmt --check` ok, clippy 0 warnings, backend 222, contracts 84, web 25. Lead ran the README demo script by hand on a fresh db: numbers in `docs/demo.md`. Defaults copied to D-33..D-35.
+
+## State (all three branches merged, no worktrees, specialist dbs dropped, nothing pushed since b098cad)
+Tests on `recovery`: backend 222, contracts 84, web 25.
+
+## Exact next actions
+1. M5 sandbox spike (D-11 still "proposed": spike only, record findings in `docs/research/`).
+2. Small backend follow-ups: rate-limit denied / no-counterparty proposals; `pnl_over_time.ts` is wall-clock even when settlement used a simulated `now`.
+3. Browser pass of the seeded demo in the web app (the lead verified it with curl only).
+4. Blocked on owner: D-3 custody (Arc deploy, signer, Streams ingestion), xAI key + D-8, D-14, review D-22..D-35, D-11, SEC-02 before any tunnel.
+5. Then M3 Streams webhook, M5 full, M6 co-captain / voice / submission write-ups.

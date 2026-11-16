@@ -15,7 +15,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [?] Provide when ready (in `.env`, never in chat): xAI API key, QuickNode key, Arc testnet faucet funds, ElevenLabs key
 - [?] Confirm the event is the University Blockchain Conference 2026 hackathon (UT Austin) and the deadline is Nov 20, 12 PM CST (D-18)
 - [?] D-14 base challenges on Gemini prediction-market events (the $4k Gemini bounty requires it)
-- [?] Review financial defaults D-22..D-31 in `docs/decisions.md` (resolution rule, void/refund, funding window, negotiation cap, exposure)
+- [?] Review financial defaults D-22..D-35 in `docs/decisions.md` (resolution rule, void/refund, funding window, negotiation cap, exposure)
 - [?] D-11 custom code = JavaScript in a Wasmtime/QuickJS sandbox
 - [?] D-17 main track "Agentic Payments & AI" + Arc award + all bounties
 - [?] Ask at sponsor office hours (Nov 16-19): what "Grok Bot" means for the xAI bounty
@@ -43,7 +43,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [x] Gemini exchange market data incl. prediction-market contracts, spot fallback, deterministic fake; shapes in `docs/research/gemini-prediction-markets.md` (backend, P0)
 - [~] Reasoner trait: rule-based done; Grok wired behind `XAI_API_KEY` but only mock-tested, endpoint/model unverified (backend, P0/P1, needs D-8 + key)
 - [x] Challenge proposal, bounded negotiation, approvals, resolve, settle/void in the simulated ledger; 211 backend tests (backend, P0)
-- [ ] Proposal cooldown (agents currently re-propose every tick); extend `schemas/` for challenge terms (backend, P1)
+- [x] Proposal cooldown (600 s per agent and market, D-33); `schemas/challenge_terms.schema.json`; demo seed `POST /api/dev/seed-demo` + seeded lifecycle test; 222 backend tests (backend, P1)
 - [ ] Deploy escrow to Arc testnet; signer + chain executor (contracts/backend, P0, needs D-3 + faucet funds)
 - [x] Visual logic builder: add/connect/delete blocks, incompatible connections rejected, validate, save with positions; browser-tested (frontend, P0)
 - [ ] Agent detail + config/policy editing (frontend, P0)
@@ -53,7 +53,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [ ] QuickNode Streams webhook ingestion, idempotent (backend, P1)
 - [ ] Full lifecycle end to end on testnet: discover → negotiate → authorize → fund → resolve → settle (lead, P0)
 - [x] Wallet overview, Activity view, approvals queue, interactions list/detail, Dashboard charts from `/stats/portfolio` only (per-agent P&L lines by default); 25 web tests. Browser-verified 2026-11-15 incl. reject, approve-then-cancelled notice, agent-detail challenges, template prefill (frontend, P0)
-- [ ] Backend gaps from `reports/qa-m2-web.md`: raw units in negotiation summaries, approvals need high conviction, clock jumps cancel negotiations (backend, P1)
+- [x] Backend gaps from `reports/qa-m2-web.md`: summaries now readable ("5.00 USDC (simulated)"); approvals arise on the counterparty side by design; dev clock jumps past a funding deadline are refused with 409 (D-34) (backend, P1)
 - [ ] Collaboration: simple agreement + simulated payout split (backend/frontend, P2, first to cut)
 
 ## M4 — QA and security (Tue–Wed, continuous)
@@ -75,7 +75,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 - [ ] Grok co-captain text suggestions, accept/dismiss (backend/frontend, P2)
 - [ ] ElevenLabs voice for co-captain (P3, last)
-- [ ] Demo script, seeded demo agents, README run instructions, AGENTS.md 9.4 filled in (lead, P0)
+- [~] Demo script, seeded demo agents, README run instructions, AGENTS.md 9.4 filled in: simulated run done and hand-verified (`docs/demo.md`); testnet version waits on D-3 (lead, P0)
 - [ ] Submission write-up per sponsor bounty (lead, P0)
 
 ## Notes from owner

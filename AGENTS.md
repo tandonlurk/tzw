@@ -862,7 +862,7 @@ Prerequisites: Rust (`~/.cargo/bin`), Foundry (`~/.foundry/bin`), PostgreSQL 17 
 - **Backend:** `cd backend && DATABASE_URL="postgres://$USER@localhost/aen_dev" cargo run -p aen-server` (port 8080, migrations run on startup). Tests: `cargo test --workspace` (databases `aen_test` and `aen_sec_test`, create both with `createdb`; set `TEST_DATABASE_URL` if needed). Regenerate schemas: `cargo run -p aen-core --example export_schemas`.
 - **Frontend:** `cd web && npm ci && npm run dev` (port 3000, backend at `http://localhost:8080/api`). Tests: `npm test`, `npm run build`.
 - **Contracts:** `git submodule update --init && cd contracts && forge test`. Not deployed anywhere yet.
-- **End-to-end demo flow (simulated funds):** run the backend with `MARKET_DATA=fake TICK_INTERVAL_SECS=0` and follow the curl lifecycle script in `backend/README.md` (`/api/dev/tick`, `/api/dev/fake-market`); watch it in the web app under Activity, Approvals and Dashboard. `docs/demo.md` still to be written.
+- **End-to-end demo flow (simulated funds):** fresh db, run the backend with `MARKET_DATA=fake TICK_INTERVAL_SECS=0`, then follow "Demo script" in `backend/README.md` (`/api/dev/seed-demo`, `/api/dev/tick`, `/api/dev/fake-market`, approve the pending approval); watch it in the web app under Activity, Approvals and Dashboard. Expected numbers: `docs/demo.md`.
 
 ---
 

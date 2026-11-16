@@ -17,3 +17,23 @@ Goal: one coherent lifecycle, about 4 minutes, on Arc testnet with real testnet 
 | 11 | (If built) Co-captain | Grok suggests a limit change; owner accepts | Advisory layer |
 
 Fallbacks: a recorded run of steps 7–9 in case testnet or faucet is down; a `simulated` environment that runs the same lifecycle against the ledger only, clearly labelled.
+
+## Simulated run that works today (verified by hand 2026-11-15, `recovery` after the backend-m2b merge)
+
+Exact commands: `backend/README.md`, "Demo script" (fresh db, `MARKET_DATA=fake TICK_INTERVAL_SECS=0`, `POST /api/dev/seed-demo`). Watch it in the web app under Activity, Approvals, Challenges and Dashboard. All funds are simulated; nothing signs or sends a transaction, and resolution is backend-administered on a fake market.
+
+| Step | Call | Observed |
+|---|---|---|
+| Seed | `POST /dev/seed-demo {}` | "Demo Bull (simulated)" and "Demo Skeptic (simulated)", 100.00 simulated USDC each; a second call creates nothing |
+| Market | `POST /dev/fake-market {"move_bps":300,"yes_price_bps":5500,"resolution_side":"open"}` | BTC +3%, contract at 0.55 |
+| Tick 1 | `POST /dev/tick {}` | proposed 1, countered 1: bull stakes 5.00 on "at or above 0.55", skeptic counters 2.50 per side |
+| Tick 2 | `POST /dev/tick {}` | accepted 1, approvals_requested 1: skeptic's stake 2.50 is above its automatic limit of 1.00, nothing funded |
+| Guard | `POST /dev/tick {"now": <after end>}` before funding | 409 `clock_jump_would_expire` |
+| Approve | `POST /approvals/:id/approve {}` | interaction `active`, both stakes committed together |
+| Tick 3 | `POST /dev/tick {}` | no new proposal (one open challenge per market, then the 600 s cooldown) |
+| Resolve | `POST /dev/fake-market {"yes_price_bps":7000}`, then `POST /dev/tick {"now": end + 5 s}` | resolving 1, settled 1; observed 7000, outcome `a` (bull) |
+| Result | `GET /stats/portfolio` | bull realized P&L +2.50, 1 win; skeptic -2.50, 1 loss; totals: allocated 200.00, committed 0, portfolio realized P&L 0 |
+
+Also checked: a `text/plain` POST to approve returns 415.
+
+Caveats: deterministic only on a fresh database; a rerun within 600 s needs `PROPOSAL_COOLDOWN_SECS=0`; a slow live demo needs a longer `FUNDING_WINDOW_SECS` (300 s default, approvals included).
