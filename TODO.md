@@ -73,7 +73,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 ## M6 — Co-captain, voice, demo (Wed Nov 18)
 
-- [~] Co-captain text suggestions: backend done (6 rules, list/generate/accept/dismiss, 254 backend tests, D-36/D-37); Grok variant mock-tested only; frontend view not started (backend/frontend, P2)
+- [x] Co-captain text suggestions: backend (6 rules, list/generate/accept/dismiss, D-36/D-37) and "Co-captain" page (accept, dismiss, loosens-control warning); 254 backend + 30 web tests. Grok variant mock-tested only; suggestions with a proposed change were browser-tested from inserted rows, not rule-generated ones (backend/frontend, P2)
 - [ ] ElevenLabs voice for co-captain (P3, last)
 - [~] Demo script, seeded demo agents, README run instructions, AGENTS.md 9.4 filled in: simulated run done and hand-verified (`docs/demo.md`); testnet version waits on D-3 (lead, P0)
 - [ ] Submission write-up per sponsor bounty (lead, P0)

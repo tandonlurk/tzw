@@ -14,7 +14,7 @@ Token discipline: read sections, not whole files; delegate web research and bulk
 
 ## Status (2026-11-15, Sun)
 
-- Phase: **M2 simulated lifecycle done and hand-verified (backend 254, contracts 84, web 25); co-captain backend merged.** Chain work blocked on D-3. Live state: `reports/handoffs/2026-11-15-m2b-orchestration.md`.
+- Phase: **M2 simulated lifecycle done and hand-verified (backend 254, contracts 84, web 30); co-captain backend and page merged.** Chain work blocked on D-3. Live state: `reports/handoffs/2026-11-15-m2b-orchestration.md`.
 - Default branch `recovery`; baseline backend 101 / contracts 72 tests pass.
 
 ## Status (2026-11-14, Sat) — historical

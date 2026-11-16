@@ -55,3 +55,7 @@ Tests on `recovery`: backend 254, contracts 84, web 25.
 3. M5 sandbox spike once the owner gives the go-ahead (D-11).
 4. Blocked on owner: D-3 custody (Arc deploy, signer, Streams ingestion), xAI key + D-8, D-14, review D-22..D-37, SEC-02 before any tunnel.
 5. Then M3 Streams webhook, M5 full, M6 voice and submission write-ups.
+
+## Update: web-cocaptain merged (supersedes "Final state" counts and next action 1)
+Lead re-ran after merge: web `npm test` 30, lint 0 errors / 2 warnings, build ok; contracts 84; backend 254. No worktrees left. Browser-verified by the specialist: list, before→after table, loosens-control warning, accept (agent version 2), dismiss, 422, 409. Gap: the demo path only produced a text-only `approval_expiring` suggestion; the three with a proposed change were inserted by SQL for the test, so rule-generated changes have not been seen end to end in the browser (they are covered by backend tests).
+Next action 1 is now: a demo step that makes a rule-generated suggestion with a change appear (e.g. three losses for `lower_max_stake`), plus a browser pass of the whole seeded demo; optional pending-suggestions count on the dashboard.
