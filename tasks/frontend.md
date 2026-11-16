@@ -50,3 +50,9 @@ Run against the real backend; charts (M2); approvals and interactions views.
 - Approval-cancelled notice no longer shows a doubled period (`reasonSuffix`, tested).
 - "1 Issue" badge: React hydration warning, extension (Grammarly) adds `data-gr-ext-installed` / `data-new-gr-c-s-check-loaded` on `<body>`. Fixed with `suppressHydrationWarning` on body in `app/layout.tsx`.
 - Browser-verified on real backend: reject, approve-then-cancelled notice, agent-detail challenges list, template description prefill, per-agent chart. Name is intentionally left blank on template pick.
+
+## Co-captain suggestions view (web-cocaptain)
+- Added `/cocaptain` page (one nav item), `lib/suggestions.ts` helpers + tests, API types/client for list/generate/accept/dismiss.
+- Pending list with before->after table (current values from `GET /agents`, display only), amber loosens-control warning, evidence in `<details>`, 422/409 handling, "Check now", decided/expired list.
+- Verified in browser against a real backend (fake market, seed-demo): list, accept (agent v2), dismiss, 422 stays pending, 409 stale. Suggestions with proposed changes were inserted via SQL (rules did not produce one in the short demo path).
+- Not done: dashboard/agent-detail pending count.
