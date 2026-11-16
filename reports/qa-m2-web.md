@@ -19,3 +19,14 @@ Observations (not fixed)
 
 ## Collaboration pass (stage 3)
 Via UI on a fresh db: propose (empty submit shows local errors) -> accept -> Fund showed the owner-approval notice -> "I approve: fund now" -> funded -> "Declare complete and pay out" -> net +1.80 / -1.80, ledger and activity correct. Cancel with reason on an unfunded one (created by curl) -> cancelled, no actions left. Agent detail and Activity link to collaborations. Not tested: reject, funded cancel, authorization_denied display.
+
+## Stage 4 pass (approvals, collab reject/cancel/denial, 127.0.0.1, mobile)
+Verified in Chrome: approve one challenge approval and reject another from /approvals (notices correct; reject says no funds moved); reject a collaboration (final, no actions); fund with owner approval then cancel funded (ledger shows collab_commit then collab_refund; agent balances back to 102.50 / 97.50 USDC available, 0 committed); fund denied by authorize (Skeptic paused) shows `authorization_denied` banner with "partner: ... the agent is paused", page stays usable; 390px (iframes) Dashboard, Agents, Collaboration detail: no horizontal overflow, layout stacks.
+
+Bugs fixed (web)
+- Opening `http://127.0.0.1:3013` in dev left every page on "Loading..." forever (Next dev blocks hydration from a non-localhost origin). Added `allowedDevOrigins: ["127.0.0.1"]` in `web/next.config.ts`.
+- With the API refusing that Origin (403 origin_not_allowed, surfaced by the browser as a failed fetch) the message was "backend unreachable, check it is running". Now says it may have refused the page origin, shows the page origin and CORS_ORIGIN hint (`lib/errors.ts`, tested).
+
+Backend notes (not changed)
+- The browser cannot read the 403 body for a CORS/origin refusal, so the web app cannot distinguish it from a dead server; the hint covers both.
+- A second challenge could not be proposed while another was active between the same pair (even with PROPOSAL_COOLDOWN_SECS=0); fine, but approvals queue could not be filled with two at once in the demo.
