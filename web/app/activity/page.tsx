@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
+import { ActivityExtra } from "@/components/ActivityDetail";
 import { Async, Empty, formatTs } from "@/components/ui";
 
 export default function ActivityPage() {
@@ -32,6 +33,7 @@ export default function ActivityPage() {
                     {it.collaboration_id && <Link href={`/collaborations/${it.collaboration_id}`}>collaboration</Link>}
                     {it.interaction_id && <Link href={`/interactions/${it.interaction_id}`}>challenge</Link>}
                   </div>
+                  <ActivityExtra it={it} />
                   {it.detail && (
                     <details style={{ marginTop: ".4rem" }}>
                       <summary>Details</summary>

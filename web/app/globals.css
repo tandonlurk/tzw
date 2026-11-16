@@ -172,3 +172,10 @@ pre { background: var(--bg); padding: .6rem; border-radius: 6px; overflow-x: aut
 .legend .sw { display: inline-block; width: .7rem; height: .25rem; margin-right: .35rem; vertical-align: middle; background: currentColor; }
 .seg { display: inline-flex; gap: .25rem; margin-bottom: .5rem; }
 .seg button.on { border-color: var(--neutral); color: var(--neutral); }
+
+/* custom.code block */
+.bnode.code-node { min-width: 440px; max-width: 520px; }
+.code-editor textarea.code { width: 100%; min-height: 220px; resize: vertical; font-size: .78rem; line-height: 1.35; white-space: pre; overflow: auto; tab-size: 2; }
+.code-editor pre { max-height: 200px; overflow: auto; font-size: .72rem; }
+.builder.has-code { height: 820px; }
+@media (max-width: 720px) { .builder.has-code { height: auto; } }

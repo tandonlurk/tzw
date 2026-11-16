@@ -427,3 +427,21 @@ export interface CollabInput {
   proposer_contribution: Money;
   partner_contribution: Money;
 }
+
+// ---- Custom code (docs/api.md "Custom code") ----
+
+export interface TestRunIntent {
+  intent: { type: string; stake?: Money };
+  decision: { result: "allow" | "require_approval" | "deny"; reasons: string[] };
+}
+
+export interface TestRun {
+  ok: boolean;
+  error: { code: string; message: string } | null;
+  intents: TestRunIntent[];
+  logs: string[];
+  fuel_used: number | null;
+  ctx: Record<string, unknown>;
+  module_sha256: string;
+  simulated: true;
+}

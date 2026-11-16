@@ -6,11 +6,13 @@ import { useSearchParams } from "next/navigation";
 import { api, isApiError, type Agent, type ApiError } from "@/lib/api";
 import { formatMoney, parseMoney } from "@/lib/money";
 import { useAsync } from "@/lib/useAsync";
+import { ActivityExtra } from "@/components/ActivityDetail";
 import { Async, Empty, ErrorBanner, EnvBadge, Money, StatusBadge, Tile, formatTs } from "@/components/ui";
 import { LedgerTable } from "@/components/LedgerTable";
 import { CollabCard } from "@/components/CollabCard";
 import { InteractionCard } from "@/components/Interactions";
 import { isOpen } from "@/lib/interactions";
+import { usesCustomCode } from "@/lib/customCode";
 import { interactionCounts, versionHistory, winRateText } from "@/lib/agentView";
 
 export default function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -71,6 +73,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
             {items.map((it) => (
               <div key={it.id} className="card">
                 <div className="row spread"><span>{it.summary}</span><span className="dim">{formatTs(it.ts)}</span></div>
+                <ActivityExtra it={it} />
                 {it.interaction_id && <Link href={`/interactions/${it.interaction_id}`}>Open challenge</Link>}
               </div>
             ))}
@@ -128,7 +131,7 @@ function Detail({ agent: a, onChanged, active }: { agent: Agent; onChanged: () =
       <div className="page-head">
         <div>
           <h1>{a.name}</h1>
-          <div className="row"><StatusBadge status={a.status} /><EnvBadge env={a.env} /><span className="dim">version {a.version}</span></div>
+          <div className="row"><StatusBadge status={a.status} /><EnvBadge env={a.env} /><span className="dim">version {a.version}</span>{usesCustomCode(a.graph) && <span className="badge info" title="This agent's behavior graph contains a custom code block.">runs custom code</span>}</div>
           {a.description && <div className="dim" style={{ marginTop: ".4rem" }}>{a.description}</div>}
         </div>
         <div className="row">
@@ -200,6 +203,7 @@ function Detail({ agent: a, onChanged, active }: { agent: Agent; onChanged: () =
         ) : (
           <>
             <div className="dim">{a.graph.nodes.length} block(s), {a.graph.edges.length} connection(s). Open Edit to view or change the canvas.</div>
+            {usesCustomCode(a.graph) && <div>Runs custom JavaScript in a sandbox. Its stakes still go through your limits. Failed runs appear in Recent activity as &quot;custom code failed&quot;.</div>}
             <details><summary>Raw graph</summary><pre>{JSON.stringify(a.graph, null, 2)}</pre></details>
           </>
         )}
