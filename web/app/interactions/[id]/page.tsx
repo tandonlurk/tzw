@@ -100,7 +100,7 @@ function RunView({ r, name }: { r: Run; name: string }) {
   return (
     <details style={{ marginBottom: ".4rem" }}>
       <summary>
-        {name} &middot; {formatTs(r.ts)} &middot; trigger {r.trigger} &middot; <span className={r.status === "error" ? "neg" : ""}>{r.status}</span> &middot; {r.reasoner}
+        {name} (config v{r.agent_version}) &middot; {formatTs(r.ts)} &middot; trigger {r.trigger} &middot; <span className={r.status === "error" ? "neg" : ""}>{r.status}</span> &middot; {r.reasoner}
       </summary>
       {r.error && <div className="neg">{r.error}</div>}
       <ul>{r.trace.map((t, k) => <li key={k}><span className="mono dim">{t.node_type}</span> {t.summary}</li>)}</ul>

@@ -18,8 +18,8 @@ export default function EditAgentPage({ params }: { params: Promise<{ id: string
   async function save(input: AgentInput) {
     setError(null);
     try {
-      await api.updateAgent(id, input);
-      router.push(`/agents/${id}`);
+      const updated = await api.updateAgent(id, input);
+      router.push(`/agents/${id}?saved=${updated.version}`);
     } catch (e) {
       if (isApiError(e)) setError(e);
     }

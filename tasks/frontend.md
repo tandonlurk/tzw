@@ -56,3 +56,8 @@ Run against the real backend; charts (M2); approvals and interactions views.
 - Pending list with before->after table (current values from `GET /agents`, display only), amber loosens-control warning, evidence in `<details>`, 422/409 handling, "Check now", decided/expired list.
 - Verified in browser against a real backend (fake market, seed-demo): list, accept (agent v2), dismiss, 422 stays pending, 409 stale. Suggestions with proposed changes were inserted via SQL (rules did not produce one in the short demo path).
 - Not done: dashboard/agent-detail pending count.
+
+## Agent detail + editing (web-m3, stage 1)
+- Audit: detail already had balances, realized P&L, config, policy, challenges, ledger; edit (PUT = new version) with inline 422 field errors existed. Missing: unrealized P&L, win rate, active count, version history, per-agent activity, saved-version confirmation, version shown on decision traces.
+- Added: unrealized P&L tile ("n/a, not computed"), win rate %, active challenges tile, Version history (`GET /agents/{id}/versions`, newest first, diff vs previous), Recent activity, "Saved as version N" notice after edit, "(config vN)" on run traces in interaction detail. Collaborations labelled not available. Helpers + tests in `lib/agentView.ts` (36 tests total).
+- Not browser-verified this stage (build/lint/tests only).
