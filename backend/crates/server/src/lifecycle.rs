@@ -637,6 +637,30 @@ async fn has_open_on_market(
     .await
 }
 
+/// Whether the agent proposed on this market less than `cooldown_secs` ago.
+/// Counted from the proposal (`created_at`), so it holds whether that
+/// challenge was rejected, expired, cancelled or settled. A runtime rule: no
+/// reasoner or graph can shorten it.
+async fn in_proposal_cooldown(
+    conn: &mut PgConnection,
+    agent: Uuid,
+    market_key: &str,
+    cooldown_secs: i64,
+    now: DateTime<Utc>,
+) -> Result<bool, sqlx::Error> {
+    if cooldown_secs <= 0 {
+        return Ok(false);
+    }
+    let last: Option<DateTime<Utc>> = sqlx::query_scalar(
+        "SELECT MAX(created_at) FROM interactions WHERE proposer_id = $1 AND market_key = $2",
+    )
+    .bind(agent)
+    .bind(market_key)
+    .fetch_one(conn)
+    .await?;
+    Ok(last.is_some_and(|t| (now - t).num_seconds() < cooldown_secs))
+}
+
 async fn schedule_due(
     conn: &mut PgConnection,
     agent: Uuid,
@@ -725,7 +749,11 @@ async fn discover_one(
         return Ok(());
     }
     let market_key = view.market.key();
-    if has_open_on_market(&mut conn, agent.id, &market_key).await? {
+    let cooldown = settings.proposal_cooldown_secs;
+    // Checked before reasoning, so a cooling-down agent costs no model call.
+    if has_open_on_market(&mut conn, agent.id, &market_key).await?
+        || in_proposal_cooldown(&mut conn, agent.id, &market_key, cooldown, now).await?
+    {
         return Ok(());
     }
     drop(conn);
@@ -751,6 +779,7 @@ async fn discover_one(
     // same challenge or pick the same counterparty for one market.
     advisory_lock(&mut tx, "aen:propose").await?;
     if has_open_on_market(&mut tx, agent.id, &market_key).await?
+        || in_proposal_cooldown(&mut tx, agent.id, &market_key, cooldown, now).await?
         || (trigger == TRIGGER_SCHEDULE
             && !schedule_due(&mut tx, agent.id, every_secs, now).await?)
     {

@@ -46,6 +46,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         max_negotiation_rounds: var("MAX_NEGOTIATION_ROUNDS", defaults.max_negotiation_rounds)?,
         funding_window_secs: var("FUNDING_WINDOW_SECS", defaults.funding_window_secs)?,
         resolution_grace_secs: var("RESOLUTION_GRACE_SECS", defaults.resolution_grace_secs)?,
+        proposal_cooldown_secs: var("PROPOSAL_COOLDOWN_SECS", defaults.proposal_cooldown_secs)?,
         default_symbol: var("DEFAULT_SYMBOL", defaults.default_symbol)?,
         default_window_secs: defaults.default_window_secs,
         dev_endpoints: var("DEV_ENDPOINTS", defaults.dev_endpoints)?,
@@ -53,6 +54,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if settings.max_negotiation_rounds < 1
         || settings.funding_window_secs < 1
         || settings.resolution_grace_secs < 0
+        || settings.proposal_cooldown_secs < 0
     {
         return Err("lifecycle settings must be positive".into());
     }
