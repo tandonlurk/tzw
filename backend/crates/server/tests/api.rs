@@ -186,7 +186,7 @@ async fn block_catalog_and_graph_validation() {
     let (status, blocks) = get(&ctx.app, "/api/graph/blocks").await;
     assert_eq!(status, StatusCode::OK);
     let blocks = blocks.as_array().unwrap();
-    assert_eq!(blocks.len(), 15);
+    assert_eq!(blocks.len(), 16);
     for key in [
         "type",
         "kind",
