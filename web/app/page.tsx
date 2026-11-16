@@ -28,11 +28,22 @@ export default function Dashboard() {
   const agents = useAsync(api.listAgents, "agents");
   const wallet = useAsync(api.getWallet, "wallet");
   const portfolio = useAsync(api.getPortfolio, "portfolio");
-  const reloadAll = () => { agents.reload(); wallet.reload(); portfolio.reload(); };
+  const pending = useAsync(() => api.listSuggestions({ status: "pending" }), "pending-suggestions");
+  const reloadAll = () => { agents.reload(); wallet.reload(); portfolio.reload(); pending.reload(); };
 
   return (
     <div>
       <div className="page-head"><div><h1>Dashboard</h1><div className="dim">Totals computed from your agents and wallet.</div></div><DevTick onDone={reloadAll} /></div>
+
+      {pending.error ? (
+        <div className="dim">Co-captain suggestions unavailable: {pending.error.message}</div>
+      ) : pending.data && (
+        <Link href="/cocaptain" className={`notice${pending.data.length ? "" : " dim"}`} style={{ display: "block", marginBottom: "1rem" }}>
+          {pending.data.length === 0
+            ? "Co-captain: no pending suggestions."
+            : `Co-captain: ${pending.data.length} pending suggestion${pending.data.length === 1 ? "" : "s"} to review.`}
+        </Link>
+      )}
 
       <h2>Challenges and performance</h2>
       <Async state={portfolio} what="portfolio">{(p) => <PortfolioCharts p={p} />}</Async>
@@ -65,7 +76,7 @@ export default function Dashboard() {
                     <Tile label="Agent available"><Money value={g.available} /></Tile>
                     <Tile label="Agent committed"><Money value={g.committed} /></Tile>
                     <Tile label="Realized P&L"><Money value={g.pnl} signed tone /></Tile>
-                    <Tile label="Settled / wins">{g.settled} / {g.wins}</Tile>
+                    <Tile label="Agent results: settled / wins" note="Each challenge counts once per side, so 3 challenges show as 6">{g.settled} / {g.wins}</Tile>
                   </div>
                 </div>
               ))}

@@ -59,5 +59,5 @@ Run against the real backend; charts (M2); approvals and interactions views.
 
 ## Agent detail + editing (web-m3, stage 1)
 - Audit: detail already had balances, realized P&L, config, policy, challenges, ledger; edit (PUT = new version) with inline 422 field errors existed. Missing: unrealized P&L, win rate, active count, version history, per-agent activity, saved-version confirmation, version shown on decision traces.
-- Added: unrealized P&L tile ("n/a, not computed"), win rate %, active challenges tile, Version history (`GET /agents/{id}/versions`, newest first, diff vs previous), Recent activity, "Saved as version N" notice after edit, "(config vN)" on run traces in interaction detail. Collaborations labelled not available. Helpers + tests in `lib/agentView.ts` (36 tests total).
+- Added: unrealized P&L tile ("n/a, not computed"), win rate %, active challenges tile, Version history (`GET /agents/{id}/versions`, newest first, diff vs previous), Recent activity, "Saved as version N" notice after edit, "(config vN)" on run traces in interaction detail. Collaborations labelled not available. Helpers + tests in `lib/agentView.ts` (33 web tests at this commit).
 - Not browser-verified this stage (build/lint/tests only).
