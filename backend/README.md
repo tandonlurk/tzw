@@ -20,7 +20,9 @@ curl http://127.0.0.1:8080/api/health
 ```
 
 Environment: `DATABASE_URL` (required), `PORT` (default 8080), `CORS_ORIGIN`
-(default `http://localhost:3000`), `RUST_LOG` (default `info,tower_http=debug`).
+(default `http://localhost:3000`), `RUST_LOG` (default `info,tower_http=debug`),
+`BIND_ADDR` (default `127.0.0.1`), `AEN_API_TOKEN`, `ALLOWED_HOSTS` (request
+guard, see below and `docs/api.md`).
 See `.env.example`; the server does not read `.env` itself, so export the
 variables (`set -a; source .env; set +a`).
 
@@ -32,8 +34,9 @@ cargo test --workspace
 
 `core` tests need nothing. The `server` integration tests use
 `postgres://$USER@localhost/aen_test` (override with `TEST_DATABASE_URL`); they
-run migrations and **truncate every table except templates**, so never
-point them at a database you care about.
+run migrations and **truncate every table except templates** (through
+`tests/common/mod.rs`, the only code that lifts the SEC-08 TRUNCATE guard), so
+never point them at a database you care about.
 
 Before committing: `cargo fmt && cargo clippy --all-targets && cargo test --workspace`.
 
@@ -183,4 +186,27 @@ A test fails if the checked-in files are out of date.
 - Money is integer USDC minor units (6 decimals), sent as strings.
 - Ledger rows and agent versions are append-only (enforced by DB triggers).
   Balances and stats are always computed from the ledger.
-- No auth (single demo user), so the server binds to loopback only.
+- **Request guard (SEC-02, `server::guard`).** Always on: Host allowlist
+  (`localhost`, `127.0.0.1`, `[::1]`, plus `ALLOWED_HOSTS`) against DNS
+  rebinding, and any `Origin` other than `CORS_ORIGIN` is refused (CSRF). A
+  bearer token is required whenever `AEN_API_TOKEN` is set, and the server
+  refuses to start on a non-loopback `BIND_ADDR` without one. The web app does
+  not send a token yet, so token mode is for scripted / remote use; the local
+  default needs none.
+- **Database guards (SEC-08).** `TRUNCATE` is refused on the append-only tables
+  (`ledger_entries`, `agent_versions`, `negotiation_rounds`, `suggestions`)
+  unless the transaction runs `SET LOCAL aen.allow_truncate = 'on'`, which only
+  the test harness (`tests/common/mod.rs`) does. A deferred constraint trigger
+  refuses any posting set (env + idempotency key) that does not sum to zero at
+  commit. To wipe a dev database: `psql aen_dev -c "BEGIN; SET LOCAL
+  aen.allow_truncate = 'on'; TRUNCATE suggestions, activity, ledger_entries,
+  agent_runs, approvals, negotiation_rounds, interactions, agent_versions,
+  agents; COMMIT;"` (or drop and recreate it).
+- **Least-privilege role (recommended, not enforced).** A superuser or table
+  owner can drop these triggers. For anything shared, run migrations as the
+  owner and the server as a role with only `SELECT, INSERT` on
+  `ledger_entries`, `agent_versions`, `negotiation_rounds`, `activity` and
+  `SELECT, INSERT, UPDATE` on the rest (no `DELETE`, no `TRUNCATE`). Today the server runs
+  migrations at startup with its own connection, so this needs a separate
+  migrate step first; left as a default for review (D-proposal in
+  `tasks/backend.md`).

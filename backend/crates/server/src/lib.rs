@@ -8,6 +8,7 @@ pub mod extract;
 pub mod graph_exec;
 pub mod grok;
 pub mod grok_cocaptain;
+pub mod guard;
 pub mod interactions;
 pub mod ledger_db;
 pub mod lifecycle;
@@ -71,9 +72,16 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
             .route("/dev/seed-demo", post(demo::seed_demo));
     }
 
+    let guard = guard::Guard {
+        config: state.settings.guard.clone(),
+        origin: cors_origin.clone(),
+    };
     Router::new()
         .nest("/api", api)
         .fallback(misc::not_found)
+        // Inside CORS, so preflights are answered first and refusals still
+        // carry CORS headers for the allowed origin.
+        .layer(axum::middleware::from_fn_with_state(guard, guard::guard))
         .layer(
             CorsLayer::new()
                 .allow_origin(cors_origin)

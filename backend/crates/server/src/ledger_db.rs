@@ -27,8 +27,24 @@ pub enum PostOutcome {
     Replayed,
 }
 
-/// The caller's `Idempotency-Key` header, or a fresh key if absent.
+/// The only caller today: the single owner of this deployment (no user
+/// accounts yet, D-9). When there are several, this becomes the
+/// authenticated caller's id.
+pub const OWNER_CALLER: &str = "owner";
+
+/// The caller's `Idempotency-Key` header (or a fresh key if absent), scoped
+/// to the caller as `client:{caller}:{key}` (SEC-09). The lifecycle's own
+/// keys (`settle:…`, `commit_stake:…`, `demo-seed:…`) never start with
+/// `client:`, so a client cannot pre-claim them, and one caller cannot claim
+/// another's keys. Keys are also unique per env only (see `post`).
 pub fn idempotency_key(headers: &HeaderMap) -> Result<String, ApiError> {
+    Ok(format!(
+        "client:{OWNER_CALLER}:{}",
+        raw_idempotency_key(headers)?
+    ))
+}
+
+fn raw_idempotency_key(headers: &HeaderMap) -> Result<String, ApiError> {
     let Some(value) = headers.get(IDEMPOTENCY_HEADER) else {
         return Ok(Uuid::new_v4().to_string());
     };
@@ -60,12 +76,15 @@ pub async fn post(conn: &mut PgConnection, set: &PostingSet) -> Result<PostOutco
 
     // Locks are always taken in the same order (key, then accounts sorted),
     // so concurrent posts cannot deadlock.
-    lock(conn, &format!("idem:{key}")).await?;
+    lock(conn, &format!("idem:{env}:{key}")).await?;
 
-    let existing: Vec<(String, i64, String, String)> = sqlx::query_as(
-        "SELECT account, delta, env, reason FROM ledger_entries \
-         WHERE idempotency_key = $1 ORDER BY line",
+    // Keys are scoped per env (SEC-09); a replay must match every field that
+    // was written, including the interaction it belongs to.
+    let existing: Vec<(String, i64, String, Option<Uuid>)> = sqlx::query_as(
+        "SELECT account, delta, reason, interaction_id FROM ledger_entries \
+         WHERE env = $1 AND idempotency_key = $2 ORDER BY line",
     )
+    .bind(env)
     .bind(key)
     .fetch_all(&mut *conn)
     .await?;
@@ -74,8 +93,8 @@ pub async fn post(conn: &mut PgConnection, set: &PostingSet) -> Result<PostOutco
             && existing.iter().zip(set.postings()).all(|(row, p)| {
                 row.0 == p.account.to_string()
                     && row.1 == p.delta.minor()
-                    && row.2 == env
-                    && row.3 == set.reason().as_str()
+                    && row.2 == set.reason().as_str()
+                    && row.3 == set.interaction_id()
             });
         return if same {
             Ok(PostOutcome::Replayed)

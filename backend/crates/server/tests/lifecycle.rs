@@ -2,6 +2,8 @@
 //! default `aen_test`). Market data is the deterministic fake and the clock is
 //! passed in, so nothing here touches the network or sleeps.
 
+mod common;
+
 use std::sync::Arc;
 
 use aen_core::challenge::{ChallengeTerms, Direction, FormulaId, MarketRef, Outcome};
@@ -45,13 +47,7 @@ async fn pool() -> PgPool {
     });
     let pool = PgPool::connect(&url).await.expect("connect to test db");
     MIGRATOR.run(&pool).await.expect("run migrations");
-    sqlx::query(
-        "TRUNCATE suggestions, activity, ledger_entries, agent_runs, approvals, \
-         negotiation_rounds, interactions, agent_versions, agents",
-    )
-    .execute(&pool)
-    .await
-    .expect("clean tables");
+    common::wipe(&pool).await;
     pool
 }
 
@@ -623,7 +619,9 @@ async fn a_failure_on_the_second_stake_rolls_back_the_first() {
     let id = fixture(&c, a, b, &terms(&c, 5, fake_contract()), "accepted").await;
     // Sabotage: a foreign row already claims B's stake for this interaction,
     // so B's posting hits the one-commit-per-interaction index after A's
-    // posting has been written in the same transaction.
+    // posting has been written in the same transaction. (Both rows in one
+    // transaction: the database refuses an unbalanced set at commit.)
+    let mut rogue = c.pool.begin().await.unwrap();
     for (line, account, delta) in [
         (0, format!("agent:{b}:available"), -USDC),
         (1, format!("agent:{b}:committed"), USDC),
@@ -638,10 +636,11 @@ async fn a_failure_on_the_second_stake_rolls_back_the_first() {
         .bind(b)
         .bind(delta)
         .bind(id)
-        .execute(&c.pool)
+        .execute(&mut *rogue)
         .await
         .unwrap();
     }
+    rogue.commit().await.unwrap();
 
     let mut tx = c.pool.begin().await.unwrap();
     let result = lifecycle::try_commit(&mut tx, id, c.t0).await;

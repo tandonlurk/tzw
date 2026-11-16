@@ -222,3 +222,29 @@ API changes (`docs/api.md`): cooldown note extended; `pnl_over_time` row in Metr
 
 - `no_counterparty` is rate-limited even if a new agent appears during the cooldown (it is picked up after at most 600 s).
 - Approvals are still decided at real time, so in the co-captain step the stakes are committed at wall-clock time while proposals and settlements use the simulated clock.
+
+## M3 item 3: SEC-02, SEC-08, SEC-09 (2026-11-16, branch `backend-m3`)
+
+Status: done. Tests: `aen_m3_test` -> core 94 + 14 + 6 + 4, server unit 63 (+4 guard), api 17, lifecycle 33, suggestions 13; `aen_m3_sec` -> adversarial_api 16 (+5), adversarial_integrity 6 (+1, and one extended). **266 passed.** The 7 repro tests were run against the code without the fixes (guard layer off, old `ledger_db.rs`, a fresh db without migration 0006) and all failed there. fmt and clippy clean. Checked by hand on port 8093: default config serves curl and a `localhost:3000` browser-style request, refuses `Host: evil.example` and `Origin: https://evil.example` (403); `BIND_ADDR=0.0.0.0` without a token and a short token refuse to start; with a token `/health` 200, `/wallet` 401 without and 200 with it. Migration 0006 applied cleanly to a dev db with existing demo data.
+
+| Item | What | Where |
+|---|---|---|
+| SEC-02 | Guard middleware (inside CORS): Host allowlist, foreign `Origin` refused on every method, bearer token when `AEN_API_TOKEN` is set (constant-time compare, redacted `Debug`, >= 32 chars). `BIND_ADDR` (default loopback); non-loopback without token = startup error | `src/guard.rs`, `lib.rs`, `main.rs`, `state.rs` (`Settings.guard`) |
+| SEC-08 | `BEFORE TRUNCATE` statement trigger on the 4 append-only tables, opt-out `SET LOCAL aen.allow_truncate = 'on'` used only by `tests/common/mod.rs::wipe` (all test files now use it); deferred constraint trigger: every (env, key) set sums to zero at commit. Least-privilege role documented, not enforced | `migrations/0006_ledger_hardening.sql`, `tests/common/mod.rs` |
+| SEC-09 | Unique `(env, idempotency_key, line)`; replay lookup per env and compares `interaction_id`; client keys stored as `client:owner:{key}` so they cannot pre-claim server keys (`settle:…`, `demo-seed:…`) | `ledger_db.rs`, migration 0006 |
+
+API changes (`docs/api.md`): new "Request guard" and "Idempotency" paragraphs (403 `host_not_allowed`, 403 `origin_not_allowed`, 401 `unauthorized`); no endpoint changes. Env: `BIND_ADDR`, `AEN_API_TOKEN`, `ALLOWED_HOSTS` (`.env.example`).
+
+### New defaults (proposals for docs/decisions.md)
+
+| # | Default | Rationale | Where |
+|---|---|---|---|
+| D-40 | Request guard always on: hosts `localhost`/`127.0.0.1`/`[::1]` + `ALLOWED_HOSTS`; a request without Host passes (browsers always send one, so DNS rebinding is still covered); any `Origin` other than `CORS_ORIGIN` is 403 on every method; no `Origin` passes | Blocks DNS rebinding and CSRF with no change to the local web app or curl |
+| D-41 | Bearer token (`AEN_API_TOKEN`, >= 32 chars) required on all routes except `GET /api/health` and `OPTIONS` when set; required to start on a non-loopback `BIND_ADDR`. One shared token = the single owner; the web app does not send it yet | Simplest auth that makes a non-loopback bind safe; per-user auth is out of MVP scope |
+| D-42 | DB refuses TRUNCATE on append-only tables unless `SET LOCAL aen.allow_truncate = 'on'` (test harness only), and refuses unbalanced posting sets at commit. Least-privilege role recommended (README) but not enforced, because the server runs its own migrations | Defense in depth against bugs and accidents; not against a superuser |
+| D-43 | Idempotency keys unique per env; client keys namespaced `client:{caller}:` (caller = `owner` today); replay must match account, delta, reason and `interaction_id` | A client could pre-claim a server key and block a settlement or the demo seed |
+
+### Notes
+
+- Old client keys in existing dev databases stay un-namespaced (harmless; new ones are prefixed).
+- `adversarial_integrity` CSRF test now expects 403 for a foreign Origin (refused before the 415 check) and still checks 415 for the allowed origin.

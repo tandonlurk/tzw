@@ -3,6 +3,8 @@
 //! activity rows, and every decision goes through the HTTP API. No test
 //! touches the network; the Grok tests talk to a local stand-in server.
 
+mod common;
+
 use std::sync::Arc;
 use std::time::Duration as StdDuration;
 
@@ -47,13 +49,7 @@ async fn setup_with(adjust: impl FnOnce(AppState) -> AppState) -> Ctx {
     });
     let pool = PgPool::connect(&url).await.expect("connect to test db");
     MIGRATOR.run(&pool).await.expect("run migrations");
-    sqlx::query(
-        "TRUNCATE suggestions, activity, ledger_entries, agent_runs, approvals, \
-         negotiation_rounds, interactions, agent_versions, agents",
-    )
-    .execute(&pool)
-    .await
-    .expect("clean tables");
+    common::wipe(&pool).await;
     let state = adjust(AppState::offline(pool.clone()));
     Ctx {
         app: app_with_state(state.clone(), DEFAULT_CORS_ORIGIN.parse().unwrap()),

@@ -3,6 +3,8 @@
 //! amounts and headers. Uses its own database (`aen_sec_test` unless
 //! `TEST_DATABASE_URL` is set) and truncates it on every test.
 
+mod common;
+
 use aen_server::{DEFAULT_CORS_ORIGIN, MIGRATOR, app};
 use axum::Router;
 use axum::body::Body;
@@ -33,10 +35,7 @@ async fn setup() -> Ctx {
         .await
         .expect("connect to test db");
     MIGRATOR.run(&pool).await.expect("run migrations");
-    sqlx::query("TRUNCATE suggestions, activity, ledger_entries, agent_runs, approvals, negotiation_rounds, interactions, agent_versions, agents")
-        .execute(&pool)
-        .await
-        .unwrap();
+    common::wipe(&pool).await;
     Ctx {
         app: app(pool.clone(), DEFAULT_CORS_ORIGIN.parse().unwrap()),
         pool,
@@ -131,8 +130,91 @@ async fn ledger_and_versions_are_append_only_at_the_database_level() {
             "{sql} must be refused"
         );
     }
-    // Direct forged insert that does not balance is not stopped by the DB
-    // (balance is enforced in application code only): documented as SEC-08.
+    let before = ledger_count(&c.pool).await;
+    // SEC-08: TRUNCATE bypassed the row triggers; now it is refused too.
+    for table in [
+        "ledger_entries",
+        "agent_versions",
+        "negotiation_rounds",
+        "suggestions",
+    ] {
+        let err = sqlx::query(sqlx::AssertSqlSafe(format!("TRUNCATE {table} CASCADE")))
+            .execute(&c.pool)
+            .await
+            .expect_err("TRUNCATE must be refused");
+        assert!(err.to_string().contains("append-only"), "{table}: {err}");
+    }
+    // The opt-out is transaction-local: it does not leak to the next statement.
+    let mut tx = c.pool.begin().await.unwrap();
+    sqlx::query("SET LOCAL aen.allow_truncate = 'on'")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.rollback().await.unwrap();
+    assert!(
+        sqlx::query("TRUNCATE ledger_entries CASCADE")
+            .execute(&c.pool)
+            .await
+            .is_err()
+    );
+    assert_eq!(ledger_count(&c.pool).await, before);
+}
+
+async fn ledger_count(pool: &PgPool) -> i64 {
+    sqlx::query_scalar("SELECT COUNT(*) FROM ledger_entries")
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+/// SEC-08: a forged insert that does not balance used to be stored (balance
+/// was enforced by the app only). The database now refuses it at commit.
+#[tokio::test]
+async fn the_database_refuses_an_unbalanced_posting_set() {
+    let c = setup().await;
+    let insert = |key: &'static str, line: i32, account: &'static str, delta: i64| {
+        sqlx::query(
+            "INSERT INTO ledger_entries (env, idempotency_key, line, account, delta, reason) \
+             VALUES ('simulated', $1, $2, $3, $4, 'deposit')",
+        )
+        .bind(key)
+        .bind(line)
+        .bind(account)
+        .bind(delta)
+    };
+    // One row on its own (autocommit).
+    assert!(
+        insert("forged", 0, "user:unallocated", 1_000_000)
+            .execute(&c.pool)
+            .await
+            .is_err()
+    );
+    // Two rows in a transaction that do not sum to zero.
+    let mut tx = c.pool.begin().await.unwrap();
+    insert("forged2", 0, "external", -1_000_000)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    insert("forged2", 1, "user:unallocated", 2_000_000)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let err = tx.commit().await.expect_err("unbalanced set committed");
+    assert!(err.to_string().contains("does not sum to zero"), "{err}");
+    assert_eq!(ledger_count(&c.pool).await, 0);
+
+    // A balanced set written row by row inside a transaction is fine.
+    let mut tx = c.pool.begin().await.unwrap();
+    insert("fair", 0, "external", -1_000_000)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    insert("fair", 1, "user:unallocated", 1_000_000)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    assert_eq!(ledger_count(&c.pool).await, 2);
 }
 
 #[tokio::test]
@@ -233,28 +315,29 @@ async fn status_endpoint_rejects_unknown_values() {
 /// CSRF: `ApiJson` reads the body bytes and ignores Content-Type, so a hostile web page can make the
 /// user's browser send a "simple" cross-origin POST (`text/plain`, no preflight) that mutates state.
 /// CORS only stops the page from READING the response. Expected secure behaviour: reject non-JSON
-/// content types with 415.
+/// content types with 415. Since SEC-02 a foreign Origin is refused (403) even before that.
 #[tokio::test]
 async fn state_changing_posts_must_require_a_json_content_type() {
     let c = setup().await;
-    for ct in [
-        "text/plain",
-        "application/x-www-form-urlencoded",
-        "multipart/form-data; boundary=x",
+    for (origin, expected) in [
+        ("https://evil.example", StatusCode::FORBIDDEN),
+        (DEFAULT_CORS_ORIGIN, StatusCode::UNSUPPORTED_MEDIA_TYPE),
     ] {
-        let req = Request::builder()
-            .method("POST")
-            .uri("/api/wallet/simulated-deposit")
-            .header("content-type", ct)
-            .header("origin", "https://evil.example")
-            .body(Body::from(r#"{"amount":"1000000"}"#))
-            .unwrap();
-        let (s, _) = raw(&c.app, req).await;
-        assert_eq!(
-            s,
-            StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            "content-type {ct} was accepted: {s}"
-        );
+        for ct in [
+            "text/plain",
+            "application/x-www-form-urlencoded",
+            "multipart/form-data; boundary=x",
+        ] {
+            let req = Request::builder()
+                .method("POST")
+                .uri("/api/wallet/simulated-deposit")
+                .header("content-type", ct)
+                .header("origin", origin)
+                .body(Body::from(r#"{"amount":"1000000"}"#))
+                .unwrap();
+            let (s, _) = raw(&c.app, req).await;
+            assert_eq!(s, expected, "content-type {ct} from {origin}: {s}");
+        }
     }
     // no Content-Type at all
     let req = Request::builder()
