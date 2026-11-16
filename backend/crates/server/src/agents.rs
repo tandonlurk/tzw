@@ -236,18 +236,32 @@ pub async fn update(
     ApiPath(id): ApiPath<Uuid>,
     ApiJson(input): ApiJson<AgentInput>,
 ) -> Result<Json<Agent>, ApiError> {
+    let mut tx = pool.begin().await?;
+    apply_update(&mut tx, id, input).await?;
+    tx.commit().await?;
+
+    Ok(Json(load_one(&pool, id).await?))
+}
+
+/// The one way an agent's configuration changes: validates `input`, writes a
+/// new immutable version and records it. The owner's edit and an accepted
+/// co-captain suggestion both go through here. Returns the new version.
+pub(crate) async fn apply_update(
+    conn: &mut PgConnection,
+    id: Uuid,
+    input: AgentInput,
+) -> Result<i32, ApiError> {
     let input = validated(input)?;
     let name = input.name.trim();
 
-    let mut tx = pool.begin().await?;
     // The row lock serializes concurrent edits so versions never collide.
     let current: Option<i32> =
         sqlx::query_scalar("SELECT current_version FROM agents WHERE id = $1 FOR UPDATE")
             .bind(id)
-            .fetch_optional(&mut *tx)
+            .fetch_optional(&mut *conn)
             .await?;
     let version = current.ok_or_else(|| ApiError::not_found("agent"))? + 1;
-    insert_version(&mut tx, id, version, &input).await?;
+    insert_version(conn, id, version, &input).await?;
     sqlx::query(
         "UPDATE agents SET name = $2, description = $3, current_version = $4, updated_at = now() \
          WHERE id = $1",
@@ -256,19 +270,44 @@ pub async fn update(
     .bind(name)
     .bind(&input.description)
     .bind(version)
-    .execute(&mut *tx)
+    .execute(&mut *conn)
     .await?;
     record_activity(
-        &mut tx,
+        conn,
         Some(id),
         "agent_updated",
         format!("Agent \"{name}\" configuration changed (version {version})"),
         Some(json!({ "version": version })),
     )
     .await?;
-    tx.commit().await?;
+    Ok(version)
+}
 
-    Ok(Json(load_one(&pool, id).await?))
+/// The agent's current version as an editable input, with the agent row
+/// locked for the rest of the transaction.
+pub(crate) async fn current_input(
+    conn: &mut PgConnection,
+    id: Uuid,
+) -> Result<Option<AgentInput>, ApiError> {
+    let row: Option<(String, String, Value, Value, Value)> = sqlx::query_as(
+        "SELECT a.name, a.description, v.config, v.policy, v.graph FROM agents a \
+         JOIN agent_versions v ON v.agent_id = a.id AND v.version = a.current_version \
+         WHERE a.id = $1 FOR UPDATE OF a",
+    )
+    .bind(id)
+    .fetch_optional(conn)
+    .await?;
+    let Some((name, description, config, policy, graph)) = row else {
+        return Ok(None);
+    };
+    let bad = |what: &str| ApiError::internal(format!("agent {id}: stored {what} is unreadable"));
+    Ok(Some(AgentInput {
+        name,
+        description,
+        config: serde_json::from_value(config).map_err(|_| bad("config"))?,
+        policy: serde_json::from_value(policy).map_err(|_| bad("policy"))?,
+        graph: serde_json::from_value(graph).map_err(|_| bad("graph"))?,
+    }))
 }
 
 pub async fn set_status(

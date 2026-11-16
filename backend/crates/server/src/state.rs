@@ -5,6 +5,7 @@ use std::sync::Arc;
 use axum::extract::FromRef;
 use sqlx::PgPool;
 
+use crate::cocaptain::{CoCaptain, RuleBasedCoCaptain};
 use crate::market::MarketData;
 use crate::market::fake::FakeMarket;
 use crate::reasoner::{Reasoner, RuleBasedReasoner};
@@ -53,11 +54,14 @@ pub struct AppState {
     /// fake-market controls and the simulated clock on `/api/dev/tick`.
     pub fake_market: Option<Arc<FakeMarket>>,
     pub reasoner: Arc<dyn Reasoner>,
+    /// Advisory only: it is handed facts and returns text (see `cocaptain`).
+    pub cocaptain: Arc<dyn CoCaptain>,
     pub settings: Settings,
 }
 
 impl AppState {
-    /// Fake market data and the rule-based reasoner: no network at all.
+    /// Fake market data, the rule-based reasoner and the rule-based
+    /// co-captain: no network at all.
     pub fn offline(pool: PgPool) -> AppState {
         let fake = Arc::new(FakeMarket::demo());
         AppState {
@@ -65,6 +69,7 @@ impl AppState {
             market: fake.clone(),
             fake_market: Some(fake),
             reasoner: Arc::new(RuleBasedReasoner),
+            cocaptain: Arc::new(RuleBasedCoCaptain),
             settings: Settings::default(),
         }
     }

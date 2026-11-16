@@ -5,7 +5,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use aen_server::cocaptain::{CoCaptain, RuleBasedCoCaptain};
 use aen_server::grok::GrokReasoner;
+use aen_server::grok_cocaptain::GrokCoCaptain;
 use aen_server::market::MarketData;
 use aen_server::market::fake::FakeMarket;
 use aen_server::market::gemini::GeminiClient;
@@ -80,28 +82,29 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         _ => return Err("MARKET_DATA must be `gemini` or `fake`".into()),
     };
-    // Grok is used only when a key is present; it falls back to the rules on
-    // any error. The key is never logged.
-    let reasoner: Arc<dyn Reasoner> = match env::var("XAI_API_KEY") {
-        Ok(key) if !key.trim().is_empty() => {
-            let base: String = var("XAI_BASE_URL", GrokReasoner::DEFAULT_BASE_URL.to_owned())?;
-            let model: String = var("XAI_MODEL", GrokReasoner::DEFAULT_MODEL.to_owned())?;
-            Arc::new(GrokReasoner::new(
-                &base,
-                &model,
-                key.trim(),
-                GrokReasoner::TIMEOUT,
-            )?)
-        }
-        _ => Arc::new(RuleBasedReasoner),
-    };
-    tracing::info!(market_data = %source, reasoner = reasoner.name(), "runtime configured");
+    // Grok is used only when a key is present; both uses fall back to the
+    // rules on any error. The key is never logged.
+    let (reasoner, cocaptain): (Arc<dyn Reasoner>, Arc<dyn CoCaptain>) =
+        match env::var("XAI_API_KEY") {
+            Ok(key) if !key.trim().is_empty() => {
+                let base: String = var("XAI_BASE_URL", GrokReasoner::DEFAULT_BASE_URL.to_owned())?;
+                let model: String = var("XAI_MODEL", GrokReasoner::DEFAULT_MODEL.to_owned())?;
+                let timeout = GrokReasoner::TIMEOUT;
+                (
+                    Arc::new(GrokReasoner::new(&base, &model, key.trim(), timeout)?),
+                    Arc::new(GrokCoCaptain::new(&base, &model, key.trim(), timeout)?),
+                )
+            }
+            _ => (Arc::new(RuleBasedReasoner), Arc::new(RuleBasedCoCaptain)),
+        };
+    tracing::info!(market_data = %source, reasoner = reasoner.name(), cocaptain = cocaptain.name(), "runtime configured");
 
     let state = AppState {
         pool,
         market,
         fake_market,
         reasoner,
+        cocaptain,
         settings,
     };
 

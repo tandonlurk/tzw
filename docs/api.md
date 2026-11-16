@@ -89,7 +89,7 @@ Approval       { id, interaction_id, agent_id, agent_name, stake: money,
                  status: "pending"|"approved"|"rejected"|"expired"|"superseded",
                  reason, requested_at, decided_at: ts|null, expires_at, market_title, env }
 TickReport     { now, proposed, denied, countered, accepted, rejected, approvals_requested, funded, resolving,
-                 settled, voided, cancelled: int, errors: string[] }
+                 settled, voided, cancelled, suggestions: int, errors: string[] }
 Portfolio      { env, as_of,
                  totals: { unallocated, available, committed, allocated, at_risk: money,
                            realized_pnl: money (signed), unrealized_pnl: null },
@@ -141,5 +141,47 @@ With one owner on both sides of a challenge, portfolio `realized_pnl` nets to ze
 ### Activity kinds added in M2
 
 `challenge_proposed`, `proposal_denied`, `no_counterparty`, `challenge_countered`, `challenge_accepted`, `challenge_rejected`, `response_denied`, `negotiation_cap_reached`, `approval_requested`, `approval_granted`, `approval_rejected`, `commit_denied`, `stake_committed`, `challenge_expired`, `resolution_delayed`, `challenge_settled`, `challenge_voided`, `market_data_error`, `reasoning_failed`. Each has a full-sentence `summary`; `detail` carries machine-readable fields (`reasons` for denials, `terms`, `run_id`). Denials list `DenyReason`s: `agent_paused, stop_loss_triggered, interaction_type_not_allowed, illegal_interaction_state, zero_amount, amount_overflow, exceeds_max_per_interaction, exceeds_aggregate_exposure, insufficient_available_balance`.
+
+## Co-captain suggestions
+
+Advisory only (AGENTS.md 2.3). A suggestion is text plus, sometimes, a small typed patch of an agent's limits. Nothing here moves funds, approves, or reaches `authorize` / the executor. Accepting a suggestion with a `proposed_change` is the owner editing the agent: the patch is merged into the agent's **current** version and goes through the same validation and versioning as `PUT /agents/{id}`.
+
+```
+Suggestion     { id, agent_id: uuid|null, agent_name: string|null,
+                 kind: "approval_expiring"|"idle_funds"|"lower_max_stake"|"repeated_denials"|
+                       "raise_approval_threshold"|"agent_halted"|"general",
+                 title, body: string,                  // plain sentences for the owner
+                 proposed_change: ProposedChange|null, // null = text only
+                 evidence: object,                     // the real numbers it was derived from (money as strings)
+                 loosens_control: bool,                // true when accepting raises a limit, the approval threshold or the stop-loss; show a warning
+                 source: "rules"|"grok",
+                 status: "pending"|"accepted"|"dismissed"|"expired",
+                 created_at, decided_at: ts|null }
+ProposedChange { policy?: { max_per_interaction?, max_aggregate_exposure?, approval_threshold?, stop_loss?: money,
+                            min_conviction_bps?: int },
+                 config?: { risk_tolerance?: "low"|"medium"|"high" } }   // only fields to change; nothing else can be named
+```
+
+| Method | Path | Body → Response | Notes |
+|---|---|---|---|
+| GET | `/suggestions?status=&agent_id=` | → `Suggestion[]` | newest first, max 200. `status` must be one of the four (422 otherwise) |
+| POST | `/suggestions/generate` | `{}` → `{ source: "rules"|"grok", created: Suggestion[] }` | Reads the records and stores new suggestions. Uses Grok when `XAI_API_KEY` is set (`source: "rules"` means no key or a fallback). The scheduler / `/dev/tick` runs the rule-based part on every tick, so calling this is optional |
+| POST | `/suggestions/{id}/accept` | `{}` → `Suggestion` | Text only: marks it `accepted`. With a `proposed_change`: applies it as a new agent version, then marks it. 422 `validation_failed` (same details as an agent edit) or `invalid_proposed_change` when the change is not valid any more; the suggestion then stays `pending`. Already accepted → 200, nothing applied twice. Dismissed / expired → 409 `suggestion_not_pending` |
+| POST | `/suggestions/{id}/dismiss` | `{}` → `Suggestion` | Already dismissed → 200. Accepted / expired → 409 `suggestion_not_pending` |
+
+De-duplication: at most one `pending` suggestion per agent and kind, and the same subject (this approval, this pause, this settle count, this agent version ...) is never suggested twice, so a dismissed suggestion does not return until the data changes. A pending rule suggestion whose condition went away becomes `expired` (kept, never deleted). Decided suggestions are immutable.
+
+Rules (all from stored records; formulas in `server/src/cocaptain.rs`):
+
+| Kind | Fires when | Proposes |
+|---|---|---|
+| `approval_expiring` | a pending approval's funding deadline is within 120 s | text |
+| `idle_funds` | active agent with ≥ 1 USDC available, no open challenge and nothing for 3600 s; or an active agent with no funds while ≥ 1 USDC is unallocated | text |
+| `lower_max_stake` | last 3 settlements all lost, or realized loss ≥ 20% of net allocation | `max_per_interaction` halved (and `approval_threshold` lowered to it if above) |
+| `repeated_denials` | ≥ 3 denials for the same reason since the current version | per-challenge limit raised to the largest blocked stake (capped at the aggregate limit), or aggregate limit raised by it (both `loosens_control`); text for a low balance |
+| `raise_approval_threshold` | last 3 owner decisions under the current version were all approvals | `approval_threshold` = largest of those stakes, capped at the per-challenge limit (`loosens_control`) |
+| `agent_halted` | agent is paused, or realized loss reached its stop-loss | text |
+
+`general` comes only from Grok. Grok output is untrusted: each item is parsed into the closed schema above, must name an agent it was shown, is validated like a rule suggestion and dropped if anything is off; evidence, `loosens_control` and `source` are filled in by the server. Activity kinds: `suggestion_accepted`, `suggestion_dismissed` (`detail.suggestion_id`, `detail.version`); an applied change also writes the usual `agent_updated`.
 
 Not yet specified: `/webhooks/quicknode`.
