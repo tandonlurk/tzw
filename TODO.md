@@ -54,7 +54,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [ ] Full lifecycle end to end on testnet: discover → negotiate → authorize → fund → resolve → settle (lead, P0)
 - [x] Wallet overview, Activity view, approvals queue, interactions list/detail, Dashboard charts from `/stats/portfolio` only (per-agent P&L lines by default); 25 web tests. Browser-verified 2026-11-15 incl. reject, approve-then-cancelled notice, agent-detail challenges, template prefill (frontend, P0)
 - [x] Backend gaps from `reports/qa-m2-web.md`: summaries now readable ("5.00 USDC (simulated)"); approvals arise on the counterparty side by design; dev clock jumps past a funding deadline are refused with 409 (D-34) (backend, P1)
-- [ ] Collaboration: simple agreement + simulated payout split (backend/frontend, P2, first to cut)
+- [~] Collaboration: backend done (agreement states, simulated payout split through ledger + `authorize`, 308 backend tests, D-46..D-48); web views pending (backend/frontend, P2)
 
 ## M4 — QA and security (Tue–Wed, continuous)
 
