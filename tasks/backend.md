@@ -159,3 +159,42 @@ Status: done. `cargo test --workspace` -> **222 passed** (core 94 + 14 + 6 + 4 s
 - Re-running the demo within the cooldown needs `PROPOSAL_COOLDOWN_SECS=0` or a wait.
 - A proposal that is denied or finds no counterparty creates no interaction, so it is not rate-limited by the cooldown (activity is still logged once; with Grok this is one model call per tick).
 - Approvals are decided at real time, not the simulated clock.
+
+## Co-captain (2026-11-15, branch `cocaptain`, worktree `worktrees/cocaptain`)
+
+Status: done (text suggestions, backend only). `cargo test --workspace` -> **254 passed** (was 222; server unit 40 -> 59, new `tests/suggestions.rs` 13). `cargo fmt --check` and `cargo clippy --workspace --all-targets` clean. Test db `aen_cc_test`. Checked by hand on `aen_cc_dev`, port 8092: seed demo, pause, tick -> 1 suggestion, 415 without JSON, dismiss, accept -> 409, generate -> nothing new.
+
+| What | Where |
+|---|---|
+| `CoCaptain` trait, `Facts`, typed `ProposedChange`, `Draft::vet`, six rules with formulas in doc comments | `server/src/cocaptain.rs` |
+| Facts from ledger / approvals / interactions / activity, storage, expiry, `GET /suggestions`, `POST /suggestions/generate`, `/accept`, `/dismiss` | `server/src/suggestions.rs`, `lib.rs` |
+| `suggestions` table: one pending per (agent, kind), a subject is never repeated, decided rows immutable, no deletes | `migrations/0004_suggestions.sql` |
+| `agents::apply_update` / `current_input` extracted from `PUT /agents/{id}`; accept calls it | `server/src/agents.rs` |
+| Rules run at the end of every tick (`TickReport.suggestions`); no model call on ticks | `server/src/lifecycle.rs` |
+| `GrokCoCaptain` when `XAI_API_KEY` is set; rules are the floor, fallback on any error | `server/src/grok_cocaptain.rs`, `main.rs`, `state.rs` |
+
+Boundaries kept: the co-captain receives `Facts` and returns drafts; it has no pool, ledger or `authorize` handle. Accept re-parses the stored change into the closed patch type, merges it into the current version and runs the normal agent validation in one transaction; any failure is a 422 and the suggestion stays pending. Tests assert the ledger, approvals and interaction states are byte-for-byte unchanged across generate / accept / dismiss.
+
+Test files now truncate `suggestions` too (it references `agents`); a branch that adds a test file with its own `TRUNCATE ... agents` list must include it.
+
+### New defaults for docs/decisions.md
+
+| # | Default | Rationale | Where |
+|---|---|---|---|
+| F-19 | `approval_expiring` warns within 120 s of the funding deadline | The funding window is 300 s and ticks are 15 s apart: late enough not to nag on every approval, early enough to act | `cocaptain.rs` `APPROVAL_EXPIRY_WARN_SECS` |
+| F-20 | `idle_funds`: idle = 3600 s without any interaction or config change with >= 1 USDC available and nothing open; unfunded = zero balance while >= 1 USDC is unallocated | One hour is several cooldown periods (600 s); 1 USDC ignores dust | `IDLE_SECS`, `IDLE_MIN_FUNDS` |
+| F-21 | `lower_max_stake`: 3 straight settled losses, or realized loss >= 20% of net allocation; proposes halving `max_per_interaction` (threshold follows down if needed) | Tightening only, so cheap to accept; halving is easy to explain and to undo | `LOSING_STREAK`, `DRAWDOWN_BPS` |
+| F-22 | `repeated_denials`: 3 denials for one reason under the current version; raise is to the largest blocked stake (capped at the aggregate limit) or aggregate + that stake | The smallest change that would have let the blocked stakes through; counted per version so an edit resets it | `DENIAL_REPEAT` |
+| F-23 | `raise_approval_threshold`: last 3 owner decisions under the current version all approvals; new threshold = largest approved stake, capped at the per-challenge limit | Never suggests more than the owner already approved by hand | `APPROVAL_STREAK` |
+| F-24 | `loosens_control` is computed by the server (higher limit, threshold or stop-loss) and such suggestions say so in the body; a suggestion can set a stop-loss but not remove one, and cannot touch the graph, interaction types, name or status | The owner must see when accepting weakens a control (AGENTS.md 8.2) | `ProposedChange::loosens` |
+| F-25 | De-duplication by subject: a dismissed or accepted suggestion is not repeated until its subject changes (new approval, new settle count, new version, new pause); a pending rule suggestion whose condition is gone becomes `expired` (a fourth status) | Ticks run every 15 s; without this a dismissed suggestion would return at once. `expired` keeps "the owner dismissed it" distinct from "it stopped applying" | `suggestions.rs` `insert`, `expire_stale` |
+| F-26 | Grok is called only by `POST /suggestions/generate`, never on ticks; its items replace the rule item of the same agent and kind, anything else is `general` | Cost, and the rules stay the floor so a model omission cannot hide a warning | `grok_cocaptain.rs` |
+
+### Known limitations / unverified
+
+- `GrokCoCaptain` has **only been tested against a local stand-in server**; endpoint path and model name are the same unverified ones as `GrokReasoner`. The prompt contains agent names, policies and numbers, never keys.
+- `idle_funds` compares the tick's clock with `agents.updated_at` (always real time), so a simulated `now` far ahead makes agents look idle.
+- Denials are counted from activity rows; the lifecycle logs a persisting identical denial once (`record_once`), so three denials can take longer than three ticks.
+- Accepting a change equal to the agent's current values is a 422 (`invalid_proposed_change`); the owner dismisses it instead.
+- No frontend yet; voice (ElevenLabs) not started.
+

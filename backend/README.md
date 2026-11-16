@@ -104,6 +104,29 @@ With `MARKET_DATA=gemini` the same flow runs on live Gemini prediction-market
 contracts (public data, no key) with simulated stakes, in real time: `now`
 cannot be overridden and a challenge lasts the agent's `horizon_secs`.
 
+## Co-captain suggestions
+
+`server::cocaptain` (`CoCaptain` trait, the six deterministic rules and their
+formulas), `server::suggestions` (facts read from the ledger, approvals,
+interactions and activity; storage; accept / dismiss) and
+`server::grok_cocaptain` (xAI, only when `XAI_API_KEY` is set, falls back to
+the rules on any error; **unverified against the live API**, mock-tested
+only). The co-captain is advisory: it is handed facts and returns text. It
+has no path to `authorize`, the executor or the ledger; accepting a
+suggestion with a proposed change calls `agents::apply_update`, the same
+validated, versioned edit as `PUT /agents/{id}`.
+
+```sh
+B=http://127.0.0.1:8080/api; J='content-type: application/json'
+curl -s -X POST $B/agents/$AGENT/status -H "$J" -d '{"status":"paused"}'
+curl -s -X POST $B/suggestions/generate -H "$J" -d '{}'       # or wait for a tick
+curl -s "$B/suggestions?status=pending"
+curl -s -X POST $B/suggestions/$ID/accept -H "$J" -d '{}'      # or /dismiss
+```
+
+Rule suggestions are also generated at the end of every tick (no model call
+there). Endpoints and thresholds: `docs/api.md`.
+
 ## Schemas
 
 `../schemas/graph.schema.json`, `../schemas/challenge_terms.schema.json` and
