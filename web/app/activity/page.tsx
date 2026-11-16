@@ -29,6 +29,7 @@ export default function ActivityPage() {
                   <div className="row dim" style={{ fontSize: ".8rem" }}>
                     <span className="badge neutral">{it.kind.replace(/_/g, " ")}</span>
                     {it.agent_id && <Link href={`/agents/${it.agent_id}`}>{names.get(it.agent_id) ?? it.agent_id}</Link>}
+                    {it.collaboration_id && <Link href={`/collaborations/${it.collaboration_id}`}>collaboration</Link>}
                     {it.interaction_id && <Link href={`/interactions/${it.interaction_id}`}>challenge</Link>}
                   </div>
                   {it.detail && (
