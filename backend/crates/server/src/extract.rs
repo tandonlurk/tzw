@@ -16,7 +16,7 @@ pub struct ApiPath<T>(pub T);
 pub struct ApiQuery<T>(pub T);
 
 /// `application/json`, with optional parameters such as `; charset=utf-8`.
-fn is_json(headers: &HeaderMap) -> bool {
+pub(crate) fn is_json(headers: &HeaderMap) -> bool {
     headers
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())

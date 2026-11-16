@@ -12,6 +12,7 @@ use aen_server::guard::{ApiToken, GuardConfig, MIN_TOKEN_LEN, startup_error};
 use aen_server::market::MarketData;
 use aen_server::market::fake::FakeMarket;
 use aen_server::market::gemini::GeminiClient;
+use aen_server::quicknode::{QuickNodeConfig, StreamSecret};
 use aen_server::reasoner::{Reasoner, RuleBasedReasoner};
 use aen_server::state::{AppState, Settings};
 use aen_server::{DEFAULT_CORS_ORIGIN, MIGRATOR, app_with_state, lifecycle};
@@ -63,7 +64,38 @@ async fn main() -> Result<(), Box<dyn Error>> {
             ..GuardConfig::default()
         }
         .with_extra_hosts(&env::var("ALLOWED_HOSTS").unwrap_or_default()),
+        // Local ingestion only: mounted when the stream's secret is set.
+        quicknode: match env::var("QUICKNODE_STREAMS_SECRET")
+            .ok()
+            .and_then(|s| StreamSecret::new(&s))
+        {
+            Some(secret) => {
+                let d = QuickNodeConfig::new(secret);
+                let name = |var: &str, default: String| {
+                    env::var(var)
+                        .ok()
+                        .map(|v| v.trim().to_ascii_lowercase())
+                        .filter(|v| !v.is_empty())
+                        .unwrap_or(default)
+                };
+                Some(QuickNodeConfig {
+                    signature_header: name("QUICKNODE_SIGNATURE_HEADER", d.signature_header),
+                    timestamp_header: name("QUICKNODE_TIMESTAMP_HEADER", d.timestamp_header),
+                    nonce_header: name("QUICKNODE_NONCE_HEADER", d.nonce_header),
+                    max_skew_secs: var("QUICKNODE_MAX_SKEW_SECS", d.max_skew_secs)?,
+                    secret: d.secret,
+                })
+            }
+            None => None,
+        },
     };
+    if settings
+        .quicknode
+        .as_ref()
+        .is_some_and(|q| q.max_skew_secs < 1)
+    {
+        return Err("QUICKNODE_MAX_SKEW_SECS must be positive".into());
+    }
     // Loopback unless asked otherwise; anything else needs a token (SEC-02).
     let bind: IpAddr = var("BIND_ADDR", IpAddr::from([127, 0, 0, 1]))?;
     if let Some(problem) = startup_error(bind, &settings.guard) {
@@ -117,6 +149,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let settings_token_required = settings.guard.api_token.is_some();
     let allowed_hosts = settings.guard.allowed_hosts.clone();
+    let quicknode_on = settings.quicknode.is_some();
     let state = AppState {
         pool,
         market,
@@ -153,6 +186,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         %addr,
         token_required = settings_token_required,
         allowed_hosts = ?allowed_hosts,
+        quicknode_webhook = quicknode_on,
         "listening"
     );
     axum::serve(listener, app_with_state(state, cors_origin)).await?;

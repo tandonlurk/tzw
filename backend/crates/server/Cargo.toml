@@ -20,6 +20,10 @@ tower-http = { version = "0.7", features = ["cors", "trace"] }
 tracing = "0.1"
 serde_path_to_error = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# QuickNode Streams webhook signatures (HMAC-SHA256). Same versions sqlx's
+# Postgres auth already pulls in, so nothing new is downloaded.
+hmac = "0.13"
+sha2 = "0.11"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["sync"] }

@@ -287,3 +287,29 @@ No new `core::Intent` variant: the sandbox's exhaustive Intent mirror (D-41) wou
 
 - No agent-initiated collaborations (no graph block / reasoner path yet) and no approvals inbox entry for them: approval is the `owner_approved` flag on `/fund`.
 - If the sandbox owner adds collaboration-specific intents to the mirror, accept / complete / cancel can switch to them.
+
+## M3 item 5: QuickNode Streams ingestion, local only (2026-11-16, branch `backend-m3`)
+
+Status: done. Tests: `aen_m3_test` -> core 99, adversarial_authorize 14, adversarial_ledger 6, schemas 4, server unit 66 (+3), api 17, lifecycle 33, suggestions 13, collaborations 10, **quicknode 8 (new, fixture-driven)**; `aen_m3_sec` -> adversarial_api 16, adversarial_integrity 6. **292 passed** (backend crates; sandbox untouched). fmt and `clippy --workspace --all-targets` clean. Checked by hand on port 8093 with `openssl`-signed fixture: 200 inserted 3, replay 200 duplicates 3, bad signature 401.
+
+| What | Where |
+|---|---|
+| `POST /api/webhooks/quicknode`, mounted only with `QUICKNODE_STREAMS_SECRET`; HMAC-SHA256 over `nonce + timestamp + body` (constant-time `verify_slice`), timestamp window, JSON only, per-log validation, insert `ON CONFLICT (tx_hash, log_index) DO NOTHING`, reorg `removed` marking, activity (`chain_event`, `chain_event_removed`, `chain_events` summary over 50) | `server/src/quicknode.rs`, `lib.rs`, `state.rs`, `main.rs` |
+| `chain_events` table | `migrations/0008_chain_events.sql` |
+| Guard: webhook path exempt from the bearer token (HMAC is its auth); any extra `ALLOWED_HOSTS` entry now requires `AEN_API_TOKEN` at startup | `guard.rs` |
+| Fixture + tests | `tests/fixtures/quicknode/logs_batch.json`, `tests/quicknode.rs` |
+| Deps `hmac 0.13`, `sha2 0.11` (already in the lock via sqlx); the lock gained `const-oid 0.10.3` (digest feature) | `server/Cargo.toml`, `Cargo.lock` |
+
+### New defaults (proposals for docs/decisions.md)
+
+| # | Default | Rationale | Where |
+|---|---|---|---|
+| D-49 | QuickNode webhook assumptions (UNVERIFIED, configurable): headers `x-qn-signature` / `x-qn-timestamp` / `x-qn-nonce`, signature = hex HMAC-SHA256(secret, nonce + timestamp + body), timestamp window 300 s (seconds or ms). Payload `{data, metadata}` with `eth_getLogs`-format logs, flat or per block. Invalid logs are skipped and counted; non-2xx only for auth / shape errors | Matches the research notes; everything that is a guess can be changed by env without code |
+| D-50 | Events are stored once per `(tx_hash, log_index)`; a later `removed: true` marks the row removed (never deleted). Nothing acts on events (no executor), and `agent_id` is null in their activity until contracts and interactions are linked | Duplicate / reordered / concurrent deliveries are no-ops; audit trail kept |
+| D-51 | The webhook path is exempt from the bearer token; Host and Origin checks still apply. Any extra `ALLOWED_HOSTS` entry requires `AEN_API_TOKEN` at startup, because a tunnel to the loopback port exposes every route | QuickNode cannot send our token; the HMAC is its authentication, and the rest of the API stays closed |
+
+### Known limitations
+
+- Header names, signed-message layout and the logs payload are unverified: capture one real delivery (Filter Editor `console.log`) before relying on it.
+- No gzip support (configure the stream uncompressed); default 2 MB body limit.
+- Events are not decoded or linked to interactions / agents yet; there is no chain executor.

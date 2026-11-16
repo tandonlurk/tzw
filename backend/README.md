@@ -191,6 +191,27 @@ curl -sS "$API/activity?collaboration_id=$C" | jq -r '.[].summary'
 
 Endpoints, states, errors and example JSON: `docs/api.md` "Collaborations".
 
+## QuickNode Streams (local ingestion only)
+
+`server::quicknode`: `POST /api/webhooks/quicknode`, mounted only with
+`QUICKNODE_STREAMS_SECRET`. HMAC-SHA256 signature and timestamp window
+(header names and signed layout UNVERIFIED, configurable), logs stored once
+per `(tx_hash, log_index)` in `chain_events`, shown as `chain_event`
+activity. No tunnel, no chain executor. Try it locally with the fixture:
+
+```sh
+QUICKNODE_STREAMS_SECRET=local-demo-secret cargo run -p aen-server &   # plus the usual env
+F=crates/server/tests/fixtures/quicknode/logs_batch.json; TS=$(date +%s); N=abc123
+SIG=$( (printf '%s%s' "$N" "$TS"; cat "$F") | openssl dgst -sha256 -hmac local-demo-secret -hex | awk '{print $NF}')
+curl -sS -X POST http://127.0.0.1:8080/api/webhooks/quicknode -H 'Content-Type: application/json' \
+  -H "x-qn-nonce: $N" -H "x-qn-timestamp: $TS" -H "x-qn-signature: $SIG" --data-binary @"$F"
+# {"received":3,"inserted":3,"duplicates":0,"removed":0,"rejected":0}; again: inserted 0, duplicates 3
+```
+
+Behind a tunnel (owner decision, not set up here): add the tunnel host to
+`ALLOWED_HOSTS` and set `AEN_API_TOKEN` (required then); the webhook is exempt
+from the token and authenticated by its HMAC. Details: `docs/api.md`.
+
 ## Schemas
 
 `../schemas/graph.schema.json`, `../schemas/challenge_terms.schema.json` and

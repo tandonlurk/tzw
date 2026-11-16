@@ -269,3 +269,33 @@ Activity entry:
   "summary": "Collaboration \"Research ETH funding rates and share the findings\" completed: \"Demo Bull (simulated)\" received 4.80 USDC (simulated) for a 3.00 USDC (simulated) contribution (net +1.80 USDC (simulated)).",
   "detail": { "contribution": "3000000", "payout": "4800000", "net": "1800000", "env": "simulated", "resolution": "owner_declared" } }
 ```
+
+## QuickNode Streams webhook (local ingestion only)
+
+`POST /api/webhooks/quicknode` stores Arc testnet logs delivered by a QuickNode Stream (dataset `Logs`, webhook destination, **no compression**) and records them as activity. It is **mounted only when `QUICKNODE_STREAMS_SECRET` is set** (404 otherwise). Nothing acts on the events yet: there is no chain executor, and nothing signs or sends a transaction. No tunnel is set up by this repo; exposing the route is an owner decision.
+
+**Authentication: the webhook's own HMAC, not the bearer token.**
+- Signature: lowercase hex HMAC-SHA256 with the stream's security token as key, over `nonce + timestamp + raw body` (string concatenation, no separators); an optional `sha256=` prefix and upper-case hex are accepted. Missing signature or timestamp → **401** `missing_signature`; mismatch → **401** `invalid_signature`.
+- Timestamp: unix seconds (or milliseconds, if > 10^12), within `QUICKNODE_MAX_SKEW_SECS` (default 300) of the server clock, else **401** `stale_timestamp`. Checked after the signature, so it is authenticated too.
+- Header names (**UNVERIFIED**, configurable): `QUICKNODE_SIGNATURE_HEADER` (default `x-qn-signature`), `QUICKNODE_TIMESTAMP_HEADER` (`x-qn-timestamp`), `QUICKNODE_NONCE_HEADER` (`x-qn-nonce`; a missing nonce is signed as the empty string). The signed-message layout is also unverified: capture one real delivery and adjust before relying on it.
+- Then: `Content-Type: application/json` (415 otherwise), JSON (400), shape (422), at most 5000 logs and the default 2 MB body limit (413).
+
+**Request guard (SEC-02) and this route.** QuickNode sends no `Origin`, so the Origin check passes; a request that does carry a foreign `Origin` is still refused. Its `Host` is the public tunnel host, which must be listed in `ALLOWED_HOSTS` (otherwise 403 `host_not_allowed`). Any extra `ALLOWED_HOSTS` entry makes `AEN_API_TOKEN` **required at startup**, because a tunnel to the loopback port exposes every route: with the token set, every other route needs `Authorization: Bearer …`, while `POST /api/webhooks/quicknode` is exempt from the token and authenticated by its HMAC alone.
+
+**Idempotency.** Each log is stored once, keyed on `(tx_hash, log_index)` (`chain_events` table, unique). A duplicate, a repeated batch, a reordered batch, or concurrent deliveries change nothing. A later delivery of a known log with `removed: true` (reorg) marks it removed once.
+
+**Assumed payload (UNVERIFIED)**: QuickNode's documented envelope `{ data: [...], metadata: {...} }` with `data` holding logs in `eth_getLogs` format, either flat or one array per block; a bare array, and receipt-shaped `{logs: [...]}` elements, are accepted too. Per log the server reads: `transactionHash` (0x + 64 hex), `logIndex` and `blockNumber` (hex quantity or number), `address` (0x + 40 hex), `topics` (≤ 4 × 0x + 64 hex), `data` (hex), `blockHash` (optional), `removed` (optional bool). Hex is stored lower-case. A log that fails these checks is skipped and counted in `rejected`; the others are stored. `metadata.network` and `metadata.stream_id` are kept with each event. Fixture: `backend/crates/server/tests/fixtures/quicknode/logs_batch.json`.
+
+```json
+{ "data": [[ { "address": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+               "blockHash": "0x1d59…8df2", "blockNumber": "0x1b4", "data": "0x…4c4b40",
+               "logIndex": "0x0", "removed": false,
+               "topics": ["0xddf252ad…b3ef", "0x…2266", "0x…79c8"],
+               "transactionHash": "0x88df…944b", "transactionIndex": "0x0" } ]],
+  "metadata": { "network": "arc-testnet", "dataset": "logs", "stream_id": "…",
+                "batch_start_range": 436, "batch_end_range": 437 } }
+```
+
+Response **200** (QuickNode retries anything else): `{ received, inserted, duplicates, removed, rejected }`, e.g. `{"received":3,"inserted":3,"duplicates":0,"removed":0,"rejected":0}` and, for the same batch again, `{"received":3,"inserted":0,"duplicates":3,"removed":0,"rejected":0}`.
+
+Activity kinds (`agent_id` null; `detail`: `chain_event_id`, `source: "quicknode_streams"`, `env: "arc_testnet"`, `network`, `tx_hash`, `log_index`, `block_number`, `address`, `topic0`): `chain_event` ("Arc testnet event seen via QuickNode Streams: log 0 of transaction 0x88df0164…944b from contract 0x5fbdb231…0aa3 in block 436. Recorded only; nothing acts on it yet."), `chain_event_removed`, and `chain_events` (one summary row when a delivery has more than 50 new events).
