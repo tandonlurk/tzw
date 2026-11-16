@@ -16,6 +16,7 @@ pub mod lifecycle;
 pub mod market;
 pub mod misc;
 pub mod models;
+pub mod quicknode;
 pub mod reasoner;
 pub mod state;
 pub mod suggestions;
@@ -79,6 +80,9 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
         .route("/suggestions/generate", post(suggestions::generate_now))
         .route("/suggestions/{id}/accept", post(suggestions::accept))
         .route("/suggestions/{id}/dismiss", post(suggestions::dismiss));
+    if state.settings.quicknode.is_some() {
+        api = api.route("/webhooks/quicknode", post(quicknode::webhook));
+    }
     if state.settings.dev_endpoints {
         api = api
             .route("/dev/tick", post(interactions::dev_tick))

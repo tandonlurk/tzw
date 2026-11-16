@@ -9,6 +9,7 @@ use crate::cocaptain::{CoCaptain, RuleBasedCoCaptain};
 use crate::guard::GuardConfig;
 use crate::market::MarketData;
 use crate::market::fake::FakeMarket;
+use crate::quicknode::QuickNodeConfig;
 use crate::reasoner::{Reasoner, RuleBasedReasoner};
 
 /// Lifecycle defaults. All of them are financial or timing defaults the owner
@@ -33,6 +34,8 @@ pub struct Settings {
     pub dev_endpoints: bool,
     /// Host allowlist and API token (SEC-02).
     pub guard: GuardConfig,
+    /// QuickNode Streams webhook; `None` (the default) = route not mounted.
+    pub quicknode: Option<QuickNodeConfig>,
 }
 
 impl Default for Settings {
@@ -46,6 +49,7 @@ impl Default for Settings {
             default_window_secs: 3600,
             dev_endpoints: true,
             guard: GuardConfig::default(),
+            quicknode: None,
         }
     }
 }

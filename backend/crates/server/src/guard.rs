@@ -90,6 +90,19 @@ pub fn startup_error(bind: IpAddr, config: &GuardConfig) -> Option<String> {
              characters) so the API is not open to the network"
         ));
     }
+    // An extra host name means requests arrive through something else (a
+    // tunnel or proxy, e.g. for the QuickNode webhook), so the rest of the
+    // API must not be open to it.
+    let extra = config
+        .allowed_hosts
+        .iter()
+        .any(|h| !DEFAULT_ALLOWED_HOSTS.contains(&h.as_str()));
+    if extra && config.api_token.is_none() {
+        return Some(format!(
+            "ALLOWED_HOSTS adds host names reachable from outside: set AEN_API_TOKEN (at least \
+             {MIN_TOKEN_LEN} characters) so only the HMAC-signed webhook works without it"
+        ));
+    }
     None
 }
 
@@ -143,8 +156,11 @@ pub async fn guard(State(guard): State<Guard>, req: Request, next: Next) -> Resp
         );
     }
     if let Some(token) = &guard.config.api_token {
+        // The QuickNode webhook authenticates itself with its HMAC signature
+        // (QuickNode cannot send our bearer token); Host and Origin still apply.
         let exempt = req.method() == Method::OPTIONS
-            || (req.method() == Method::GET && req.uri().path() == "/api/health");
+            || (req.method() == Method::GET && req.uri().path() == "/api/health")
+            || (req.method() == Method::POST && req.uri().path() == crate::quicknode::PATH);
         let presented = headers
             .get(AUTHORIZATION)
             .and_then(|v| v.as_bytes().strip_prefix(b"Bearer "));
@@ -194,6 +210,14 @@ mod tests {
             ..GuardConfig::default()
         };
         assert!(startup_error("0.0.0.0".parse().unwrap(), &locked).is_none());
+        // A tunnel host on a loopback bind also needs the token.
+        let tunnel = GuardConfig::default().with_extra_hosts("abc.trycloudflare.com");
+        assert!(startup_error("127.0.0.1".parse().unwrap(), &tunnel).is_some());
+        let tunnel = GuardConfig {
+            api_token: ApiToken::new(&"x".repeat(MIN_TOKEN_LEN)),
+            ..tunnel
+        };
+        assert!(startup_error("127.0.0.1".parse().unwrap(), &tunnel).is_none());
     }
 
     #[test]
