@@ -222,3 +222,14 @@ API changes (`docs/api.md`): cooldown note extended; `pnl_over_time` row in Metr
 
 - `no_counterparty` is rate-limited even if a new agent appears during the cooldown (it is picked up after at most 600 s).
 - Approvals are still decided at real time, so in the co-captain step the stakes are committed at wall-clock time while proposals and settlements use the simulated clock.
+
+
+## sandbox-host stage 1 (2026-11-16, branch `sandbox-host`, worktree `worktrees/sandbox-host`)
+
+Status: done (stage 1). The D-11 spike is now crate `backend/crates/sandbox` (`aen-sandbox`); no runtime wiring yet (stage 2: `custom.code` block -> `Sandbox::run_blocking` -> `core::authorize`).
+
+- **API:** `Sandbox::new(path)` (compiles once, `module_sha256()`), `default_module_path()` (`$AEN_SANDBOX_MODULE` or `crates/sandbox/guest/runner.wasm`), `with_limits`, `with_max_concurrency` (default 4), sync `run(code, &ctx, now_ms, seed)` / `run_with_limits`, async `run_blocking` (`spawn_blocking` behind a `Semaphore`), `stats()`. Returns `RunOutput { intents: Vec<aen_core::authorize::Intent>, logs, fuel_used }` or `SandboxError` (Display is audit-trail text; Javy `unreachable` -> `Unsupported`).
+- **Guest:** `./backend/crates/sandbox/build-guest.sh` (checksum-verified Javy v9.1.0 in gitignored `tools/`); `guest/runner.wasm` is gitignored. Javy output is not byte-reproducible (two builds of the same source gave different hashes), so the recorded SHA-256 identifies the built artifact, not the source.
+- **Tests:** `cargo test -p aen-sandbox`: 3 unit + 24 integration passed, 1 ignored (latency). Tests needing the module skip (message visible with `--nocapture`) when it is absent. fmt and clippy clean; `cargo build --workspace` OK.
+- **Fixed vs spike:** `{"type":"reject","stake":"1"}` was accepted (serde ignores extra fields on an internally tagged unit variant); `Reject {}` is now a struct variant in the mirror. Money must also be canonical (no leading zeros), as in `core::Money`.
+- **Debug-build cost:** without `[profile.dev.package."*"] opt-level = 3` at the workspace root, compiling the guest takes ~8 s in a dev build (0.6 s optimised). Full run p50 ~0.3 ms, ~1.05M fuel. Lead's call: add the profile line, or cache with `Module::serialize`.
