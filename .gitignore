@@ -22,3 +22,6 @@ contracts/broadcast/
 
 # agent worktrees
 .claude/
+
+# downloaded tool binaries (never commit)
+tools/
