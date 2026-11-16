@@ -8,9 +8,10 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // suppressHydrationWarning on body: extensions (e.g. Grammarly) inject attributes before hydration.
   return (
     <html lang="en">
-      <body>
+      <body suppressHydrationWarning>
         <div className="shell">
           <aside className="sidebar">
             <div className="brand">Agent Network</div>

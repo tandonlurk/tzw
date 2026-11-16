@@ -10,3 +10,8 @@ Not browser-tested: reject, approve-then-cancelled message, agent detail challen
 2. Agents with a lowered `approval_threshold` only ask for approval when conviction is high (stake sizing stays at the threshold otherwise), so a demo needs `POST /dev/fake-market {"move_bps":700}` before the propose tick.
 3. Simulated clock jumps (`/dev/tick {"now":...}`) of many minutes cancel in-flight negotiations ("funding deadline passed"); tick in small steps.
 4. With one open challenge on the fake market, no further proposals are made (not an error, but looks like agents are idle).
+
+## web-m2b follow-up
+Browser-verified (real backend, fake market): reject notice, approve-then-cancelled notice (reproduced by deallocating the agent after the approval was requested; fixed doubled period), agent-detail challenge list (open/history cards), template description prefill, per-agent P&L chart.
+"1 Issue" badge: hydration mismatch from a browser extension (Grammarly attrs on `<body>`), not an app bug; suppressed on body only.
+Backend/API gap: `/stats/portfolio` already has per-agent cumulative series, so no new endpoint is needed. Note: the portfolio series has one event per settled challenge, so a fresh demo shows single-point lines (held to the chart edge).

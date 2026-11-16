@@ -44,3 +44,9 @@ Run against the real backend; charts (M2); approvals and interactions views.
 - Helpers with tests: `lib/interactions.ts`, `lib/charts.ts` (21 tests total).
 - Browser-verified against real backend: approvals approve flow, dashboard numbers vs API, interaction detail, builder add block / incompatible connection rejected / compatible connection drawn.
 - Not browser-verified: reject path, approve -> cancelled notice, agent detail challenges section, create-form prefill.
+
+## M2b (web-m2b)
+- Dashboard P&L chart: "By agent" lines (default, mint/rose/ice by final sign, from `/stats/portfolio` `pnl_over_time.agent_cumulative`) with a "Portfolio total" toggle. Helpers `perAgentSeries`/`scaleMulti` in `lib/charts.ts` (tests).
+- Approval-cancelled notice no longer shows a doubled period (`reasonSuffix`, tested).
+- "1 Issue" badge: React hydration warning, extension (Grammarly) adds `data-gr-ext-installed` / `data-new-gr-c-s-check-loaded` on `<body>`. Fixed with `suppressHydrationWarning` on body in `app/layout.tsx`.
+- Browser-verified on real backend: reject, approve-then-cancelled notice, agent-detail challenges list, template description prefill, per-agent chart. Name is intentionally left blank on template pick.
