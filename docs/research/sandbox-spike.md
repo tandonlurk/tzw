@@ -2,6 +2,8 @@
 
 **Verdict: GO for D-11.** Every required limit works, all tests pass, and a call takes about 0.16 ms. The Rhai fallback was not needed.
 
+> Superseded 2026-11-16: the spike crate was ported to `backend/crates/sandbox` (`aen-sandbox`, 27 tests) and `spikes/sandbox/` was removed; it remains in git history at commit c1d3f79. Build the guest with `backend/crates/sandbox/build-guest.sh`.
+
 ## What was built (`spikes/sandbox/`, a standalone Cargo workspace that is not part of `backend/`)
 - **Guest:** `guest/runner.js` is compiled **once** with Javy into `runner.wasm` (1.36 MB) by `build-guest.sh`. The runner reads `{code, ctx, now_ms, seed}` from stdin and turns the user's source into a function with `new Function`. It replaces `Date` with the host's `now_ms` and `Math.random` with a PRNG seeded by `seed`. It captures `console.*` into `logs`, deletes the `Javy` I/O global, and writes `{ok, intents, logs}` or `{ok:false, error}`.
 - **Host (`src/lib.rs`):** wasmtime `=50.0.1` with `default-features = false` and the `cranelift`, `runtime`, `std`, `parallel-compilation` and `wat` features. It enables fuel (default 50M) and an epoch deadline (a 10 ms wall-clock ticker, default 50 ticks = 500 ms). Memory is capped at 32 MiB through `StoreLimits` wrapped in a `ResourceLimiter`, and the wasm stack is 512 KiB. Each run gets a fresh `Store` and instance.
