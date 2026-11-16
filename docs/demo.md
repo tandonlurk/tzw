@@ -37,3 +37,17 @@ Exact commands: `backend/README.md`, "Demo script" (fresh db, `MARKET_DATA=fake 
 Also checked: a `text/plain` POST to approve returns 415.
 
 Caveats: deterministic only on a fresh database; a rerun within 600 s needs `PROPOSAL_COOLDOWN_SECS=0`; a slow live demo needs a longer `FUNDING_WINDOW_SECS` (300 s default, approvals included).
+
+## Co-captain step (verified by hand 2026-11-16, `recovery` after the backend-m3 stage 1 merge)
+
+Lead re-ran the whole README "Demo script" on a fresh db (port 8095). Steps above reproduced unchanged, then the co-captain rounds:
+
+| Step | Observed |
+|---|---|
+| Round 2 (simulated clock) | proposed 1 / countered 1, accepted 1 / approvals_requested 1, approve → active, settle: `{"settled":1,"suggestions":0}` |
+| Round 3 | same, settle: `{"settled":1,"suggestions":2}` (skeptic's third straight loss) |
+| Pending suggestions | skeptic `raise_approval_threshold` → `approval_threshold` 2.50; skeptic `lower_max_stake` → `max_per_interaction` 5.00 (rule-generated, no model call) |
+| Accept `lower_max_stake` | `"accepted"`; skeptic now version 2, `max_per_interaction` 5000000 |
+| Portfolio | bull realized +7.50, 3 settled, 3 wins; skeptic -7.50, 3 settled, 0 wins (simulated) |
+
+`pnl_over_time` points now carry the simulated settlement times (D-39), so the dashboard chart spreads the three rounds over the simulated hours.
