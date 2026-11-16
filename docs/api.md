@@ -120,7 +120,7 @@ Units: `pm_yes_price_bps_v1` = the contract's YES price in basis points of 1.00 
 
 Runtime rules worth knowing when reading these endpoints:
 
-- **Proposal cooldown.** After an agent proposes on a market it does not propose on that market again for `PROPOSAL_COOLDOWN_SECS` (default 600, `0` disables), whatever happened to the first proposal. Enforced in the runtime before any reasoning; other markets are unaffected.
+- **Proposal cooldown.** After an agent proposes on a market it does not propose on that market again for `PROPOSAL_COOLDOWN_SECS` (default 600, `0` disables), whatever happened to the first proposal. A proposal attempt that `authorize` denied (`proposal_denied`) or that found no counterparty (`no_counterparty`) starts the same cooldown, but only under the agent's current config version: an owner edit lets it try again on the next tick. Enforced in the runtime before any reasoning (no run, no model call); other markets are unaffected. The cooldown is measured on the lifecycle clock (the simulated `now` of `/dev/tick`).
 - **Summaries are for people.** Negotiation `summary` strings and run traces write amounts as `2.50 USDC (simulated)`, prediction-market prices as `0.55 (YES price)`, spot prices as `65000.00 USD` and convictions / moves as percentages. The structured fields next to them (`terms.stake`, `terms.threshold`, `conviction_bps`) keep exact integers.
 - `schemas/challenge_terms.schema.json` is the JSON Schema of `terms` (shape only; cross-field rules are checked by the server).
 
@@ -134,6 +134,7 @@ Runtime rules worth knowing when reading these endpoints:
 | realized_pnl | net of the agent's `settle` ledger entries = sum over settled challenges of (payout − stake). Deposits, allocations, deallocations, stake commits and refunds are transfers and are excluded |
 | unrealized_pnl | not computed (no fair mark for a binary challenge before it resolves) |
 | win_rate_bps | wins × 10000 / settled; voided and cancelled challenges excluded |
+| pnl_over_time | one point per agent per settled challenge, ordered by settlement time. `ts` is the lifecycle clock at settlement (the simulated `now` of the `/dev/tick` that settled it, real time otherwise), not the ledger rows' wall-clock `ts`; `agent_cumulative` / `portfolio_cumulative` are running sums of `delta` |
 | exposure (authorization) | sum of stakes of the agent's challenges in `funded`, `active`, `resolving` |
 
 With one owner on both sides of a challenge, portfolio `realized_pnl` nets to zero; the per-agent numbers are the informative ones.

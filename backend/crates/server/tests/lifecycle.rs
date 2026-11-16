@@ -1209,9 +1209,16 @@ async fn proposal_denied_by_policy_is_explained_in_activity() {
     )
     .await;
     let _b = skeptic(&c, 100).await;
-    for offset in 0..2 {
+    let cooldown = c.state.settings.proposal_cooldown_secs;
+    // Denied once, then rate-limited like a proposal; denied again (and
+    // still logged once) after the cooldown.
+    for (offset, denied) in [(0, 1), (1, 0), (cooldown, 1)] {
         let report = tick(&c, c.t0 + Duration::seconds(offset)).await;
-        assert_eq!((report.proposed, report.denied), (0, 1));
+        assert_eq!(
+            (report.proposed, report.denied),
+            (0, denied),
+            "at {offset} s"
+        );
     }
     let items = get(&c.app, &format!("/api/activity?agent_id={a}")).await;
     let denied: Vec<&Value> = items
@@ -1231,6 +1238,87 @@ async fn proposal_denied_by_policy_is_explained_in_activity() {
         denied[0]["detail"]["reasons"],
         json!(["interaction_type_not_allowed"])
     );
+}
+
+async fn discovery_runs(pool: &PgPool, agent: Uuid) -> i64 {
+    sqlx::query_scalar(
+        "SELECT COUNT(*) FROM agent_runs WHERE agent_id = $1 AND trigger = 'trigger.market_move'",
+    )
+    .bind(agent)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn a_denied_proposal_is_rate_limited_until_the_owner_edits_the_agent() {
+    let c = setup().await;
+    let cooldown = c.state.settings.proposal_cooldown_secs;
+    let a = agent_from_template(
+        &c,
+        "Momentum bull",
+        json!({ "allowed_interaction_types": ["collaboration"] }),
+        100,
+    )
+    .await;
+    let _b = skeptic(&c, 100).await;
+    assert_eq!(tick(&c, c.t0).await.denied, 1);
+    assert_eq!(discovery_runs(&c.pool, a).await, 1);
+    let blocked: Option<String> =
+        sqlx::query_scalar("SELECT blocked FROM agent_runs WHERE agent_id = $1")
+            .bind(a)
+            .fetch_one(&c.pool)
+            .await
+            .unwrap();
+    assert_eq!(blocked.as_deref(), Some("denied"));
+
+    // Inside the cooldown the agent does not even reason (no run, no model call).
+    for secs in [15, 300, cooldown - 1] {
+        let r = tick(&c, c.t0 + Duration::seconds(secs)).await;
+        assert_eq!((r.proposed, r.denied), (0, 0), "after {secs} s");
+    }
+    assert_eq!(discovery_runs(&c.pool, a).await, 1);
+
+    // An owner edit is a new version: the agent may try again at once.
+    let mut input = get(&c.app, &format!("/api/agents/{a}")).await;
+    input["policy"]["allowed_interaction_types"] = json!(["challenge", "collaboration"]);
+    let body = json!({
+        "name": input["name"], "description": input["description"], "config": input["config"],
+        "policy": input["policy"], "graph": input["graph"],
+    });
+    let (status, out) = send(&c.app, "PUT", &format!("/api/agents/{a}"), Some(body)).await;
+    assert_eq!(status, StatusCode::OK, "{out}");
+    assert_eq!(tick(&c, c.t0 + Duration::seconds(16)).await.proposed, 1);
+    assert_ledger_sound(&c.pool).await;
+}
+
+#[tokio::test]
+async fn no_counterparty_is_rate_limited_too() {
+    let c = setup().await;
+    let cooldown = c.state.settings.proposal_cooldown_secs;
+    let a = bull(&c, 100).await;
+    tick(&c, c.t0).await;
+    assert_eq!(discovery_runs(&c.pool, a).await, 1);
+    for secs in [15, cooldown - 1] {
+        tick(&c, c.t0 + Duration::seconds(secs)).await;
+    }
+    assert_eq!(discovery_runs(&c.pool, a).await, 1);
+    assert_eq!(count(&activity_kinds(&c.pool).await, "no_counterparty"), 1);
+    tick(&c, c.t0 + Duration::seconds(cooldown)).await;
+    assert_eq!(discovery_runs(&c.pool, a).await, 2);
+
+    // Disabled cooldown: the old behaviour, one attempt per tick.
+    drop(c);
+    let c = setup_with(|mut state| {
+        state.settings.proposal_cooldown_secs = 0;
+        state
+    })
+    .await;
+    let a = bull(&c, 100).await;
+    for secs in [0, 15] {
+        tick(&c, c.t0 + Duration::seconds(secs)).await;
+    }
+    assert_eq!(discovery_runs(&c.pool, a).await, 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -1818,6 +1906,128 @@ async fn seeded_demo_walks_the_whole_lifecycle() {
         assert!(count(&kinds, kind) >= 1, "missing {kind} in {kinds:?}");
     }
     assert_ledger_sound(&c.pool).await;
+
+    // P&L over time is plotted on the lifecycle clock: the simulated `now`
+    // of the settling tick, not the wall clock.
+    let settled_at = end_at + Duration::seconds(5);
+    let pnl = get(&c.app, "/api/stats/portfolio").await["pnl_over_time"].clone();
+    assert_eq!(pnl.as_array().unwrap().len(), 2);
+    for point in pnl.as_array().unwrap() {
+        let ts: DateTime<Utc> = field(point, "ts").parse().unwrap();
+        assert_eq!(ts, settled_at);
+    }
+
+    // Co-captain step: two more identical rounds, each won by the bull. The
+    // skeptic's third straight loss yields a rule suggestion (F-21) to halve
+    // its maximum stake.
+    let mut at = settled_at;
+    for round in 2..=3 {
+        let report = demo_round(&c, at).await;
+        assert_eq!(report["settled"], 1, "round {round}: {report}");
+        at = field(&report, "now").parse().unwrap();
+        if round == 2 {
+            assert!(
+                pending_suggestion(&c, skeptic, "lower_max_stake")
+                    .await
+                    .is_none()
+            );
+        }
+    }
+    assert_eq!(
+        available(&c.pool, skeptic).await,
+        100 * USDC - 3 * 5 * USDC / 2
+    );
+    let suggestion = pending_suggestion(&c, skeptic, "lower_max_stake")
+        .await
+        .expect("lower_max_stake suggestion after three losses");
+    assert_eq!(suggestion["source"], "rules");
+    assert_eq!(suggestion["loosens_control"], false);
+    assert_eq!(
+        suggestion["proposed_change"],
+        json!({"policy": {"max_per_interaction": "5000000"}})
+    );
+    assert_eq!(
+        suggestion["evidence"]["recent_settle_nets"],
+        json!(["-2500000", "-2500000", "-2500000"])
+    );
+    let pnl = get(&c.app, "/api/stats/portfolio").await["pnl_over_time"].clone();
+    let times: Vec<&str> = pnl
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| field(p, "ts"))
+        .collect();
+    assert_eq!(times.len(), 6);
+    assert!(times.windows(2).all(|w| w[0] <= w[1]), "{times:?}");
+
+    // Accepting it is an owner edit: a new config version, history kept, no
+    // funds moved.
+    let before = get(&c.app, &format!("/api/agents/{skeptic}")).await;
+    assert_eq!(before["version"], 1);
+    let done = post(
+        &c.app,
+        &format!("/api/suggestions/{}/accept", field(&suggestion, "id")),
+        json!({}),
+    )
+    .await;
+    assert_eq!(done["status"], "accepted");
+    let after = get(&c.app, &format!("/api/agents/{skeptic}")).await;
+    assert_eq!(after["version"], 2);
+    assert_eq!(after["policy"]["max_per_interaction"], "5000000");
+    assert_eq!(after["balances"], before["balances"]);
+    let versions = get(&c.app, &format!("/api/agents/{skeptic}/versions")).await;
+    assert_eq!(versions.as_array().unwrap().len(), 2);
+    assert_eq!(versions[1]["policy"]["max_per_interaction"], "10000000");
+    assert_ledger_sound(&c.pool).await;
+}
+
+/// One more round of the README demo starting at simulated time `at`: the
+/// contract back at 0.55, propose + counter, accept + approval request,
+/// owner approves, contract to 0.70, settle. Returns the settling tick.
+async fn demo_round(c: &Ctx, at: DateTime<Utc>) -> Value {
+    post(
+        &c.app,
+        "/api/dev/fake-market",
+        json!({ "yes_price_bps": 5500 }),
+    )
+    .await;
+    let report = http_tick(c, at).await;
+    assert_eq!(
+        (report["proposed"].clone(), report["countered"].clone()),
+        (json!(1), json!(1)),
+        "{report}"
+    );
+    let report = http_tick(c, at + Duration::seconds(15)).await;
+    assert_eq!(report["approvals_requested"], 1, "{report}");
+    let approvals = get(&c.app, "/api/approvals").await;
+    let approval = field(&approvals[0], "id");
+    let result = post(
+        &c.app,
+        &format!("/api/approvals/{approval}/approve"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(result["interaction"]["state"], "active");
+    let id = field(&result["interaction"], "id").to_owned();
+    post(
+        &c.app,
+        "/api/dev/fake-market",
+        json!({ "yes_price_bps": 7000 }),
+    )
+    .await;
+    let detail = get(&c.app, &format!("/api/interactions/{id}")).await;
+    let end_at: DateTime<Utc> = field(&detail, "end_at").parse().unwrap();
+    http_tick(c, end_at + Duration::seconds(5)).await
+}
+
+async fn pending_suggestion(c: &Ctx, agent: Uuid, kind: &str) -> Option<Value> {
+    get(&c.app, "/api/suggestions?status=pending")
+        .await
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["kind"] == kind && s["agent_id"] == agent.to_string())
+        .cloned()
 }
 
 #[tokio::test]

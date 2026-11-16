@@ -198,3 +198,27 @@ Test files now truncate `suggestions` too (it references `agents`); a branch tha
 - Accepting a change equal to the agent's current values is a 422 (`invalid_proposed_change`); the owner dismisses it instead.
 - No frontend yet; voice (ElevenLabs) not started.
 
+
+## M3 stage 1 (2026-11-16, branch `backend-m3`, worktree `worktrees/backend-m3`)
+
+Status: done. Tests (two db groups): `aen_m3_test` -> core 94 + 14 + 6 + 4, server unit 59, api 17, lifecycle 33 (+2), suggestions 13; `aen_m3_sec` -> adversarial_api 11, adversarial_integrity 5. **256 passed.** fmt and clippy clean. README demo (incl. the new co-captain step) run verbatim on `aen_m3_dev`, port 8093.
+
+| Task | What changed | Where |
+|---|---|---|
+| 1a Blocked proposals rate-limited | A discovery run that `authorize` denied or that found no counterparty is marked (`agent_runs.blocked`, `market_key`) and starts the proposal cooldown for that market, only under the same agent version. Checked before reasoning, so no run / model call | `migrations/0005_blocked_proposals.sql`, `lifecycle.rs` `in_proposal_cooldown`, `mark_blocked` |
+| 1b P&L clock | `pnl_over_time.ts` = `interactions.settled_at` (new column, the tick's `now`, simulated in dev), ordered by it; ledger `ts` unchanged | `interactions.rs` `portfolio`, `lifecycle.rs` `settle_locked` |
+| 2 Co-captain demo step | No new endpoint: two more seeded rounds (`/dev/fake-market`, `/dev/tick`, approve) -> skeptic's third loss -> `lower_max_stake` `{"policy":{"max_per_interaction":"5000000"}}` (plus `raise_approval_threshold`); accept -> version 2 | README "Co-captain step", `tests/lifecycle.rs` `seeded_demo_walks_the_whole_lifecycle` |
+
+API changes (`docs/api.md`): cooldown note extended; `pnl_over_time` row in Metrics. No new endpoints or fields.
+
+### New defaults (proposals for docs/decisions.md)
+
+| # | Default | Rationale | Where |
+|---|---|---|---|
+| D-38 | A proposal attempt denied by `authorize` or without a counterparty starts the same `PROPOSAL_COOLDOWN_SECS` (600 s) cooldown per (agent, market) as a proposal, counted from the run's `ts` (lifecycle clock), only while the agent's config version is unchanged. Reasoner errors and invalid terms are not rate-limited (a transient error should retry). Supersedes the "not rate-limited yet" note in D-33 | Stops a blocked agent re-reasoning (and calling Grok) every 15 s tick; an owner edit is the usual fix for a denial, so it should take effect on the next tick | `lifecycle.rs` |
+| D-39 | P&L over time is plotted against the settlement time on the lifecycle clock (`interactions.settled_at`), not the ledger rows' wall-clock `ts`; rows settled before migration 0005 use `observed_at` (same value) | Charts of a simulated-clock demo would otherwise bunch every point at the moment the script ran | `interactions.rs` |
+
+### Known limitations
+
+- `no_counterparty` is rate-limited even if a new agent appears during the cooldown (it is picked up after at most 600 s).
+- Approvals are still decided at real time, so in the co-captain step the stakes are committed at wall-clock time while proposals and settlements use the simulated clock.
