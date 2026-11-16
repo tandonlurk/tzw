@@ -61,6 +61,21 @@ impl Money {
     }
 }
 
+/// On the wire `Money` is a string of digits (minor units), not a number.
+impl schemars::JsonSchema for Money {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Money".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,18})$",
+            "description": "USDC minor units (6 decimals) as a decimal string, e.g. \"1500000\" = 1.5 USDC. At most 9223372036854775807."
+        })
+    }
+}
+
 impl fmt::Display for Money {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)

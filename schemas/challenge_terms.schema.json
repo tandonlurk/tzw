@@ -1,0 +1,142 @@
+{
+  "$defs": {
+    "Direction": {
+      "description": "The side party A (the proposer) takes.",
+      "enum": [
+        "above",
+        "below"
+      ],
+      "type": "string"
+    },
+    "FormulaId": {
+      "description": "How the observation is computed. The id is stored with the terms so a\nformula can change without rewriting old challenges.",
+      "oneOf": [
+        {
+          "const": "pm_yes_price_bps_v1",
+          "description": "The contract's YES price in basis points (0-10000), first successful\nread at or after `end_ts`: `prices.lastTradePrice * 10000` while the\ncontract is open; 10000 / 0 once it has resolved yes / no.",
+          "type": "string"
+        },
+        {
+          "const": "spot_last_price_micros_v1",
+          "description": "The spot `last` price in micro-USD (6 decimals, extra digits\ntruncated), first successful read at or after `end_ts`.",
+          "type": "string"
+        }
+      ]
+    },
+    "MarketRef": {
+      "description": "What the challenge is about. Only listed Gemini markets can be referenced.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "One contract of a Gemini prediction-market event.",
+          "properties": {
+            "event_ticker": {
+              "description": "Event ticker, e.g. `BTC2611152200`.",
+              "type": "string"
+            },
+            "instrument_symbol": {
+              "description": "Contract `instrumentSymbol`, e.g. `GEMI-BTC2611152200-HI65000`.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "gemini_prediction_contract",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "event_ticker",
+            "instrument_symbol"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A Gemini spot pair, e.g. `btcusd`.",
+          "properties": {
+            "kind": {
+              "const": "gemini_spot",
+              "type": "string"
+            },
+            "symbol": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "symbol"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Money": {
+      "description": "USDC minor units (6 decimals) as a decimal string, e.g. \"1500000\" = 1.5 USDC. At most 9223372036854775807.",
+      "pattern": "^(0|[1-9][0-9]{0,18})$",
+      "type": "string"
+    },
+    "ResolutionSource": {
+      "description": "Where the resolving observation is read from. Read by the backend: this is\nbackend-administered resolution, not an oracle.",
+      "oneOf": [
+        {
+          "const": "gemini_prediction_markets",
+          "description": "`GET /v1/prediction-markets/events/{event_ticker}`.",
+          "type": "string"
+        },
+        {
+          "const": "gemini_spot_ticker",
+          "description": "`GET /v1/pubticker/{symbol}`.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "direction": {
+      "$ref": "#/$defs/Direction",
+      "description": "Party A's side."
+    },
+    "end_ts": {
+      "description": "Unix seconds. The observation is the first read at or after this.",
+      "format": "int64",
+      "type": "integer"
+    },
+    "formula": {
+      "$ref": "#/$defs/FormulaId"
+    },
+    "market": {
+      "$ref": "#/$defs/MarketRef"
+    },
+    "resolution_source": {
+      "$ref": "#/$defs/ResolutionSource"
+    },
+    "stake": {
+      "$ref": "#/$defs/Money",
+      "description": "Stake per side."
+    },
+    "start_ts": {
+      "description": "Unix seconds. Funding deadline: both stakes must be committed before\nthis instant or the challenge is cancelled.",
+      "format": "int64",
+      "type": "integer"
+    },
+    "threshold": {
+      "description": "In the unit of `formula`.",
+      "format": "int64",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "market",
+    "direction",
+    "threshold",
+    "start_ts",
+    "end_ts",
+    "stake",
+    "resolution_source",
+    "formula"
+  ],
+  "title": "ChallengeTerms",
+  "type": "object"
+}

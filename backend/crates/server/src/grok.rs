@@ -68,8 +68,9 @@ const SYSTEM_PROMPT: &str = "You are the reasoning module of an autonomous agent
 two-sided, equal-stake challenges with other agents about one market observation. You give an \
 opinion only: you cannot move funds, and separate code enforces every limit. Answer with the JSON \
 object requested and nothing else. conviction_bps is 0-10000. summary is one or two plain sentences \
-for the owner (a decision summary, not step-by-step reasoning). Amounts are integer USDC minor \
-units (6 decimals) as strings. Set stake and threshold to null unless the task asks for terms.";
+for the owner (a decision summary, not step-by-step reasoning). Amounts in the JSON fields are integer \
+USDC minor units (6 decimals) as strings; in summary, write amounts in USDC with decimals (2500000 \
+is \"2.50 USDC\") and percentages instead of basis points, never raw units. Set stake and threshold to null unless the task asks for terms.";
 
 fn task_text(task: Task) -> &'static str {
     match task {

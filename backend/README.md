@@ -54,10 +54,14 @@ signs or sends a transaction. The moving parts:
 Extra environment (all optional, see `.env.example`): `MARKET_DATA` (`gemini`
 default, or `fake`), `TICK_INTERVAL_SECS` (default 15, `0` disables the
 scheduler), `MAX_NEGOTIATION_ROUNDS` (3), `FUNDING_WINDOW_SECS` (300),
-`RESOLUTION_GRACE_SECS` (600), `DEFAULT_SYMBOL` (`BTCUSD`), `DEV_ENDPOINTS`
+`RESOLUTION_GRACE_SECS` (600), `PROPOSAL_COOLDOWN_SECS` (600, per agent and
+market, `0` disables), `DEFAULT_SYMBOL` (`BTCUSD`), `DEV_ENDPOINTS`
 (`true`), `GEMINI_BASE_URL`.
 
-Offline demo, driven by hand (needs `jq`):
+### Demo script (offline, simulated funds)
+
+Deterministic on a fresh database (other active agents would also take part).
+Needs `jq`. All funds are simulated; nothing signs or sends a transaction.
 
 ```sh
 createdb aen_demo
@@ -65,20 +69,36 @@ DATABASE_URL="postgres://$USER@localhost/aen_demo" PORT=8099 MARKET_DATA=fake TI
   cargo run -p aen-server &
 API=http://127.0.0.1:8099/api
 post() { curl -sS -X POST "$API$1" -H 'Content-Type: application/json' -d "$2"; }
-agent_from() { curl -sS $API/templates | jq -c --arg n "$1" '.[] | select(.name==$n) | {name, description, config, policy, graph}' \
-  | curl -sS -X POST $API/agents -H 'Content-Type: application/json' -d @- | jq -r .id; }
 
-post /wallet/simulated-deposit '{"amount":"200000000"}'
-BULL=$(agent_from "Momentum bull"); SKEPTIC=$(agent_from "Skeptic")
-post /agents/$BULL/allocate '{"amount":"100000000"}'; post /agents/$SKEPTIC/allocate '{"amount":"100000000"}'
-post /dev/tick '{}'        # bull proposes 5 USDC, skeptic counters with 2.5
-post /dev/tick '{}'        # bull accepts; both stakes authorized and committed -> active
+post /dev/seed-demo '{}'   # "Demo Bull (simulated)" + "Demo Skeptic (simulated)", 100 simulated USDC each; safe to repeat
+post /dev/fake-market '{"move_bps":300,"yes_price_bps":5500,"resolution_side":"open"}'   # BTC +3%, contract at 0.55
+post /dev/tick '{}'        # proposed 1, countered 1: bull offers 5.00, skeptic counters 2.50 -> negotiating
+post /dev/tick '{}'        # accepted 1, approvals_requested 1 -> awaiting_approval, nothing funded
+APPROVAL=$(curl -sS $API/approvals | jq -r '.[0].id')
+post /approvals/$APPROVAL/approve '{}' | jq .interaction.state    # "active": both stakes committed together
 ID=$(curl -sS $API/interactions | jq -r '.[0].id')
-post /dev/fake-market '{"yes_price_bps":7000}'                     # the fake contract trades at 0.70
-post /dev/tick '{"now":"<a time after the interaction end_at>"}'   # resolves and settles: bull +2.5, skeptic -2.5
-curl -sS $API/interactions/$ID | jq '{state, outcome, observed, negotiation, runs}'
-curl -sS $API/stats/portfolio | jq .
+AFTER_END=$(curl -sS $API/interactions/$ID | jq -r '.end_at | fromdateiso8601 + 5 | todateiso8601')
+post /dev/fake-market '{"yes_price_bps":7000}'   # the contract now trades at 0.70
+post /dev/tick "{\"now\":\"$AFTER_END\"}"         # simulated clock: resolving 1, settled 1
+curl -sS $API/interactions/$ID | jq '{state, outcome, observed, negotiation: [.negotiation[].summary]}'
+curl -sS $API/stats/portfolio | jq .agents     # bull +2.50, skeptic -2.50 (simulated)
 ```
+
+Things that surprise people (all intended, see `tasks/backend.md`):
+
+- **Why the skeptic asks for approval.** Its automatic limit is 1.00 USDC and the
+  agreed stake is 2.50. A *proposer* sizes its own stake into its automatic range
+  (at most `approval_threshold`, the per-challenge maximum only from 80%
+  conviction), so lowering a proposer's threshold shrinks its stakes instead of
+  producing approvals. The counterparty takes the stake on the table.
+- **The funding deadline is real.** A challenge must be funded within
+  `FUNDING_WINDOW_SECS` (300) of the proposal, approvals included. `/dev/tick`
+  refuses a simulated `now` past the deadline of an unfunded challenge (409
+  `clock_jump_would_expire`) unless `"allow_expiry": true`. For a slow live demo
+  start the server with a longer `FUNDING_WINDOW_SECS`.
+- **Running it again.** The bull will not propose on the same market for
+  `PROPOSAL_COOLDOWN_SECS` (600) after its last proposal. Wait, or start the
+  server with `PROPOSAL_COOLDOWN_SECS=0`.
 
 With `MARKET_DATA=gemini` the same flow runs on live Gemini prediction-market
 contracts (public data, no key) with simulated stakes, in real time: `now`
@@ -86,8 +106,9 @@ cannot be overridden and a challenge lasts the agent's `horizon_secs`.
 
 ## Schemas
 
-`../schemas/graph.schema.json` and `../schemas/blocks.json` are generated from
-`core`. Regenerate after changing the graph types or the block catalog:
+`../schemas/graph.schema.json`, `../schemas/challenge_terms.schema.json` and
+`../schemas/blocks.json` are generated from `core`. Regenerate after changing
+the graph types, the challenge terms or the block catalog:
 
 ```sh
 cargo run -p aen-core --example export_schemas

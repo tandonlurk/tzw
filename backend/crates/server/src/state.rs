@@ -20,6 +20,10 @@ pub struct Settings {
     /// Seconds after `end_ts` to keep retrying market data before a
     /// challenge is voided and refunded.
     pub resolution_grace_secs: i64,
+    /// Seconds an agent waits after proposing on a market before it may
+    /// propose on that market again, whatever became of the first proposal.
+    /// `0` disables the cooldown.
+    pub proposal_cooldown_secs: i64,
     /// Market looked at by `trigger.schedule` flows (which name no symbol).
     pub default_symbol: String,
     pub default_window_secs: i64,
@@ -33,6 +37,7 @@ impl Default for Settings {
             max_negotiation_rounds: 3,
             funding_window_secs: 300,
             resolution_grace_secs: 600,
+            proposal_cooldown_secs: 600,
             default_symbol: "BTCUSD".into(),
             default_window_secs: 3600,
             dev_endpoints: true,

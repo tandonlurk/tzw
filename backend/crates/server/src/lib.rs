@@ -1,6 +1,7 @@
 //! HTTP API over the core domain logic. See docs/api.md for the contract.
 
 pub mod agents;
+pub mod demo;
 pub mod error;
 pub mod extract;
 pub mod graph_exec;
@@ -59,7 +60,8 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
     if state.settings.dev_endpoints {
         api = api
             .route("/dev/tick", post(interactions::dev_tick))
-            .route("/dev/fake-market", post(interactions::dev_fake_market));
+            .route("/dev/fake-market", post(interactions::dev_fake_market))
+            .route("/dev/seed-demo", post(demo::seed_demo));
     }
 
     Router::new()

@@ -126,3 +126,36 @@ Done (all committed):
 2. A proposal cooldown per (agent, market).
 3. Frontend: interactions list / detail, approvals inbox, portfolio charts from `/stats/portfolio`.
 4. Lead: copy F-1..F-15 into `docs/decisions.md`; fill `docs/demo.md` from the README script.
+
+## M2b (2026-11-15, branch `backend-m2b`)
+
+Status: done. `cargo test --workspace` -> **222 passed** (core 94 + 14 + 6 + 4 schema; server 40 unit, 11 + 5 adversarial, 17 api, 31 lifecycle). `cargo fmt --check` and `cargo clippy --workspace --all-targets` clean. Test db `aen_m2b_test` (all server tests, including the adversarial ones, read `TEST_DATABASE_URL`; there is no separate variable, so `aen_m2b_sec` was not needed). Demo script run by hand on `aen_m2b_dev`, port 8091.
+
+| Task | What changed | Where |
+|---|---|---|
+| 1 Cooldown | An agent does not propose again on a market for `PROPOSAL_COOLDOWN_SECS` after its last proposal there. Checked before reasoning (no run, no model call) and again in the proposing transaction | `lifecycle.rs` `in_proposal_cooldown`, `state.rs` |
+| 2 Summaries | Rule-based summaries and graph traces write `2.50 USDC (simulated)`, `0.55 (YES price)`, `65%`, `+3%`. Structured fields unchanged. Grok's prompt asks for the same (unverified against the live model) | `reasoner.rs`, `graph_exec.rs`, `models.rs` `display_bps`, `grok.rs` |
+| 3a Approvals | Root cause below; no rule changed. The demo skeptic's threshold makes the approval step deterministic | `demo.rs`, test `a_proposer_sizes_its_stake_into_the_automatic_range` |
+| 3b Clock jumps | Root cause below; no rule changed. `/dev/tick` refuses a simulated `now` that would expire unfunded challenges unless `allow_expiry: true` | `interactions.rs` `dev_tick` |
+| 4 Schemas | `schemas/challenge_terms.schema.json` (+ `Money` as a digit string); up-to-date test and a wire-format test | `core/src/challenge.rs`, `core/src/money.rs`, `core/tests/schemas.rs` |
+| 5 Demo seed | `POST /api/dev/seed-demo` `{}`: two fixed-id agents from the starter templates, 100 simulated USDC each, idempotent. Lifecycle test `seeded_demo_walks_the_whole_lifecycle`. README script and `docs/api.md` updated | `demo.rs`, `agents.rs` `insert_agent` |
+
+### Root causes (QA M2 observations 2 and 3)
+
+- **Lowered `approval_threshold` rarely asks for approval.** By design (F-12): `reasoner.rs` `proposal_stake` sizes a *proposer's* stake to `min(approval_threshold, max_per_interaction)` and only uses the per-challenge maximum from 80% conviction (move >= 600 bps with the rule-based reasoner). `authorize` asks the owner only when `stake > approval_threshold`, so the stake follows the threshold down and stays automatic. The gate is correct; what surprised QA is the sizing. A *counterparty* takes the stake on the table, so its threshold does trigger approvals. Kept as is; the demo gets its approval from the skeptic (threshold 1.00, agreed stake 2.50). The "Momentum bull" graph's `cond.stake_lte` max (5.00) is a graph parameter and does not follow the policy; harmless (it can only add approvals).
+- **Clock jumps cancel negotiations.** By design (F-5): `start_ts` = proposal + `FUNDING_WINDOW_SECS` (300) is the funding deadline and the first phase of every tick expires unfunded challenges past it. A simulated `now` more than 5 minutes ahead is past that deadline. Not a bug; the dev endpoint now says so instead of silently expiring.
+
+### New defaults for docs/decisions.md
+
+| # | Default | Rationale | Where |
+|---|---|---|---|
+| F-16 | Proposal cooldown: 600 s per (proposing agent, market), counted from the proposal's `created_at`, regardless of how that challenge ended. `PROPOSAL_COOLDOWN_SECS`, `0` disables. Being a counterparty starts no cooldown | Stops the propose / cancel loop on every 15 s tick. Longer than the 300 s funding window so an expired challenge is not re-proposed in the tick that expires it. Counted from the proposal, not the end, so it is a plain rate limit and does not depend on the simulated clock used to resolve | `state.rs`, `lifecycle.rs` `in_proposal_cooldown` |
+| F-17 | Dev clock guard: `/dev/tick` with `now` at or past the funding deadline of an unfunded challenge is 409 unless `allow_expiry: true`. The scheduler and the deadline rule (F-5) are unchanged | Demo reliability without weakening the rule | `interactions.rs` `dev_tick` |
+| F-18 | Demo seed: fixed agent ids `…00d1` / `…00d2`, 100 simulated USDC each (one 200 deposit, idempotency keys `demo-seed:*`), skeptic `approval_threshold` 1.00 USDC, everything else from the templates. Existing demo agents are never modified | Deterministic walk; goes through the normal validation and ledger paths | `demo.rs` |
+
+### Known limitations
+
+- The seeded walk is deterministic only when the demo agents are the only active agents (others may propose or be picked as counterparty).
+- Re-running the demo within the cooldown needs `PROPOSAL_COOLDOWN_SECS=0` or a wait.
+- A proposal that is denied or finds no counterparty creates no interaction, so it is not rate-limited by the cooldown (activity is still logged once; with Grok this is one model call per tick).
+- Approvals are decided at real time, not the simulated clock.

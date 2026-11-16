@@ -114,8 +114,15 @@ Units: `pm_yes_price_bps_v1` = the contract's YES price in basis points of 1.00 
 | POST | `/approvals/{id}/approve` | `{}` → `{approval, interaction}` | Records the approval, then **re-runs authorization** against current balances and limits. The interaction comes back `active`, still `awaiting_approval` (the other side is pending) or `cancelled` (authorization denied; reason in `status_reason`). 409 `approval_not_pending`, `approval_stale`, `approval_expired` |
 | POST | `/approvals/{id}/reject` | `{}` → `{approval, interaction}` | Cancels the challenge; no funds move |
 | GET | `/stats/portfolio` | → `Portfolio` | Every metric's formula is in `formulas` |
-| POST | `/dev/tick` | `{}` or `{now: ts}` → `TickReport` | Runs one lifecycle step now (the interval scheduler calls the same code). `now` is a simulated clock, accepted only when the server runs on the fake market (422 otherwise). Not mounted when `DEV_ENDPOINTS=false` |
+| POST | `/dev/tick` | `{}` or `{now: ts, allow_expiry?: bool}` → `TickReport` | Runs one lifecycle step now (the interval scheduler calls the same code). `now` is a simulated clock, accepted only when the server runs on the fake market (422 otherwise). A `now` at or after the funding deadline (`start_at`) of a challenge that is not funded yet is refused with 409 `clock_jump_would_expire` unless `allow_expiry: true` (then it expires, as in real time). Not mounted when `DEV_ENDPOINTS=false` |
 | POST | `/dev/fake-market` | `{move_bps?, yes_price_bps?, resolution_side?: "yes"|"no"|"open", prediction_markets?: bool, fail?: bool}` → `{status}` | Fake market only (404 otherwise) |
+| POST | `/dev/seed-demo` | `{}` → `{env: "simulated", agents: [{id, name, role: "proposer"|"counterparty", created}], funds_per_agent: Money, note}` | Idempotent. Creates "Demo Bull (simulated)" and "Demo Skeptic (simulated)" with fixed ids (`…00d1`, `…00d2`) from the starter templates and allocates 100 simulated USDC to each, once. Existing demo agents are left untouched. Uses the same validation and ledger code as `POST /agents` and `/allocate`; the agents get no special treatment afterwards |
+
+Runtime rules worth knowing when reading these endpoints:
+
+- **Proposal cooldown.** After an agent proposes on a market it does not propose on that market again for `PROPOSAL_COOLDOWN_SECS` (default 600, `0` disables), whatever happened to the first proposal. Enforced in the runtime before any reasoning; other markets are unaffected.
+- **Summaries are for people.** Negotiation `summary` strings and run traces write amounts as `2.50 USDC (simulated)`, prediction-market prices as `0.55 (YES price)`, spot prices as `65000.00 USD` and convictions / moves as percentages. The structured fields next to them (`terms.stake`, `terms.threshold`, `conviction_bps`) keep exact integers.
+- `schemas/challenge_terms.schema.json` is the JSON Schema of `terms` (shape only; cross-field rules are checked by the server).
 
 ### Metrics
 

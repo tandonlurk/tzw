@@ -16,6 +16,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::market::MarketView;
+use crate::models::{display_bps, display_usdc};
 use crate::reasoner::{AgentCtx, ReasonRequest, Reasoner, ReasonerOutput, Task};
 
 pub const TRIGGER_SCHEDULE: &str = "trigger.schedule";
@@ -239,8 +240,9 @@ impl<'a> Walker<'a> {
                 self.note(
                     node,
                     format!(
-                        "Conviction {} bps vs minimum {min}: {pass}.",
-                        a.conviction_bps
+                        "Conviction {} vs minimum {}: {pass}.",
+                        display_bps(i64::from(a.conviction_bps)),
+                        display_bps(i64::try_from(min).unwrap_or(i64::MAX))
                     ),
                 );
                 Ok(Some((if pass { "true" } else { "false" }, flow)))
@@ -251,8 +253,9 @@ impl<'a> Walker<'a> {
                 self.note(
                     node,
                     format!(
-                        "Exposure {} vs limit {max}: {pass}.",
-                        self.input.agent.exposure
+                        "Exposure {} vs limit {}: {pass}.",
+                        display_usdc(self.input.agent.exposure),
+                        display_usdc(max)
                     ),
                 );
                 Ok(Some((if pass { "true" } else { "false" }, flow)))
@@ -273,7 +276,11 @@ impl<'a> Walker<'a> {
                 let pass = terms.stake <= max;
                 self.note(
                     node,
-                    format!("Stake {} vs limit {max}: {pass}.", terms.stake),
+                    format!(
+                        "Stake {} vs limit {}: {pass}.",
+                        display_usdc(terms.stake),
+                        display_usdc(max)
+                    ),
                 );
                 Ok(Some((if pass { "true" } else { "false" }, flow)))
             }

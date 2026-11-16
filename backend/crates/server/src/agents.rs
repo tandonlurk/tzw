@@ -192,11 +192,22 @@ pub async fn create(
     State(pool): State<PgPool>,
     ApiJson(input): ApiJson<AgentInput>,
 ) -> Result<(StatusCode, Json<Agent>), ApiError> {
-    let input = validated(input)?;
     let id = Uuid::new_v4();
-    let name = input.name.trim();
-
     let mut tx = pool.begin().await?;
+    insert_agent(&mut tx, id, input).await?;
+    tx.commit().await?;
+
+    Ok((StatusCode::CREATED, Json(load_one(&pool, id).await?)))
+}
+
+/// Validates `input` and writes a new agent (version 1) with the given id.
+pub(crate) async fn insert_agent(
+    conn: &mut PgConnection,
+    id: Uuid,
+    input: AgentInput,
+) -> Result<(), ApiError> {
+    let input = validated(input)?;
+    let name = input.name.trim();
     // M1: agents hold simulated funds only and have no onchain wallet yet.
     sqlx::query(
         "INSERT INTO agents (id, name, description, status, env, current_version) \
@@ -206,20 +217,18 @@ pub async fn create(
     .bind(name)
     .bind(&input.description)
     .bind(Env::Simulated.as_str())
-    .execute(&mut *tx)
+    .execute(&mut *conn)
     .await?;
-    insert_version(&mut tx, id, 1, &input).await?;
+    insert_version(conn, id, 1, &input).await?;
     record_activity(
-        &mut tx,
+        conn,
         Some(id),
         "agent_created",
         format!("Agent \"{name}\" was created"),
         Some(json!({ "version": 1 })),
     )
     .await?;
-    tx.commit().await?;
-
-    Ok((StatusCode::CREATED, Json(load_one(&pool, id).await?)))
+    Ok(())
 }
 
 pub async fn update(
