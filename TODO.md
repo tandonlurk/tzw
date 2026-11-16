@@ -16,7 +16,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [?] Confirm the event is the University Blockchain Conference 2026 hackathon (UT Austin) and the deadline is Nov 20, 12 PM CST (D-18)
 - [?] D-14 base challenges on Gemini prediction-market events (the $4k Gemini bounty requires it)
 - [?] Review financial defaults D-22..D-37 in `docs/decisions.md` (resolution rule, void/refund, funding window, negotiation cap, exposure)
-- [?] D-11 custom code = JavaScript in a Wasmtime/QuickJS sandbox (the spike was not started: it needs your go-ahead, incl. downloading the Javy build tool)
+- [?] D-11 custom code = JavaScript in a Wasmtime/QuickJS sandbox: spike says GO (`docs/research/sandbox-spike.md`); also review D-40 (build `runner.wasm` locally vs commit it)
 - [?] D-17 main track "Agentic Payments & AI" + Arc award + all bounties
 - [?] Ask at sponsor office hours (Nov 16-19): what "Grok Bot" means for the xAI bounty
 - [x] Pushed to GitHub `tandonlurk/tzw`; `recovery` is the default branch. Repo is PUBLIC: make it private if you do not want the docs visible
