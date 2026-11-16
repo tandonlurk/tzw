@@ -84,6 +84,43 @@ curl -sS $API/interactions/$ID | jq '{state, outcome, observed, negotiation: [.n
 curl -sS $API/stats/portfolio | jq .agents     # bull +2.50, skeptic -2.50 (simulated)
 ```
 
+**Co-captain step** (continue in the same shell). Two more identical rounds on
+the simulated clock, each won by the bull. After the skeptic's third straight
+loss the rule-based co-captain (no model call) suggests halving its maximum
+stake; accepting it is an owner edit and creates config version 2.
+
+```sh
+at() { jq -rn --arg t "$1" --argjson d "$2" '$t | fromdateiso8601 + $d | todateiso8601'; }
+round() {   # one round starting at simulated time $1; leaves its settle time in $NOW
+  post /dev/fake-market '{"yes_price_bps":5500}' >/dev/null
+  post /dev/tick "{\"now\":\"$1\"}" | jq -c '{proposed, countered}'                     # {"proposed":1,"countered":1}
+  post /dev/tick "{\"now\":\"$(at $1 15)\"}" | jq -c '{accepted, approvals_requested}'  # {"accepted":1,"approvals_requested":1}
+  post /approvals/$(curl -sS $API/approvals | jq -r '.[0].id')/approve '{}' | jq -r .interaction.state   # active
+  post /dev/fake-market '{"yes_price_bps":7000}' >/dev/null
+  NOW=$(at "$(curl -sS $API/interactions | jq -r '[.[] | select(.state == "active")][0].end_at')" 5)
+  post /dev/tick "{\"now\":\"$NOW\"}" | jq -c '{settled, suggestions}'
+}
+round $AFTER_END   # ... {"settled":1,"suggestions":0}   (two losses: no suggestion yet)
+round $NOW         # ... {"settled":1,"suggestions":2}   (third loss)
+curl -sS "$API/suggestions?status=pending" | jq -c '.[] | {agent_name, kind, proposed_change}'
+# {"agent_name":"Demo Skeptic (simulated)","kind":"raise_approval_threshold","proposed_change":{"policy":{"approval_threshold":"2500000"}}}
+# {"agent_name":"Demo Skeptic (simulated)","kind":"lower_max_stake","proposed_change":{"policy":{"max_per_interaction":"5000000"}}}
+SKEPTIC=00000000-0000-4000-8000-0000000000d2
+SUG=$(curl -sS "$API/suggestions?status=pending" | jq -r ".[] | select(.kind == \"lower_max_stake\" and .agent_id == \"$SKEPTIC\") | .id")
+post /suggestions/$SUG/accept '{}' | jq .status     # "accepted"
+curl -sS $API/agents/$SKEPTIC | jq -c '{version, max_per_interaction: .policy.max_per_interaction}'
+# {"version":2,"max_per_interaction":"5000000"}
+curl -sS $API/stats/portfolio | jq -c '.agents[] | {name, realized_pnl, settled, wins}'
+# bull 7500000 / 3 / 3, skeptic -7500000 / 3 / 0 (simulated); pnl_over_time.ts are the simulated settle times
+```
+
+The suggestion body reads: `"Demo Skeptic (simulated)" lost its last 3
+challenges (realized P&L -7.50 USDC (simulated)). Halving its maximum stake per
+challenge from 10.00 USDC (simulated) to 5.00 USDC (simulated) limits further
+losses while you review its strategy.` The second suggestion
+(`raise_approval_threshold`, F-23) appears because the owner approved the
+skeptic's last three stakes by hand; it loosens a control and says so.
+
 Things that surprise people (all intended, see `tasks/backend.md`):
 
 - **Why the skeptic asks for approval.** Its automatic limit is 1.00 USDC and the
@@ -97,8 +134,9 @@ Things that surprise people (all intended, see `tasks/backend.md`):
   `clock_jump_would_expire`) unless `"allow_expiry": true`. For a slow live demo
   start the server with a longer `FUNDING_WINDOW_SECS`.
 - **Running it again.** The bull will not propose on the same market for
-  `PROPOSAL_COOLDOWN_SECS` (600) after its last proposal. Wait, or start the
-  server with `PROPOSAL_COOLDOWN_SECS=0`.
+  `PROPOSAL_COOLDOWN_SECS` (600) after its last proposal, nor after an attempt
+  that was denied or found no counterparty (until the agent is edited). Wait,
+  or start the server with `PROPOSAL_COOLDOWN_SECS=0`.
 
 With `MARKET_DATA=gemini` the same flow runs on live Gemini prediction-market
 contracts (public data, no key) with simulated stakes, in real time: `now`
