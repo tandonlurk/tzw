@@ -289,7 +289,7 @@ pub async fn get(
     .await?;
     let ledger = ledger_db::interaction_entries(pool, id).await?;
     let activity = sqlx::query_as(
-        "SELECT id, ts, agent_id, interaction_id, kind, summary, detail FROM activity \
+        "SELECT id, ts, agent_id, interaction_id, collaboration_id, kind, summary, detail FROM activity \
          WHERE interaction_id = $1 ORDER BY seq",
     )
     .bind(id)

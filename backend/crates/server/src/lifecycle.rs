@@ -163,14 +163,19 @@ impl AgentRec {
 }
 
 /// Exposure = stakes of the agent's interactions in Funded / Active /
-/// Resolving. Realized P&L = the agent's net over `settle` ledger entries.
+/// Resolving, plus its contributions to funded collaborations. Realized
+/// P&L = the agent's net over `settle` ledger entries (challenges only).
 const AGENT_SQL: &str = "
 SELECT a.id, a.name, a.status, a.env, a.current_version, v.config, v.policy, v.graph,
   (SELECT COALESCE(SUM(e.delta), 0)::BIGINT FROM ledger_entries e
     WHERE e.env = a.env AND e.account = 'agent:' || a.id || ':available') AS available,
   (SELECT COALESCE(SUM(i.stake), 0)::BIGINT FROM interactions i
     WHERE i.state IN ('funded', 'active', 'resolving')
-      AND (i.proposer_id = a.id OR i.counterparty_id = a.id)) AS exposure,
+      AND (i.proposer_id = a.id OR i.counterparty_id = a.id))
+  + (SELECT COALESCE(SUM(CASE WHEN c.proposer_id = a.id THEN c.proposer_contribution
+                              ELSE c.partner_contribution END), 0)::BIGINT
+     FROM collaborations c
+     WHERE c.state = 'funded' AND (c.proposer_id = a.id OR c.partner_id = a.id)) AS exposure,
   (SELECT COALESCE(SUM(e.delta), 0)::BIGINT FROM ledger_entries e
     WHERE e.agent_id = a.id AND e.env = a.env AND e.reason = 'settle') AS realized_pnl
 FROM agents a

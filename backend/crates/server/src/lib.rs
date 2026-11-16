@@ -2,6 +2,7 @@
 
 pub mod agents;
 pub mod cocaptain;
+pub mod collaborations;
 pub mod demo;
 pub mod error;
 pub mod extract;
@@ -61,6 +62,19 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
         .route("/approvals/{id}/approve", post(interactions::approve))
         .route("/approvals/{id}/reject", post(interactions::reject))
         .route("/stats/portfolio", get(interactions::portfolio))
+        .route(
+            "/collaborations",
+            get(collaborations::list).post(collaborations::create),
+        )
+        .route("/collaborations/{id}", get(collaborations::get))
+        .route("/collaborations/{id}/accept", post(collaborations::accept))
+        .route("/collaborations/{id}/reject", post(collaborations::reject))
+        .route("/collaborations/{id}/fund", post(collaborations::fund))
+        .route(
+            "/collaborations/{id}/complete",
+            post(collaborations::complete),
+        )
+        .route("/collaborations/{id}/cancel", post(collaborations::cancel))
         .route("/suggestions", get(suggestions::list))
         .route("/suggestions/generate", post(suggestions::generate_now))
         .route("/suggestions/{id}/accept", post(suggestions::accept))

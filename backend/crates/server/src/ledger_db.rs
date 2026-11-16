@@ -60,6 +60,9 @@ fn raw_idempotency_key(headers: &HeaderMap) -> Result<String, ApiError> {
     Ok(key.to_owned())
 }
 
+/// account, delta, reason, interaction_id, collaboration_id
+type StoredLine = (String, i64, String, Option<Uuid>, Option<Uuid>);
+
 async fn lock(conn: &mut PgConnection, name: &str) -> Result<(), sqlx::Error> {
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
         .bind(name)
@@ -80,8 +83,8 @@ pub async fn post(conn: &mut PgConnection, set: &PostingSet) -> Result<PostOutco
 
     // Keys are scoped per env (SEC-09); a replay must match every field that
     // was written, including the interaction it belongs to.
-    let existing: Vec<(String, i64, String, Option<Uuid>)> = sqlx::query_as(
-        "SELECT account, delta, reason, interaction_id FROM ledger_entries \
+    let existing: Vec<StoredLine> = sqlx::query_as(
+        "SELECT account, delta, reason, interaction_id, collaboration_id FROM ledger_entries \
          WHERE env = $1 AND idempotency_key = $2 ORDER BY line",
     )
     .bind(env)
@@ -95,6 +98,7 @@ pub async fn post(conn: &mut PgConnection, set: &PostingSet) -> Result<PostOutco
                     && row.1 == p.delta.minor()
                     && row.2 == set.reason().as_str()
                     && row.3 == set.interaction_id()
+                    && row.4 == set.collaboration_id()
             });
         return if same {
             Ok(PostOutcome::Replayed)
@@ -137,8 +141,9 @@ pub async fn post(conn: &mut PgConnection, set: &PostingSet) -> Result<PostOutco
     for (line, posting) in set.postings().iter().enumerate() {
         sqlx::query(
             "INSERT INTO ledger_entries \
-             (env, idempotency_key, line, account, agent_id, delta, reason, interaction_id) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+             (env, idempotency_key, line, account, agent_id, delta, reason, interaction_id, \
+              collaboration_id) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
         )
         .bind(env)
         .bind(key)
@@ -148,6 +153,7 @@ pub async fn post(conn: &mut PgConnection, set: &PostingSet) -> Result<PostOutco
         .bind(posting.delta.minor())
         .bind(set.reason().as_str())
         .bind(set.interaction_id())
+        .bind(set.collaboration_id())
         .execute(&mut *conn)
         .await?;
     }
@@ -163,6 +169,7 @@ struct LedgerRow {
     delta: i64,
     reason: String,
     interaction_id: Option<Uuid>,
+    collaboration_id: Option<Uuid>,
     tx_hash: Option<String>,
 }
 
@@ -176,6 +183,7 @@ impl From<LedgerRow> for LedgerEntry {
             delta: SignedMoney::from_minor(r.delta),
             reason: r.reason,
             interaction_id: r.interaction_id,
+            collaboration_id: r.collaboration_id,
             tx_hash: r.tx_hash,
         }
     }
@@ -189,7 +197,7 @@ pub async fn agent_entries<'e>(
     agent_id: Uuid,
 ) -> Result<Vec<LedgerEntry>, sqlx::Error> {
     let rows: Vec<LedgerRow> = sqlx::query_as(
-        "SELECT id, ts, env, account, delta, reason, interaction_id, tx_hash \
+        "SELECT id, ts, env, account, delta, reason, interaction_id, collaboration_id, tx_hash \
          FROM ledger_entries WHERE agent_id = $1 ORDER BY seq DESC LIMIT $2",
     )
     .bind(agent_id)
@@ -206,7 +214,7 @@ pub async fn account_entries<'e>(
     account: Account,
 ) -> Result<Vec<LedgerEntry>, sqlx::Error> {
     let rows: Vec<LedgerRow> = sqlx::query_as(
-        "SELECT id, ts, env, account, delta, reason, interaction_id, tx_hash \
+        "SELECT id, ts, env, account, delta, reason, interaction_id, collaboration_id, tx_hash \
          FROM ledger_entries WHERE env = $1 AND account = $2 ORDER BY seq DESC LIMIT $3",
     )
     .bind(env.as_str())
@@ -223,10 +231,25 @@ pub async fn interaction_entries<'e>(
     interaction_id: Uuid,
 ) -> Result<Vec<LedgerEntry>, sqlx::Error> {
     let rows: Vec<LedgerRow> = sqlx::query_as(
-        "SELECT id, ts, env, account, delta, reason, interaction_id, tx_hash \
+        "SELECT id, ts, env, account, delta, reason, interaction_id, collaboration_id, tx_hash \
          FROM ledger_entries WHERE interaction_id = $1 ORDER BY seq",
     )
     .bind(interaction_id)
+    .fetch_all(ex)
+    .await?;
+    Ok(rows.into_iter().map(Into::into).collect())
+}
+
+/// Every entry of one collaboration, oldest first.
+pub async fn collaboration_entries<'e>(
+    ex: impl PgExecutor<'e>,
+    collaboration_id: Uuid,
+) -> Result<Vec<LedgerEntry>, sqlx::Error> {
+    let rows: Vec<LedgerRow> = sqlx::query_as(
+        "SELECT id, ts, env, account, delta, reason, interaction_id, collaboration_id, tx_hash \
+         FROM ledger_entries WHERE collaboration_id = $1 ORDER BY seq",
+    )
+    .bind(collaboration_id)
     .fetch_all(ex)
     .await?;
     Ok(rows.into_iter().map(Into::into).collect())

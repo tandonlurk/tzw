@@ -31,8 +31,8 @@ Template     { id, name, description, config, policy, graph }
 BlockDef     { type, kind: "trigger"|"reasoning"|"condition"|"action", label, description,
                inputs: [{port, data_type}], outputs: [{port, data_type}], params_schema: JSON Schema }
 GraphError   { code, message, node_id: string|null }
-LedgerEntry  { id, ts, env, account, delta: money (signed), reason, interaction_id: string|null, tx_hash: string|null }
-ActivityItem { id, ts, agent_id: string|null, interaction_id: string|null, kind, summary, detail: object|null }
+LedgerEntry  { id, ts, env, account, delta: money (signed), reason, interaction_id: string|null, collaboration_id: string|null, tx_hash: string|null }
+ActivityItem { id, ts, agent_id: string|null, interaction_id: string|null, collaboration_id: string|null, kind, summary, detail: object|null }
 ```
 
 ## Endpoints
@@ -54,7 +54,7 @@ ActivityItem { id, ts, agent_id: string|null, interaction_id: string|null, kind,
 | POST | `/graph/validate` | `Graph` → `{valid: bool, errors: GraphError[]}` | Always 200 |
 | GET | `/wallet` | → `{env, unallocated: money, allocated: money, committed: money, entries: LedgerEntry[]}` | User-level overview |
 | POST | `/wallet/simulated-deposit` | `{amount: money}` → wallet | Credits simulated funds, labelled as such |
-| GET | `/activity?agent_id=&interaction_id=&limit=` | → `ActivityItem[]` | newest first |
+| GET | `/activity?agent_id=&interaction_id=&collaboration_id=&limit=` | → `ActivityItem[]` | newest first |
 
 ## M2: challenges
 
@@ -193,3 +193,79 @@ Rules (all from stored records; formulas in `server/src/cocaptain.rs`):
 `general` comes only from Grok. Grok output is untrusted: each item is parsed into the closed schema above, must name an agent it was shown, is validated like a rule suggestion and dropped if anything is off; evidence, `loosens_control` and `source` are filled in by the server. Activity kinds: `suggestion_accepted`, `suggestion_dismissed` (`detail.suggestion_id`, `detail.version`); an applied change also writes the usual `agent_updated`.
 
 Not yet specified: `/webhooks/quicknode`.
+
+## Collaborations (M3, simulated funds)
+
+A two-agent agreement: a proposer and a partner each contribute a fixed amount; on completion the pooled contributions are paid out by the agreed split. The owner drives it over REST on behalf of the agents. Every agent decision (propose, accept, reject) and every commitment of funds (fund) goes through `core::authorize` with a fresh balance snapshot (same per-agent locks as challenges). Payouts and refunds release what was committed, by the funded terms, like a challenge settlement or refund, and are not gated again. Money moves only as balanced ledger posting sets (`collab_commit`, `collab_payout`, `collab_refund`). Completion is **declared by the owner** (`resolution: "owner_declared"`), not trustless.
+
+States: `proposed → accepted | rejected`, `accepted → funded`, `funded → completed`, and `proposed | accepted | funded → cancelled`. `rejected`, `completed`, `cancelled` are final. `actions` lists what the owner may do next, so the UI can render buttons straight from it.
+
+```
+Collaboration {
+  id, env: "simulated", state: "proposed"|"accepted"|"rejected"|"funded"|"completed"|"cancelled",
+  objective: string,
+  proposer: Party, partner: Party,
+  pool: money,                      // proposer.contribution + partner.contribution
+  resolution: "owner_declared",
+  status_reason: string|null,       // the cancel reason, if any
+  actions: ("accept"|"reject"|"fund"|"complete"|"cancel")[],
+  created_at, updated_at, funded_at: ts|null, closed_at: ts|null
+}
+Party { agent_id, name, contribution: money, share_bps: int, expected_payout: money,
+        payout: money|null, net: money (signed)|null }   // payout and net = payout - contribution, once completed
+```
+
+Split: `proposer.expected_payout = floor(pool × proposer_share_bps / 10000)`, `partner.expected_payout = pool − that` (the rounding unit goes to the partner, so nothing is created or lost). Contributions must both be > 0; `proposer_share_bps` is 0–10000; objective 1–500 characters.
+
+| Method | Path | Body → Response | Notes |
+|---|---|---|---|
+| GET | `/collaborations?agent_id=&state=` | → `Collaboration[]` | newest first, max 200; `agent_id` matches either party; unknown `state` → 400 |
+| POST | `/collaborations` | `{proposer_id, partner_id, objective, proposer_share_bps, proposer_contribution: money, partner_contribution: money}` → **201** `Collaboration` | Authorizes the proposer (`ProposeCollaboration`). 422 `validation_failed` (paths `objective`, `proposer_share_bps`, `proposer_contribution`, `partner_contribution`, `partner_id` = same agent), 404 unknown agent, 422 `unsupported_env` |
+| GET | `/collaborations/{id}` | → `{collaboration: Collaboration, ledger: LedgerEntry[], activity: ActivityItem[]}` | ledger and activity oldest first |
+| POST | `/collaborations/{id}/accept` | `{}` → `Collaboration` | Partner, authorized like a proposal of its own contribution (`ProposeCollaboration`) |
+| POST | `/collaborations/{id}/reject` | `{}` → `Collaboration` | Partner, `Reject` |
+| POST | `/collaborations/{id}/fund` | `{owner_approved?: bool}` → `Collaboration` | Both parties re-authorized (`CommitFunds`, type `collaboration`) against current balances and limits, then both contributions move available → committed in one transaction. A contribution above an agent's `approval_threshold` needs `owner_approved: true`, else **409** `approval_required` (`details[].path` = `proposer`/`partner`). Funded contributions count toward `max_aggregate_exposure` |
+| POST | `/collaborations/{id}/complete` | `{}` → `Collaboration` | Pays the split. Exactly once (row lock + unique ledger indexes); a later pause or policy change does not block it |
+| POST | `/collaborations/{id}/cancel` | `{reason?: string (≤ 200)}` → `Collaboration` | Unfunded: no money moves. Funded: both contributions refunded |
+
+Errors: a step in the wrong state is **409** `invalid_state`; a refusal by the permission engine is **422** `authorization_denied` with one detail per reason, `{path: "proposer"|"partner", code: <DenyReason>, message}` (codes as in challenges: `agent_paused`, `stop_loss_triggered`, `interaction_type_not_allowed`, `exceeds_max_per_interaction`, `exceeds_aggregate_exposure`, `insufficient_available_balance`, ...) and a `collaboration_denied` activity entry. Pausing an agent or changing its policy after funding never traps money.
+
+Accounting: contributions sit in each agent's `committed` balance while funded; the payout set moves both into `escrow:{collaboration id}` and from there to each party's `available`. Collaboration results are **not** part of `realized_pnl` (challenge P&L) in the MVP; use `Party.net`.
+
+Activity kinds (all carry `collaboration_id`; amounts in summaries say "(simulated)"): `collaboration_proposed` (proposer), `collaboration_accepted` / `collaboration_rejected` (partner), `collaboration_funded` (one per party, `detail.owner_approved`), `collaboration_completed` (one per party, `detail.contribution`, `payout`, `net`), `collaboration_cancelled` (one per party with `detail.refund` if it was funded, else one), `collaboration_denied` (`detail.step`, `role`, `reasons`).
+
+Example: create, then complete.
+
+```json
+POST /api/collaborations
+{ "proposer_id": "00000000-0000-4000-8000-0000000000d1",
+  "partner_id": "00000000-0000-4000-8000-0000000000d2",
+  "objective": "Research ETH funding rates and share the findings",
+  "proposer_share_bps": 6000, "proposer_contribution": "3000000", "partner_contribution": "5000000" }
+
+201
+{ "id": "6f1c…", "env": "simulated", "state": "proposed",
+  "objective": "Research ETH funding rates and share the findings",
+  "proposer": { "agent_id": "…00d1", "name": "Demo Bull (simulated)", "contribution": "3000000",
+                "share_bps": 6000, "expected_payout": "4800000", "payout": null, "net": null },
+  "partner":  { "agent_id": "…00d2", "name": "Demo Skeptic (simulated)", "contribution": "5000000",
+                "share_bps": 4000, "expected_payout": "3200000", "payout": null, "net": null },
+  "pool": "8000000", "resolution": "owner_declared", "status_reason": null,
+  "actions": ["accept", "reject", "cancel"],
+  "created_at": "2026-11-16T09:00:00Z", "updated_at": "2026-11-16T09:00:00Z",
+  "funded_at": null, "closed_at": null }
+
+POST /api/collaborations/6f1c…/complete   {}     (after accept and fund)
+200 { …, "state": "completed", "actions": [],
+      "proposer": { …, "payout": "4800000", "net": "1800000" },
+      "partner":  { …, "payout": "3200000", "net": "-1800000" } }
+```
+
+Activity entry:
+
+```json
+{ "id": "…", "ts": "2026-11-16T09:05:00Z", "agent_id": "…00d1", "interaction_id": null,
+  "collaboration_id": "6f1c…", "kind": "collaboration_completed",
+  "summary": "Collaboration \"Research ETH funding rates and share the findings\" completed: \"Demo Bull (simulated)\" received 4.80 USDC (simulated) for a 3.00 USDC (simulated) contribution (net +1.80 USDC (simulated)).",
+  "detail": { "contribution": "3000000", "payout": "4800000", "net": "1800000", "env": "simulated", "resolution": "owner_declared" } }
+```

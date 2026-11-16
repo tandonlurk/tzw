@@ -239,10 +239,10 @@ API changes (`docs/api.md`): new "Request guard" and "Idempotency" paragraphs (4
 
 | # | Default | Rationale | Where |
 |---|---|---|---|
-| D-40 | Request guard always on: hosts `localhost`/`127.0.0.1`/`[::1]` + `ALLOWED_HOSTS`; a request without Host passes (browsers always send one, so DNS rebinding is still covered); any `Origin` other than `CORS_ORIGIN` is 403 on every method; no `Origin` passes | Blocks DNS rebinding and CSRF with no change to the local web app or curl |
-| D-41 | Bearer token (`AEN_API_TOKEN`, >= 32 chars) required on all routes except `GET /api/health` and `OPTIONS` when set; required to start on a non-loopback `BIND_ADDR`. One shared token = the single owner; the web app does not send it yet | Simplest auth that makes a non-loopback bind safe; per-user auth is out of MVP scope |
-| D-42 | DB refuses TRUNCATE on append-only tables unless `SET LOCAL aen.allow_truncate = 'on'` (test harness only), and refuses unbalanced posting sets at commit. Least-privilege role recommended (README) but not enforced, because the server runs its own migrations | Defense in depth against bugs and accidents; not against a superuser |
-| D-43 | Idempotency keys unique per env; client keys namespaced `client:{caller}:` (caller = `owner` today); replay must match account, delta, reason and `interaction_id` | A client could pre-claim a server key and block a settlement or the demo seed |
+| D-42 | Request guard always on: hosts `localhost`/`127.0.0.1`/`[::1]` + `ALLOWED_HOSTS`; a request without Host passes (browsers always send one, so DNS rebinding is still covered); any `Origin` other than `CORS_ORIGIN` is 403 on every method; no `Origin` passes | Blocks DNS rebinding and CSRF with no change to the local web app or curl |
+| D-43 | Bearer token (`AEN_API_TOKEN`, >= 32 chars) required on all routes except `GET /api/health` and `OPTIONS` when set; required to start on a non-loopback `BIND_ADDR`. One shared token = the single owner; the web app does not send it yet | Simplest auth that makes a non-loopback bind safe; per-user auth is out of MVP scope |
+| D-44 | DB refuses TRUNCATE on append-only tables unless `SET LOCAL aen.allow_truncate = 'on'` (test harness only), and refuses unbalanced posting sets at commit. Least-privilege role recommended (README) but not enforced, because the server runs its own migrations | Defense in depth against bugs and accidents; not against a superuser |
+| D-45 | Idempotency keys unique per env; client keys namespaced `client:{caller}:` (caller = `owner` today); replay must match account, delta, reason and `interaction_id` | A client could pre-claim a server key and block a settlement or the demo seed |
 
 ### Notes
 
@@ -259,3 +259,31 @@ Status: done (stage 1). The D-11 spike is now crate `backend/crates/sandbox` (`a
 - **Tests:** `cargo test -p aen-sandbox`: 3 unit + 24 integration passed, 1 ignored (latency). Tests needing the module skip (message visible with `--nocapture`) when it is absent. fmt and clippy clean; `cargo build --workspace` OK.
 - **Fixed vs spike:** `{"type":"reject","stake":"1"}` was accepted (serde ignores extra fields on an internally tagged unit variant); `Reject {}` is now a struct variant in the mirror. Money must also be canonical (no leading zeros), as in `core::Money`.
 - **Debug-build cost:** without `[profile.dev.package."*"] opt-level = 3` at the workspace root, compiling the guest takes ~8 s in a dev build (0.6 s optimised). Full run p50 ~0.3 ms, ~1.05M fuel. Lead's call: add the profile line, or cache with `Module::serialize`.
+
+## M3 item 4: collaboration MVP (2026-11-16, branch `backend-m3`)
+
+Status: done. Tests: `aen_m3_test` -> core 99 (+5: split, transitions, terms, payout set), adversarial_authorize 14, adversarial_ledger 6, schemas 4, server unit 63, api 17, lifecycle 33, suggestions 13, **collaborations 10 (new)**; `aen_m3_sec` -> adversarial_api 16, adversarial_integrity 6. **281 passed** (sandbox crate tests also pass, untouched). fmt and `clippy --workspace --all-targets` clean. Checked by hand on `aen_m3_dev`, port 8093: seed, propose, accept, fund -> 409 `approval_required`, fund with approval, complete (+1.80 / -1.80), second complete -> 409, activity readable.
+
+| What | Where |
+|---|---|
+| States, transitions, terms validation, `split` (floor for proposer, remainder to partner) | `core/src/collaboration.rs` |
+| Ledger reasons `collab_commit` / `collab_payout` (via `escrow:{collab}`) / `collab_refund`, `PostingSet::for_collaboration` | `core/src/ledger.rs` |
+| Table `collaborations`; `collaboration_id` on `activity` and `ledger_entries`; unique indexes: one commit and one release per (collaboration, account) | `migrations/0007_collaborations.sql` |
+| REST: list/get/create/accept/reject/fund/complete/cancel, `actions` for the UI, activity per party | `server/src/collaborations.rs`, `lib.rs` |
+| Funded contributions count toward aggregate exposure | `lifecycle.rs` `AGENT_SQL` |
+| `?collaboration_id=` on `/activity`; `collaboration_id` on `ActivityItem` and `LedgerEntry` | `misc.rs`, `models.rs`, `ledger_db.rs` |
+
+No new `core::Intent` variant: the sandbox's exhaustive Intent mirror (D-41) would have to change, and that crate is not mine. Accept is authorized as `ProposeCollaboration` of the partner's contribution (state checked separately), reject as `Reject`, funding as `CommitFunds { collaboration }`.
+
+### New defaults (proposals for docs/decisions.md)
+
+| # | Default | Rationale | Where |
+|---|---|---|---|
+| D-46 | Collaborations are owner-driven over REST (no agent reasoning yet). Proposal, acceptance (as `ProposeCollaboration` of the partner's contribution), rejection (`Reject`) and funding (`CommitFunds`, both sides, fresh snapshots, one transaction) go through `authorize`; a contribution above `approval_threshold` needs `owner_approved: true` on `/fund` (409 `approval_required` otherwise). Payouts and refunds release funded contributions by the agreed terms and are not gated again, like challenge settlement and refund. Completion is owner-declared | Every commitment of funds is gated; nothing funded can be trapped by a later pause or policy edit |
+| D-47 | Both contributions > 0. Split: proposer gets `floor(pool × bps / 10000)`, partner the remainder; zero shares get no posting. Contributions sit in each agent's `committed` while funded and count toward `max_aggregate_exposure`. Collaboration results are not in `realized_pnl` (challenge P&L); shown per collaboration as `Party.net` | Exact integer accounting; keeps the challenge metrics and co-captain rules unchanged |
+| D-48 | Seeded demo agents allow `collaboration` as well as `challenge` (new seeds only; existing agents untouched) | So a fresh demo can show collaborations; the challenge walk is unchanged |
+
+### Known limitations
+
+- No agent-initiated collaborations (no graph block / reasoner path yet) and no approvals inbox entry for them: approval is the `owner_approved` flag on `/fund`.
+- If the sandbox owner adds collaboration-specific intents to the mirror, accept / complete / cancel can switch to them.

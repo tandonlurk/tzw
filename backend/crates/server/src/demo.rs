@@ -104,6 +104,9 @@ async fn seed_agent(conn: &mut PgConnection, demo: &DemoAgent) -> Result<bool, A
     if let Some(threshold) = demo.approval_threshold {
         policy["approval_threshold"] = json!(threshold);
     }
+    // Both demo agents may also collaborate, so the collaboration endpoints
+    // can be shown on a fresh seed.
+    policy["allowed_interaction_types"] = json!(["challenge", "collaboration"]);
     let input: AgentInput = serde_json::from_value(json!({
         "name": demo.name, "description": demo.description,
         "config": config, "policy": policy, "graph": graph,
