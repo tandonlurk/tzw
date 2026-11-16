@@ -11,7 +11,7 @@ Lead ran: backend `cargo test --workspace` 211 pass, contracts `forge test` 80 p
 |---|---|---|---|---|---|
 | backend-m2b | `~/dev/hackathongs/worktrees/backend-m2b` | `backend-m2b` | `backend/`, `schemas/`, `docs/api.md`, `tasks/backend.md` | `aen_m2b_test`, `aen_m2b_sec`, `aen_m2b_dev`, port 8091 | running |
 | web-m2b | `~/dev/hackathongs/worktrees/web-m2b` | `web-m2b` | `web/`, `tasks/frontend.md`, `reports/qa-m2-web.md` | `aen_qa`, ports 8090 / 3010 | running |
-| contracts-sec | `~/dev/hackathongs/worktrees/contracts-sec` | `contracts-sec` | `contracts/`, `tasks/contracts.md` | none | running |
+| contracts-sec | `~/dev/hackathongs/worktrees/contracts-sec` | `contracts-sec` | `contracts/`, `tasks/contracts.md` | none | MERGED, worktree removed |
 
 Cargo target dirs: `~/dev/hackathongs/.cargo-target/<name>`.
 
@@ -21,4 +21,4 @@ Scope: backend = proposal cooldown, readable negotiation summaries, approval-con
 Review diff vs AGENTS.md section 8, run its tests, `git merge --no-ff`, run all three suites, copy "New defaults" from the task file into `docs/decisions.md`, then `git worktree remove`, delete the cargo target dir, `dropdb` its dbs.
 
 ## Merge log
-(none yet)
+- contracts-sec merged. Lead re-ran after merge: `forge test` 84, backend 211, web 21. SEC-04 caps + SEC-07 (resolver cannot be a party; the lead brief had mislabelled it). D-32 added.
