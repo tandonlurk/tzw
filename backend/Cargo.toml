@@ -12,3 +12,41 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["serde", "v4"] }
 thiserror = "2"
+
+# The sandbox compiles its 1.4 MB guest with Cranelift at startup. Unoptimised
+# Cranelift takes ~8 s for that in a dev build; optimising just the compiler
+# crates brings it to well under a second without slowing other dev builds.
+[profile.dev.package.cranelift-codegen]
+opt-level = 3
+[profile.dev.package.cranelift-assembler-x64]
+opt-level = 3
+[profile.dev.package.cranelift-bforest]
+opt-level = 3
+[profile.dev.package.cranelift-bitset]
+opt-level = 3
+[profile.dev.package.cranelift-control]
+opt-level = 3
+[profile.dev.package.cranelift-entity]
+opt-level = 3
+[profile.dev.package.cranelift-frontend]
+opt-level = 3
+[profile.dev.package.regalloc2]
+opt-level = 3
+[profile.dev.package.wasmparser]
+opt-level = 3
+[profile.dev.package.wasmtime]
+opt-level = 3
+[profile.dev.package.wasmtime-environ]
+opt-level = 3
+[profile.dev.package.wasmtime-internal-cranelift]
+opt-level = 3
+[profile.dev.package.wasmtime-internal-core]
+opt-level = 3
+[profile.dev.package.gimli]
+opt-level = 3
+[profile.dev.package.object]
+opt-level = 3
+[profile.dev.package.hashbrown]
+opt-level = 3
+[profile.dev.package.rustc-hash]
+opt-level = 3
