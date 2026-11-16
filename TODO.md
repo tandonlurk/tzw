@@ -15,8 +15,8 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [?] Provide when ready (in `.env`, never in chat): xAI API key, QuickNode key, Arc testnet faucet funds, ElevenLabs key
 - [?] Confirm the event is the University Blockchain Conference 2026 hackathon (UT Austin) and the deadline is Nov 20, 12 PM CST (D-18)
 - [?] D-14 base challenges on Gemini prediction-market events (the $4k Gemini bounty requires it)
-- [?] Review financial defaults D-22..D-35 in `docs/decisions.md` (resolution rule, void/refund, funding window, negotiation cap, exposure)
-- [?] D-11 custom code = JavaScript in a Wasmtime/QuickJS sandbox
+- [?] Review financial defaults D-22..D-37 in `docs/decisions.md` (resolution rule, void/refund, funding window, negotiation cap, exposure)
+- [?] D-11 custom code = JavaScript in a Wasmtime/QuickJS sandbox (the spike was not started: it needs your go-ahead, incl. downloading the Javy build tool)
 - [?] D-17 main track "Agentic Payments & AI" + Arc award + all bounties
 - [?] Ask at sponsor office hours (Nov 16-19): what "Grok Bot" means for the xAI bounty
 - [x] Pushed to GitHub `tandonlurk/tzw`; `recovery` is the default branch. Repo is PUBLIC: make it private if you do not want the docs visible
@@ -73,7 +73,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 ## M6 — Co-captain, voice, demo (Wed Nov 18)
 
-- [ ] Grok co-captain text suggestions, accept/dismiss (backend/frontend, P2)
+- [~] Co-captain text suggestions: backend done (6 rules, list/generate/accept/dismiss, 254 backend tests, D-36/D-37); Grok variant mock-tested only; frontend view not started (backend/frontend, P2)
 - [ ] ElevenLabs voice for co-captain (P3, last)
 - [~] Demo script, seeded demo agents, README run instructions, AGENTS.md 9.4 filled in: simulated run done and hand-verified (`docs/demo.md`); testnet version waits on D-3 (lead, P0)
 - [ ] Submission write-up per sponsor bounty (lead, P0)

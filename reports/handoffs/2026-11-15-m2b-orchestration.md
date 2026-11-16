@@ -39,8 +39,19 @@ Tests on `recovery`: backend 222, contracts 84, web 25.
 ## Second wave (from ef8c31d)
 | Name | Worktree | Branch | Owns | Dbs / ports | Status |
 |---|---|---|---|---|---|
-| cocaptain | `~/dev/hackathongs/worktrees/cocaptain` | `cocaptain` | `backend/`, `docs/api.md`, `tasks/backend.md` | `aen_cc_test`, `aen_cc_dev`, port 8092 | running |
+| cocaptain | `~/dev/hackathongs/worktrees/cocaptain` | `cocaptain` | `backend/`, `docs/api.md`, `tasks/backend.md` | `aen_cc_test`, `aen_cc_dev`, port 8092 | MERGED, worktree removed |
 
 Scope: `CoCaptain` trait, rule-based suggestions from real data, Grok behind `XAI_API_KEY` (mock-tested), `suggestions` table, list / generate / accept / dismiss endpoints; accept goes through the normal validated config edit. No frontend yet.
 
 M5 sandbox spike: NOT started. Launching the specialist was denied by the session's permission check (D-11 is on the owner's review list and the spike would download a build tool). Needs the owner's go-ahead.
+- cocaptain merged. Lead re-ran after merge: fmt ok, clippy 0 warnings, backend 254, contracts 84, web 25. Defaults copied to D-36/D-37. New test files with their own truncate list must include `suggestions`.
+
+## Final state of this session (no worktrees, specialist dbs dropped, nothing pushed since b098cad)
+Tests on `recovery`: backend 254, contracts 84, web 25.
+
+## Exact next actions (supersedes the list above)
+1. Web: co-captain suggestions view (list, accept, dismiss, show `loosens_control` and evidence), endpoints in `docs/api.md`. Then a browser pass of the seeded demo incl. suggestions.
+2. Small backend follow-ups: rate-limit denied / no-counterparty proposals; `pnl_over_time.ts` is wall-clock even when settlement used a simulated `now`.
+3. M5 sandbox spike once the owner gives the go-ahead (D-11).
+4. Blocked on owner: D-3 custody (Arc deploy, signer, Streams ingestion), xAI key + D-8, D-14, review D-22..D-37, SEC-02 before any tunnel.
+5. Then M3 Streams webhook, M5 full, M6 voice and submission write-ups.
