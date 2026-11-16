@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import type { ApiError, Env } from "@/lib/api";
 import type { AsyncState } from "@/lib/useAsync";
 import { formatMoney, signOf } from "@/lib/money";
+import { API_URL } from "@/lib/api";
+import { unreachableHint } from "@/lib/errors";
 
 export function Loading({ what = "data" }: { what?: string }) {
   return <div className="state" role="status">Loading {what}...</div>;
@@ -18,7 +20,7 @@ export function ErrorState({ error, onRetry }: { error: ApiError; onRetry?: () =
     return (
       <div className="state unreachable" role="alert">
         <strong>Backend unreachable.</strong>
-        <div>{error.message}. Check that the backend is running and NEXT_PUBLIC_API_URL is correct.</div>
+        <div>{unreachableHint(typeof window === "undefined" ? null : window.location.origin, API_URL)} Also check NEXT_PUBLIC_API_URL.</div>
         {onRetry && <button className="sm" onClick={onRetry} style={{ marginTop: ".5rem" }}>Retry</button>}
       </div>
     );
