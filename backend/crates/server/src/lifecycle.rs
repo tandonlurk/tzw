@@ -129,6 +129,8 @@ pub struct TickReport {
     pub settled: u32,
     pub voided: u32,
     pub cancelled: u32,
+    /// New co-captain suggestions (rule-based; advisory only).
+    pub suggestions: u32,
     /// Problems that did not stop the tick (market data, reasoner).
     pub errors: Vec<String>,
 }
@@ -544,6 +546,13 @@ pub async fn tick(state: &AppState, now: DateTime<Utc>) -> Result<TickReport, Ap
     {
         let outcome = resolve_one(state, id, now, &mut report).await;
         step(&mut report, outcome);
+    }
+
+    // Last, and read-only as far as funds and interactions go: the rule-based
+    // co-captain looks at what the tick left behind. No model call here.
+    match crate::suggestions::generate(state, now, false).await {
+        Ok(generated) => report.suggestions = generated.created.len() as u32,
+        Err(e) => step(&mut report, Err(e)),
     }
 
     Ok(report)

@@ -128,6 +128,17 @@ impl ProposedChange {
         }
     }
 
+    /// No field is set at all.
+    pub fn is_empty(&self) -> bool {
+        self.policy
+            .as_ref()
+            .is_none_or(|p| *p == PolicyChange::default())
+            && self
+                .config
+                .as_ref()
+                .is_none_or(|c| *c == ConfigChange::default())
+    }
+
     pub fn apply_policy(&self, policy: &mut AgentPolicy) {
         let Some(p) = &self.policy else { return };
         if let Some(v) = p.max_per_interaction {
@@ -247,6 +258,9 @@ pub struct Draft {
     pub body: String,
     pub proposed_change: Option<ProposedChange>,
     pub evidence: Value,
+    /// Who wrote the text. Set by the code that builds the draft, never
+    /// taken from model output.
+    pub source: Source,
     /// Set by `vet`, never by the producer.
     pub loosens_control: bool,
 }
@@ -296,7 +310,8 @@ impl Draft {
 }
 
 pub struct Advice {
-    /// Who actually produced the drafts (`Rules` after a Grok fallback).
+    /// Who answered: `Rules` when only the rules ran, including after a Grok
+    /// fallback. Each draft also names its own source.
     pub source: Source,
     pub drafts: Vec<Draft>,
 }
@@ -365,6 +380,7 @@ fn draft(
         body,
         proposed_change,
         evidence,
+        source: Source::Rules,
         loosens_control: false,
     })
 }
@@ -429,9 +445,7 @@ fn idle_funds(agent: &AgentFacts, facts: &Facts) -> Option<Draft> {
         return None;
     }
     let min = Money::from_minor(IDLE_MIN_FUNDS)?;
-    if agent.available == Money::ZERO
-        && agent.committed == Money::ZERO
-        && facts.unallocated >= min
+    if agent.available == Money::ZERO && agent.committed == Money::ZERO && facts.unallocated >= min
     {
         return draft(
             agent,
@@ -533,8 +547,14 @@ fn lower_max_stake(agent: &AgentFacts) -> Option<Draft> {
             "\"{}\" {why} (realized P&L {}{}). Halving its maximum stake per challenge from {} \
              to {} limits further losses while you review its strategy.{}",
             agent.name,
-            if agent.realized_pnl.is_negative() { "-" } else { "" },
-            usdc(Money::from_minor(agent.realized_pnl.minor().saturating_abs())?),
+            if agent.realized_pnl.is_negative() {
+                "-"
+            } else {
+                ""
+            },
+            usdc(Money::from_minor(
+                agent.realized_pnl.minor().saturating_abs()
+            )?),
             usdc(current),
             usdc(lower),
             if lowers_threshold {
@@ -902,7 +922,10 @@ pub(crate) mod tests {
         assert!(d.body.contains("6.00 USDC (simulated)"), "{}", d.body);
         one(pending(1), Kind::ApprovalExpiring);
 
-        none(pending(APPROVAL_EXPIRY_WARN_SECS + 1), Kind::ApprovalExpiring);
+        none(
+            pending(APPROVAL_EXPIRY_WARN_SECS + 1),
+            Kind::ApprovalExpiring,
+        );
         none(pending(0), Kind::ApprovalExpiring);
         none(pending(-30), Kind::ApprovalExpiring);
         none(agent(), Kind::ApprovalExpiring);
@@ -1247,6 +1270,7 @@ pub(crate) mod tests {
             body: "b".into(),
             proposed_change: Some(serde_json::from_value(change).unwrap()),
             evidence: json!({}),
+            source: Source::Grok,
             loosens_control: false,
         }
     }

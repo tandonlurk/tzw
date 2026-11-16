@@ -7,6 +7,7 @@ pub mod error;
 pub mod extract;
 pub mod graph_exec;
 pub mod grok;
+pub mod grok_cocaptain;
 pub mod interactions;
 pub mod ledger_db;
 pub mod lifecycle;
@@ -15,6 +16,7 @@ pub mod misc;
 pub mod models;
 pub mod reasoner;
 pub mod state;
+pub mod suggestions;
 
 use axum::Router;
 use axum::http::HeaderValue;
@@ -57,7 +59,11 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
         .route("/approvals", get(interactions::approvals))
         .route("/approvals/{id}/approve", post(interactions::approve))
         .route("/approvals/{id}/reject", post(interactions::reject))
-        .route("/stats/portfolio", get(interactions::portfolio));
+        .route("/stats/portfolio", get(interactions::portfolio))
+        .route("/suggestions", get(suggestions::list))
+        .route("/suggestions/generate", post(suggestions::generate_now))
+        .route("/suggestions/{id}/accept", post(suggestions::accept))
+        .route("/suggestions/{id}/dismiss", post(suggestions::dismiss));
     if state.settings.dev_endpoints {
         api = api
             .route("/dev/tick", post(interactions::dev_tick))
