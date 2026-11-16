@@ -17,7 +17,7 @@ Foundry project, forge-std only, no other dependencies.
 | `claim(id, party)` | anyone | `owed[id][party] > 0` | Retries a payout that could not be pushed. Funds go to `party` only |
 | `getChallenge(id)` | view | | Full stored state; `status == None` means unused |
 
-`GRACE` is a constant, 1 hour. `USDC` and `RESOLVER` are immutable. `totalHeld` is what the contract owes
+`GRACE` is a constant, 1 hour. `create` requires `fundDeadline` within `MAX_FUND_WINDOW` (7 days) of now and `resolveDeadline` within `MAX_RESOLVE_WINDOW` (30 days) after `fundDeadline` (else `InvalidDeadlines`), and neither party may be the resolver (`InvalidParties`); so the timeout refund opens at most 37 days + 1 hour after `create`. `USDC` and `RESOLVER` are immutable. `totalHeld` is what the contract owes
 (locked stakes plus deferred payouts).
 
 ```

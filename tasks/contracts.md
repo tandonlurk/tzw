@@ -52,3 +52,10 @@
 ## Recommended next steps
 - Install `arc-forge`, run the suite with `--network arc`, then deploy to Arc testnet following `contracts/README.md`.
 - Export the ABI (`contracts/out/ChallengeEscrow.sol/ChallengeEscrow.json`) for the backend.
+
+## Log: SEC-04 / SEC-07 fixes (branch contracts-sec)
+- `create` now reverts `InvalidDeadlines` if `fundDeadline - now > MAX_FUND_WINDOW` (7 days) or `resolveDeadline - fundDeadline > MAX_RESOLVE_WINDOW` (30 days). Refund is reachable at most 37 days + GRACE after create.
+- SEC-07: `create` reverts `InvalidParties` if either party is the resolver.
+- Tests: boundary, fuzz (refund reachable; out-of-bounds revert), old repro tests converted. 84 pass, `forge fmt` clean.
+- ABI: no new errors/events/constructor change; two new constant getters `MAX_FUND_WINDOW()`, `MAX_RESOLVE_WINDOW()`. Backend must keep deadlines within the windows and never use the resolver address as an agent wallet.
+- New defaults for docs/decisions.md: MAX_RESOLVE_WINDOW = 30 days (matches the report's suggestion; ample for demo/short-horizon challenges, bounds lock-up), MAX_FUND_WINDOW = 7 days (stops a far-future fundDeadline from bypassing the cap). Both are constants, easy to change before deploy.

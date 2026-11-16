@@ -879,7 +879,8 @@ contract ChallengeEscrowTest is Test {
     function testFuzz_create_deadlineValidation(uint64 nowTs, uint64 fd, uint64 rd) public {
         nowTs = uint64(bound(nowTs, 1, type(uint64).max));
         vm.warp(nowTs);
-        bool valid = fd > nowTs && rd > fd;
+        bool valid = fd > nowTs && rd > fd && uint256(fd) - nowTs <= escrow.MAX_FUND_WINDOW()
+            && uint256(rd) - fd <= escrow.MAX_RESOLVE_WINDOW();
 
         vm.prank(resolver);
         if (!valid) vm.expectRevert(ChallengeEscrow.InvalidDeadlines.selector);
