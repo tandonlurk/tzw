@@ -160,3 +160,13 @@ pre { background: var(--bg); padding: .6rem; border-radius: 6px; overflow-x: aut
 .dev-box { border: 1px dashed var(--pending); border-radius: 8px; padding: .6rem .8rem; }
 .timeline { border-left: 2px solid var(--border); padding-left: .8rem; }
 .timeline > div { margin-bottom: .6rem; }
+.chart .series.pos .line { stroke: var(--positive); }
+.chart .series.pos .dot { fill: var(--positive); }
+.chart .series.neg .line { stroke: var(--negative); }
+.chart .series.neg .dot { fill: var(--negative); }
+.chart .series.info .line { stroke: var(--neutral); }
+.chart .series.info .dot { fill: var(--neutral); }
+.legend { display: flex; flex-wrap: wrap; gap: .25rem 1rem; font-size: .8rem; margin: .4rem 0; }
+.legend .sw { display: inline-block; width: .7rem; height: .25rem; margin-right: .35rem; vertical-align: middle; background: currentColor; }
+.seg { display: inline-flex; gap: .25rem; margin-bottom: .5rem; }
+.seg button.on { border-color: var(--neutral); color: var(--neutral); }

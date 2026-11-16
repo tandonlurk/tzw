@@ -1,6 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import type { Portfolio } from "@/lib/api";
+import { perAgentSeries } from "@/lib/charts";
+import { MultiLineChart } from "./charts/MultiLineChart";
 import { formatMoney, signOf } from "@/lib/money";
 import { LineChart } from "./charts/LineChart";
 import { BarList, type BarItem } from "./charts/BarList";
@@ -8,6 +11,14 @@ import { Empty, EnvBadge, Tile, formatTs } from "./ui";
 
 /** Presentational: renders only what /stats/portfolio returned. */
 export function PortfolioCharts({ p }: { p: Portfolio }) {
+  const [view, setView] = useState<"agents" | "total">("agents");
+  const series = perAgentSeries(
+    p.pnl_over_time,
+    p.agents,
+    (v) => formatMoney(v, { signed: true }),
+    formatTs,
+  );
+  const toneOf = (finalMinor: number) => (finalMinor > 0 ? "pos" : finalMinor < 0 ? "neg" : "info");
   const o = p.outcomes;
   const pnlPoints = p.pnl_over_time.map((e) => ({
     x: new Date(e.ts).getTime(),
@@ -46,12 +57,29 @@ export function PortfolioCharts({ p }: { p: Portfolio }) {
 
       <div className="grid-2">
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>Portfolio realized P&amp;L over time</h3>
+          <h3 style={{ marginTop: 0 }}>Realized P&amp;L over time</h3>
           {pnlPoints.length === 0 ? <Empty>No settled challenges yet.</Empty> : (
-            <LineChart points={pnlPoints} ariaLabel="Cumulative portfolio realized P&L" formatY={(y) => formatMoney(String(Math.round(y)), { signed: true })} />
-          )}
-          {p.pnl_over_time.length > 0 && signOf(p.totals.realized_pnl) === 0 && (
-            <div className="dim" style={{ fontSize: ".8rem" }}>Nets to zero when one owner is on both sides of every challenge; see per-agent P&amp;L.</div>
+            <>
+              <div className="seg" role="group" aria-label="P&L view">
+                <button className={view === "agents" ? "on" : ""} aria-pressed={view === "agents"} onClick={() => setView("agents")}>By agent</button>
+                <button className={view === "total" ? "on" : ""} aria-pressed={view === "total"} onClick={() => setView("total")}>Portfolio total</button>
+              </div>
+              {view === "agents" ? (
+                <>
+                  <MultiLineChart series={series} tone={(s) => toneOf(s.finalMinor)} ariaLabel="Cumulative realized P&L per agent" formatY={(y) => formatMoney(String(Math.round(y)), { signed: true })} />
+                  <div className="legend">
+                    {series.map((s) => <span key={s.agentId} className={toneOf(s.finalMinor)}><span className="sw" />{s.name}: {formatMoney(String(s.finalMinor), { signed: true })}</span>)}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <LineChart points={pnlPoints} ariaLabel="Cumulative portfolio realized P&L" formatY={(y) => formatMoney(String(Math.round(y)), { signed: true })} />
+                  {signOf(p.totals.realized_pnl) === 0 && (
+                    <div className="dim" style={{ fontSize: ".8rem" }}>Nets to zero when one owner is on both sides of every challenge; see the by-agent view.</div>
+                  )}
+                </>
+              )}
+            </>
           )}
         </div>
         <div className="card">

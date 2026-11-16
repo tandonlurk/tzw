@@ -56,3 +56,11 @@ describe("chart helpers", () => {
     expect(barPercents([5, -10])).toEqual([50, 100]);
   });
 });
+
+import { reasonSuffix } from "./interactions";
+describe("reasonSuffix", () => {
+  it("avoids doubled periods and handles empty", () => {
+    expect(reasonSuffix("Stakes could not be committed (x: low).")).toBe(" Reason: Stakes could not be committed (x: low).");
+    expect(reasonSuffix(null)).toBe("");
+  });
+});

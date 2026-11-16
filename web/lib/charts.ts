@@ -39,3 +39,49 @@ export function barPercents(values: number[]): number[] {
   const max = Math.max(0, ...values.map((v) => Math.abs(v)));
   return values.map((v) => (max === 0 ? 0 : (Math.abs(v) / max) * 100));
 }
+
+export interface AgentSeries {
+  agentId: string;
+  name: string;
+  /** Cumulative realized P&L per settled event, from the ledger series; money minor units, drawing only. */
+  points: (Pt & { label: string })[];
+  finalMinor: number;
+}
+
+interface PnlEvent { ts: string; agent_id: string; agent_cumulative: string }
+
+/** Group the API's pnl_over_time events into one series per agent (events keep API order). Nothing is interpolated or invented. */
+export function perAgentSeries(
+  events: PnlEvent[],
+  agents: { agent_id: string; name: string }[],
+  fmt: (v: string) => string = (v) => v,
+  fmtTs: (ts: string) => string = (t) => t,
+): AgentSeries[] {
+  const names = new Map(agents.map((a) => [a.agent_id, a.name]));
+  const out = new Map<string, AgentSeries>();
+  for (const e of events) {
+    let s = out.get(e.agent_id);
+    if (!s) {
+      s = { agentId: e.agent_id, name: names.get(e.agent_id) ?? e.agent_id, points: [], finalMinor: 0 };
+      out.set(e.agent_id, s);
+    }
+    const y = Number(e.agent_cumulative);
+    s.points.push({ x: new Date(e.ts).getTime(), y, label: `${s.name} ${fmtTs(e.ts)}: ${fmt(e.agent_cumulative)}` });
+    s.finalMinor = y;
+  }
+  return [...out.values()];
+}
+
+/** Scale several series onto one shared axis (zero included). */
+export function scaleMulti(series: Pt[][], w: number, h: number, pad = 8) {
+  const all = series.flat();
+  if (all.length === 0) return null;
+  const shared = scaleSeries(all, w, h, pad);
+  let i = 0;
+  const lines = series.map((s) => {
+    const pts = shared.points.slice(i, i + s.length);
+    i += s.length;
+    return pts;
+  });
+  return { lines, zeroY: shared.zeroY, yMin: shared.yMin, yMax: shared.yMax };
+}
