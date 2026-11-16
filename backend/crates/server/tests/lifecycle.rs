@@ -1517,3 +1517,336 @@ async fn spot_fallback_is_used_and_labelled_when_no_contract_is_usable() {
             .contains("prediction-market")
     );
 }
+
+// ---------------------------------------------------------------------------
+// Proposal cooldown, the dev clock guard and the demo seed
+// ---------------------------------------------------------------------------
+
+async fn set_status(c: &Ctx, agent: Uuid, status: &str) {
+    post(
+        &c.app,
+        &format!("/api/agents/{agent}/status"),
+        json!({ "status": status }),
+    )
+    .await;
+}
+
+/// Proposes at `t0`, then gets the challenge cancelled (the paused proposer
+/// cannot answer the counter) and resumes the proposer.
+async fn proposed_then_cancelled(c: &Ctx) -> Uuid {
+    let (a, _b) = (bull(c, 100).await, skeptic(c, 100).await);
+    assert_eq!(tick(c, c.t0).await.proposed, 1);
+    set_status(c, a, "paused").await;
+    assert_eq!(tick(c, c.t0 + Duration::seconds(1)).await.cancelled, 1);
+    set_status(c, a, "active").await;
+    a
+}
+
+#[tokio::test]
+async fn an_agent_does_not_propose_again_on_a_market_during_the_cooldown() {
+    let c = setup().await;
+    let cooldown = c.state.settings.proposal_cooldown_secs;
+    assert_eq!(cooldown, 600);
+    let a = proposed_then_cancelled(&c).await;
+    let runs = || async {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM agent_runs WHERE agent_id = $1 AND trigger = 'trigger.market_move'",
+        )
+        .bind(a)
+        .fetch_one(&c.pool)
+        .await
+        .unwrap()
+    };
+    assert_eq!(runs().await, 1);
+
+    // The market still shows the same opportunity, but the agent stays quiet
+    // and does not even reason (no run, so no model call).
+    for secs in [2, 15, 300, cooldown - 1] {
+        let r = tick(&c, c.t0 + Duration::seconds(secs)).await;
+        assert_eq!((r.proposed, r.denied), (0, 0), "after {secs} s");
+    }
+    assert_eq!(runs().await, 1);
+    assert_eq!(
+        get(&c.app, "/api/interactions")
+            .await
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+
+    // Once the cooldown has passed it may propose again.
+    let r = tick(&c, c.t0 + Duration::seconds(cooldown)).await;
+    assert_eq!(r.proposed, 1);
+    assert_eq!(
+        get(&c.app, "/api/interactions")
+            .await
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_ledger_sound(&c.pool).await;
+}
+
+#[tokio::test]
+async fn cooldown_is_per_market_and_can_be_disabled() {
+    // Disabled: the old behaviour, a new proposal on the next tick.
+    let c = setup_with(|mut state| {
+        state.settings.proposal_cooldown_secs = 0;
+        state
+    })
+    .await;
+    proposed_then_cancelled(&c).await;
+    assert_eq!(tick(&c, c.t0 + Duration::seconds(2)).await.proposed, 1);
+    drop(c);
+
+    // Enabled: another market is not affected by the cooldown on the first.
+    let c = setup().await;
+    proposed_then_cancelled(&c).await;
+    c.fake.set_prediction_markets(false); // discovery falls back to spot
+    let r = tick(&c, c.t0 + Duration::seconds(2)).await;
+    assert_eq!(r.proposed, 1);
+    let list = get(&c.app, "/api/interactions").await;
+    let keys: Vec<String> =
+        sqlx::query_scalar("SELECT market_key FROM interactions ORDER BY created_at")
+            .fetch_all(&c.pool)
+            .await
+            .unwrap();
+    assert_eq!(list.as_array().unwrap().len(), 2);
+    assert_ne!(keys[0], keys[1]);
+}
+
+#[tokio::test]
+async fn a_simulated_clock_jump_past_a_funding_deadline_is_refused_unless_allowed() {
+    let c = setup().await;
+    let (_a, _b) = (bull(&c, 100).await, skeptic(&c, 100).await);
+    http_tick(&c, c.t0).await;
+    let id = uuid(&only_interaction(&c).await["id"]);
+    assert_eq!(state_of(&c.pool, id).await, "negotiating");
+
+    // Jumping an hour ahead would silently expire the negotiation: refused.
+    let jump = (c.t0 + Duration::hours(1)).to_rfc3339();
+    let (status, body) = send(
+        &c.app,
+        "POST",
+        "/api/dev/tick",
+        Some(json!({ "now": jump })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert_eq!(body["error"]["code"], "clock_jump_would_expire");
+    assert_eq!(state_of(&c.pool, id).await, "negotiating");
+
+    // A step that stays inside the funding window is fine and moves it on.
+    let report = http_tick(&c, c.t0 + Duration::seconds(299)).await;
+    assert_eq!(
+        (report["accepted"].clone(), report["funded"].clone()),
+        (json!(1), json!(1))
+    );
+    assert_eq!(state_of(&c.pool, id).await, "active");
+    // Funded challenges have no funding deadline left: the jump is allowed.
+    let report = http_tick(&c, c.t0 + Duration::hours(2)).await;
+    assert_eq!(report["settled"], 1);
+}
+
+#[tokio::test]
+async fn the_deadline_rule_itself_is_unchanged_by_the_clock_guard() {
+    let c = setup().await;
+    let (_a, _b) = (bull(&c, 100).await, skeptic(&c, 100).await);
+    http_tick(&c, c.t0).await;
+    let id = uuid(&only_interaction(&c).await["id"]);
+    let jump = (c.t0 + Duration::hours(1)).to_rfc3339();
+    let report = post(
+        &c.app,
+        "/api/dev/tick",
+        json!({ "now": jump, "allow_expiry": true }),
+    )
+    .await;
+    assert_eq!(report["funded"], 0);
+    assert_eq!(state_of(&c.pool, id).await, "cancelled");
+    assert!(
+        activity_kinds(&c.pool)
+            .await
+            .contains(&"challenge_expired".to_owned())
+    );
+    assert_ledger_sound(&c.pool).await;
+}
+
+fn field<'a>(v: &'a Value, name: &str) -> &'a str {
+    v[name].as_str().unwrap_or_else(|| panic!("{name} in {v}"))
+}
+
+/// The README demo: seed, then a few ticks walk the whole lifecycle.
+#[tokio::test]
+async fn seeded_demo_walks_the_whole_lifecycle() {
+    let c = setup().await;
+    let seed = post(&c.app, "/api/dev/seed-demo", json!({})).await;
+    assert_eq!(seed["env"], "simulated");
+    let (bull, skeptic) = (
+        uuid(&seed["agents"][0]["id"]),
+        uuid(&seed["agents"][1]["id"]),
+    );
+    assert_eq!(seed["agents"][0]["created"], true);
+    for agent in seed["agents"].as_array().unwrap() {
+        assert!(field(agent, "name").contains("(simulated)"));
+    }
+
+    // Seeding again changes nothing: same agents, no second funding.
+    let again = post(&c.app, "/api/dev/seed-demo", json!({})).await;
+    assert_eq!(uuid(&again["agents"][0]["id"]), bull);
+    assert_eq!(again["agents"][0]["created"], false);
+    assert_eq!(
+        get(&c.app, "/api/agents").await.as_array().unwrap().len(),
+        2
+    );
+    assert_eq!(available(&c.pool, bull).await, 100 * USDC);
+    assert_eq!(available(&c.pool, skeptic).await, 100 * USDC);
+    let wallet = get(&c.app, "/api/wallet").await;
+    assert_eq!(
+        (field(&wallet, "env"), field(&wallet, "unallocated")),
+        ("simulated", "0")
+    );
+    assert_eq!(
+        get(&c.app, &format!("/api/agents/{bull}")).await["env"],
+        "simulated"
+    );
+
+    // Tick 1: propose and counter.
+    let report = http_tick(&c, c.t0).await;
+    assert_eq!(
+        (report["proposed"].clone(), report["countered"].clone()),
+        (json!(1), json!(1))
+    );
+    let interaction = only_interaction(&c).await;
+    let id = uuid(&interaction["id"]);
+    assert_eq!(interaction["state"], "negotiating");
+    assert_eq!(interaction["env"], "simulated");
+    assert_eq!(uuid(&interaction["proposer_id"]), bull);
+    assert_eq!(uuid(&interaction["counterparty_id"]), skeptic);
+
+    // Tick 2: the bull accepts; the skeptic's stake is above its automatic
+    // limit, so the permission engine asks the owner and nothing is funded.
+    let report = http_tick(&c, c.t0 + Duration::seconds(15)).await;
+    assert_eq!(
+        (
+            report["accepted"].clone(),
+            report["approvals_requested"].clone(),
+            report["funded"].clone()
+        ),
+        (json!(1), json!(1), json!(0))
+    );
+    assert_eq!(state_of(&c.pool, id).await, "awaiting_approval");
+    assert_eq!(
+        committed(&c.pool, bull).await + committed(&c.pool, skeptic).await,
+        0
+    );
+    // More ticks never fund it without the owner.
+    let report = http_tick(&c, c.t0 + Duration::seconds(30)).await;
+    assert_eq!(report["funded"], 0);
+
+    let approvals = get(&c.app, "/api/approvals").await;
+    assert_eq!(approvals.as_array().unwrap().len(), 1);
+    assert_eq!(uuid(&approvals[0]["agent_id"]), skeptic);
+    assert_eq!(approvals[0]["stake"], "2500000");
+    let approval = field(&approvals[0], "id");
+    let result = post(
+        &c.app,
+        &format!("/api/approvals/{approval}/approve"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(result["interaction"]["state"], "active");
+    assert_eq!(committed(&c.pool, bull).await, 5 * USDC / 2);
+    assert_eq!(committed(&c.pool, skeptic).await, 5 * USDC / 2);
+
+    // The market moves the bull's way; after `end_at` the challenge resolves
+    // and settles.
+    post(
+        &c.app,
+        "/api/dev/fake-market",
+        json!({ "yes_price_bps": 7000 }),
+    )
+    .await;
+    let detail = get(&c.app, &format!("/api/interactions/{id}")).await;
+    let end_at: DateTime<Utc> = field(&detail, "end_at").parse().unwrap();
+    let report = http_tick(&c, end_at + Duration::seconds(5)).await;
+    assert_eq!(
+        (report["resolving"].clone(), report["settled"].clone()),
+        (json!(1), json!(1))
+    );
+
+    let detail = get(&c.app, &format!("/api/interactions/{id}")).await;
+    assert_eq!(detail["state"], "settled");
+    assert_eq!(detail["outcome"], "a");
+    assert_eq!(uuid(&detail["winner_id"]), bull);
+    assert_eq!(available(&c.pool, bull).await, 100 * USDC + 5 * USDC / 2);
+    assert_eq!(available(&c.pool, skeptic).await, 100 * USDC - 5 * USDC / 2);
+    assert_eq!(
+        committed(&c.pool, bull).await + committed(&c.pool, skeptic).await,
+        0
+    );
+
+    // What the owner reads: sentences with USDC amounts, labelled simulated,
+    // and never raw minor units.
+    let negotiation = detail["negotiation"].as_array().unwrap();
+    let actions: Vec<&str> = negotiation.iter().map(|r| field(r, "action")).collect();
+    assert_eq!(actions, ["propose", "counter", "accept"]);
+    assert_eq!(
+        field(&negotiation[0], "summary"),
+        "I claim the market ends at or above 0.55 (YES price) and stake 5.00 USDC (simulated) on it."
+    );
+    assert!(field(&negotiation[1], "summary").contains("2.50 USDC (simulated)"));
+    assert_eq!(negotiation[1]["terms"]["stake"], "2500000");
+    for round in negotiation {
+        let summary = field(round, "summary");
+        assert!(
+            !summary.contains("minor units") && !summary.contains("bps"),
+            "{summary}"
+        );
+    }
+    let kinds = activity_kinds(&c.pool).await;
+    for kind in [
+        "challenge_proposed",
+        "challenge_countered",
+        "challenge_accepted",
+        "approval_requested",
+        "approval_granted",
+        "stake_committed",
+        "challenge_settled",
+    ] {
+        assert!(count(&kinds, kind) >= 1, "missing {kind} in {kinds:?}");
+    }
+    assert_ledger_sound(&c.pool).await;
+}
+
+#[tokio::test]
+async fn seed_demo_needs_json_and_is_dev_only() {
+    let c = setup().await;
+    let (status, _) = send(&c.app, "POST", "/api/dev/seed-demo", None).await;
+    assert_eq!(status, StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    let (status, _) = send(
+        &c.app,
+        "POST",
+        "/api/dev/seed-demo",
+        Some(json!({ "funds": "1" })),
+    )
+    .await;
+    assert!(status.is_client_error());
+    assert!(
+        get(&c.app, "/api/agents")
+            .await
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    drop(c);
+
+    let c = setup_with(|mut state| {
+        state.settings.dev_endpoints = false;
+        state
+    })
+    .await;
+    let (status, _) = send(&c.app, "POST", "/api/dev/seed-demo", Some(json!({}))).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

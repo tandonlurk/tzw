@@ -697,4 +697,31 @@ pub(crate) mod tests {
         );
         assert_eq!(counter.terms.unwrap().stake, m(2_500_000));
     }
+
+    /// Why lowering `approval_threshold` alone rarely produces an approval
+    /// request (QA M2, observation 2): a proposer sizes its own stake into
+    /// the automatic range. The gate is unchanged: any stake above the
+    /// threshold needs the owner.
+    #[test]
+    fn a_proposer_sizes_its_stake_into_the_automatic_range() {
+        use aen_core::authorize::{AgentStatus, Decision, Intent, Snapshot, authorize};
+
+        let mut bull = agent("Follow momentum.");
+        bull.policy.approval_threshold = m(2_000_000);
+        let snapshot = Snapshot {
+            status: AgentStatus::Active,
+            available: bull.available,
+            exposure: Money::ZERO,
+            realized_pnl: aen_core::money::SignedMoney::from_minor(0),
+        };
+        let decide = |move_bps| {
+            let stake = proposal(&bull, &market(move_bps)).stake;
+            let intent = Intent::ProposeChallenge { stake };
+            (stake, authorize(&intent, &bull.policy, &snapshot, None))
+        };
+        // 65% conviction: the stake follows the lowered threshold down.
+        assert_eq!(decide(300), (m(2_000_000), Decision::Allow));
+        // 80% and above: the per-challenge maximum, which needs the owner.
+        assert_eq!(decide(600), (m(10_000_000), Decision::RequireApproval));
+    }
 }
