@@ -7,6 +7,10 @@ import type {
   Portfolio,
   TickReport,
   Agent,
+  CollabAction,
+  CollabDetail,
+  CollabInput,
+  Collaboration,
   AgentInput,
   AgentStatus,
   AgentVersion,
@@ -107,8 +111,9 @@ export const api = {
   getWallet: () => get<Wallet>("/wallet"),
   simulatedDeposit: (amount: Money) => post<Wallet>("/wallet/simulated-deposit", { amount }),
 
-  listActivity: (opts: { agent_id?: string; interaction_id?: string; limit?: number } = {}) => {
+  listActivity: (opts: { agent_id?: string; interaction_id?: string; collaboration_id?: string; limit?: number } = {}) => {
     const q = new URLSearchParams();
+    if (opts.collaboration_id) q.set("collaboration_id", opts.collaboration_id);
     if (opts.interaction_id) q.set("interaction_id", opts.interaction_id);
     if (opts.agent_id) q.set("agent_id", opts.agent_id);
     if (opts.limit) q.set("limit", String(opts.limit));
@@ -137,6 +142,20 @@ export const api = {
   generateSuggestions: () => post<GenerateSuggestionsResult>("/suggestions/generate", {}),
   acceptSuggestion: (id: string) => post<Suggestion>(`/suggestions/${encodeURIComponent(id)}/accept`, {}),
   dismissSuggestion: (id: string) => post<Suggestion>(`/suggestions/${encodeURIComponent(id)}/dismiss`, {}),
+  listCollaborations: (opts: { agent_id?: string; state?: string } = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(opts)) if (v) q.set(k, v);
+    const qs = q.toString();
+    return get<Collaboration[]>(`/collaborations${qs ? `?${qs}` : ""}`);
+  },
+  getCollaboration: (id: string) => get<CollabDetail>(`/collaborations/${encodeURIComponent(id)}`),
+  createCollaboration: (input: CollabInput) => post<Collaboration>("/collaborations", input),
+  collabAction: (id: string, action: Exclude<CollabAction, "fund" | "cancel">) =>
+    post<Collaboration>(`/collaborations/${encodeURIComponent(id)}/${action}`, {}),
+  fundCollaboration: (id: string, ownerApproved = false) =>
+    post<Collaboration>(`/collaborations/${encodeURIComponent(id)}/fund`, ownerApproved ? { owner_approved: true } : {}),
+  cancelCollaboration: (id: string, reason?: string) =>
+    post<Collaboration>(`/collaborations/${encodeURIComponent(id)}/cancel`, reason ? { reason } : {}),
   getPortfolio: () => get<Portfolio>("/stats/portfolio"),
   devTick: () => post<TickReport>("/dev/tick", {}),
 };

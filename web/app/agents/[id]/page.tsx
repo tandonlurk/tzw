@@ -8,6 +8,7 @@ import { formatMoney, parseMoney } from "@/lib/money";
 import { useAsync } from "@/lib/useAsync";
 import { Async, Empty, ErrorBanner, EnvBadge, Money, StatusBadge, Tile, formatTs } from "@/components/ui";
 import { LedgerTable } from "@/components/LedgerTable";
+import { CollabCard } from "@/components/CollabCard";
 import { InteractionCard } from "@/components/Interactions";
 import { isOpen } from "@/lib/interactions";
 import { interactionCounts, versionHistory, winRateText } from "@/lib/agentView";
@@ -18,6 +19,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
   const ledger = useAsync(() => api.getAgentLedger(id), `ledger:${id}`);
 
   const interactions = useAsync(() => api.listInteractions({ agent_id: id }), `interactions:${id}`);
+  const collabs = useAsync(() => api.listCollaborations({ agent_id: id }), `collabs:${id}`);
   const versions = useAsync(() => api.listAgentVersions(id), `versions:${id}`);
   const activity = useAsync(() => api.listActivity({ agent_id: id, limit: 20 }), `activity:${id}`);
   const saved = useSearchParams().get("saved");
@@ -25,6 +27,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
   function refresh() {
     interactions.reload();
     versions.reload();
+    collabs.reload();
     activity.reload();
     agent.reload();
     ledger.reload();
@@ -41,7 +44,6 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
         {(a) => <Detail agent={a} onChanged={refresh} active={interactions.data ? interactionCounts(interactions.data).active : null} />}
       </Async>
       <h2>Challenges</h2>
-      <div className="dim">Collaborations are not available yet; only challenges exist in this version of the product.</div>
       <Async state={interactions} what="challenges">
         {(list) => {
           const open = list.filter((i) => isOpen(i.state));
@@ -53,6 +55,12 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           );
         }}
+      </Async>
+      <h2>Collaborations</h2>
+      <Async state={collabs} what="collaborations">
+        {(list) => list.length === 0 ? <Empty>This agent has no collaborations yet. <Link href="/collaborations">Propose one</Link>.</Empty> : (
+          <div className="stack">{list.map((c) => <CollabCard key={c.id} c={c} />)}</div>
+        )}
       </Async>
       <h2>Wallet transactions</h2>
       <Async state={ledger} what="ledger">{(entries) => <LedgerTable entries={entries} />}</Async>

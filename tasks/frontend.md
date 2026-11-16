@@ -61,3 +61,8 @@ Run against the real backend; charts (M2); approvals and interactions views.
 - Audit: detail already had balances, realized P&L, config, policy, challenges, ledger; edit (PUT = new version) with inline 422 field errors existed. Missing: unrealized P&L, win rate, active count, version history, per-agent activity, saved-version confirmation, version shown on decision traces.
 - Added: unrealized P&L tile ("n/a, not computed"), win rate %, active challenges tile, Version history (`GET /agents/{id}/versions`, newest first, diff vs previous), Recent activity, "Saved as version N" notice after edit, "(config vN)" on run traces in interaction detail. Collaborations labelled not available. Helpers + tests in `lib/agentView.ts` (33 web tests at this commit).
 - Not browser-verified this stage (build/lint/tests only).
+
+## Collaboration views (web-m3, stage 3)
+- Added `/collaborations` (list + propose form, simulated agents only, share entered as percent -> bps, local checks + server 422 banner), `/collaborations/[id]` (state, parties, contribution, share bps, expected payout, payout/net, ledger, activity; buttons rendered only from `actions`; fund 409 `approval_required` shows an explicit owner-approval confirm that re-sends `owner_approved: true`; cancel with optional reason), agent detail Collaborations section (replaces "not available"), Activity rows link to collaboration, nav item. Helpers + tests: `lib/collaborations.ts`.
+- Chrome-verified on real backend: propose (with empty-form local errors) -> accept -> fund (approval prompt) -> approve -> complete (+1.80 / -1.80 net), and cancel with reason (created via curl, cancelled in UI).
+- Not verified in browser: reject, cancel of a funded collaboration (refund), authorization_denied 422 display.

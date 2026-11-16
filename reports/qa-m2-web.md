@@ -16,3 +16,6 @@ Observations (not fixed)
 - Agent detail repeats identical-looking challenge cards (same market/outcome); correct, just visually repetitive.
 - Edit page: mouse wheel over the builder canvas zooms the canvas instead of scrolling the page.
 - Reject path and ledger/versions after simulated-clock jumps not re-tested this pass.
+
+## Collaboration pass (stage 3)
+Via UI on a fresh db: propose (empty submit shows local errors) -> accept -> Fund showed the owner-approval notice -> "I approve: fund now" -> funded -> "Declare complete and pay out" -> net +1.80 / -1.80, ledger and activity correct. Cancel with reason on an unfunded one (created by curl) -> cancelled, no actions left. Agent detail and Activity link to collaborations. Not tested: reject, funded cancel, authorization_denied display.

@@ -155,6 +155,7 @@ export interface ActivityItem {
   ts: string;
   agent_id: string | null;
   interaction_id?: string | null;
+  collaboration_id?: string | null;
   kind: string;
   summary: string;
   detail: Record<string, unknown> | null;
@@ -378,4 +379,51 @@ export interface Suggestion {
 export interface GenerateSuggestionsResult {
   source: "rules" | "grok";
   created: Suggestion[];
+}
+
+// ---- M3: collaborations (docs/api.md "Collaborations") ----
+
+export type CollabState = "proposed" | "accepted" | "rejected" | "funded" | "completed" | "cancelled";
+export type CollabAction = "accept" | "reject" | "fund" | "complete" | "cancel";
+
+export interface CollabParty {
+  agent_id: string;
+  name: string;
+  contribution: Money;
+  share_bps: number;
+  expected_payout: Money;
+  payout: Money | null;
+  net: Money | null; // signed, once completed
+}
+
+export interface Collaboration {
+  id: string;
+  env: Env;
+  state: CollabState;
+  objective: string;
+  proposer: CollabParty;
+  partner: CollabParty;
+  pool: Money;
+  resolution: "owner_declared";
+  status_reason: string | null;
+  actions: CollabAction[];
+  created_at: string;
+  updated_at: string;
+  funded_at: string | null;
+  closed_at: string | null;
+}
+
+export interface CollabDetail {
+  collaboration: Collaboration;
+  ledger: LedgerEntry[];
+  activity: ActivityItem[];
+}
+
+export interface CollabInput {
+  proposer_id: string;
+  partner_id: string;
+  objective: string;
+  proposer_share_bps: number;
+  proposer_contribution: Money;
+  partner_contribution: Money;
 }

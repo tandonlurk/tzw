@@ -7,6 +7,7 @@ const ITEMS = [
   { href: "/", label: "Dashboard" },
   { href: "/agents", label: "My Agents" },
   { href: "/interactions", label: "Challenges" },
+  { href: "/collaborations", label: "Collaborations" },
   { href: "/approvals", label: "Approvals" },
   { href: "/cocaptain", label: "Co-captain" },
   { href: "/wallet", label: "Wallet" },
