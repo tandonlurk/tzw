@@ -474,7 +474,9 @@ const FORMULAS: [(&str, &str); 11] = [
     ),
     (
         "pnl_over_time",
-        "one point per agent per settled challenge, in settlement order; cumulative sums of delta",
+        "one point per agent per settled challenge, ordered by settlement time; ts = the \
+         lifecycle clock at settlement (the simulated `now` of a dev tick, real time otherwise); \
+         cumulative sums of delta",
     ),
     (
         "win_rate_bps",
@@ -537,9 +539,12 @@ pub async fn portfolio(State(pool): State<PgPool>) -> Result<Json<Portfolio>, Ap
     }
 
     let settlements: Vec<(DateTime<Utc>, Option<Uuid>, Uuid, i64)> = sqlx::query_as(
-        "SELECT MIN(ts), interaction_id, agent_id, SUM(delta)::BIGINT FROM ledger_entries \
-         WHERE env = $1 AND reason = 'settle' AND agent_id IS NOT NULL \
-         GROUP BY idempotency_key, interaction_id, agent_id ORDER BY MIN(seq), agent_id",
+        "SELECT COALESCE(i.settled_at, MIN(e.ts)) AS settled_at, e.interaction_id, e.agent_id, \
+                SUM(e.delta)::BIGINT \
+         FROM ledger_entries e LEFT JOIN interactions i ON i.id = e.interaction_id \
+         WHERE e.env = $1 AND e.reason = 'settle' AND e.agent_id IS NOT NULL \
+         GROUP BY e.idempotency_key, e.interaction_id, e.agent_id, i.settled_at \
+         ORDER BY 1, MIN(e.seq), e.agent_id",
     )
     .bind(env.as_str())
     .fetch_all(&pool)

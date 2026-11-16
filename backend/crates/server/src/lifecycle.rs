@@ -646,13 +646,15 @@ async fn has_open_on_market(
     .await
 }
 
-/// Whether the agent proposed on this market less than `cooldown_secs` ago.
-/// Counted from the proposal (`created_at`), so it holds whether that
+/// Whether the agent proposed on this market less than `cooldown_secs` ago,
+/// or tried to and was blocked (denied by `authorize`, or no counterparty)
+/// under its current config version. Counted from the proposal
+/// (`created_at`) or the blocked run (`ts`), so it holds whether that
 /// challenge was rejected, expired, cancelled or settled. A runtime rule: no
 /// reasoner or graph can shorten it.
 async fn in_proposal_cooldown(
     conn: &mut PgConnection,
-    agent: Uuid,
+    agent: &AgentRec,
     market_key: &str,
     cooldown_secs: i64,
     now: DateTime<Utc>,
@@ -661,13 +663,36 @@ async fn in_proposal_cooldown(
         return Ok(false);
     }
     let last: Option<DateTime<Utc>> = sqlx::query_scalar(
-        "SELECT MAX(created_at) FROM interactions WHERE proposer_id = $1 AND market_key = $2",
+        "SELECT GREATEST( \
+             (SELECT MAX(created_at) FROM interactions \
+              WHERE proposer_id = $1 AND market_key = $2), \
+             (SELECT MAX(ts) FROM agent_runs \
+              WHERE agent_id = $1 AND market_key = $2 AND blocked IS NOT NULL \
+                AND agent_version = $3))",
     )
-    .bind(agent)
+    .bind(agent.id)
     .bind(market_key)
+    .bind(agent.version)
     .fetch_one(conn)
     .await?;
     Ok(last.is_some_and(|t| (now - t).num_seconds() < cooldown_secs))
+}
+
+/// Marks a discovery run as a blocked proposal on `market_key`, which starts
+/// the proposal cooldown for that market (see `in_proposal_cooldown`).
+async fn mark_blocked(
+    conn: &mut PgConnection,
+    run_id: Uuid,
+    market_key: &str,
+    blocked: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE agent_runs SET market_key = $2, blocked = $3 WHERE id = $1")
+        .bind(run_id)
+        .bind(market_key)
+        .bind(blocked)
+        .execute(conn)
+        .await?;
+    Ok(())
 }
 
 async fn schedule_due(
@@ -761,7 +786,7 @@ async fn discover_one(
     let cooldown = settings.proposal_cooldown_secs;
     // Checked before reasoning, so a cooling-down agent costs no model call.
     if has_open_on_market(&mut conn, agent.id, &market_key).await?
-        || in_proposal_cooldown(&mut conn, agent.id, &market_key, cooldown, now).await?
+        || in_proposal_cooldown(&mut conn, &agent, &market_key, cooldown, now).await?
     {
         return Ok(());
     }
@@ -788,7 +813,7 @@ async fn discover_one(
     // same challenge or pick the same counterparty for one market.
     advisory_lock(&mut tx, "aen:propose").await?;
     if has_open_on_market(&mut tx, agent.id, &market_key).await?
-        || in_proposal_cooldown(&mut tx, agent.id, &market_key, cooldown, now).await?
+        || in_proposal_cooldown(&mut tx, &agent, &market_key, cooldown, now).await?
         || (trigger == TRIGGER_SCHEDULE
             && !schedule_due(&mut tx, agent.id, every_secs, now).await?)
     {
@@ -858,6 +883,9 @@ async fn discover_one(
             json!({ "reasons": reasons, "run_id": run_id, "terms": terms }),
         )
         .await?;
+        // Rate-limited like a proposal, so a denied agent does not retry
+        // (and reason, or call a model) on every tick.
+        mark_blocked(&mut tx, run_id, &market_key, "denied").await?;
         report.denied += 1;
         tx.commit().await?;
         return Ok(());
@@ -875,6 +903,7 @@ async fn discover_one(
             json!({ "run_id": run_id }),
         )
         .await?;
+        mark_blocked(&mut tx, run_id, &market_key, "no_counterparty").await?;
         tx.commit().await?;
         return Ok(());
     };
@@ -1869,8 +1898,8 @@ pub async fn settle_locked(
         .unwrap_or_default();
     ledger_db::post(conn, &ledger::settle(env, id, winner, loser, stake)?).await?;
     sqlx::query(
-        "UPDATE interactions SET outcome = $2, winner_id = $3, observed = $4, observed_at = $5 \
-         WHERE id = $1",
+        "UPDATE interactions SET outcome = $2, winner_id = $3, observed = $4, observed_at = $5, \
+         settled_at = $5 WHERE id = $1",
     )
     .bind(id)
     .bind(if outcome == Outcome::A { "a" } else { "b" })
