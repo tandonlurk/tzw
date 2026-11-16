@@ -13,6 +13,12 @@ use serde_json::{Value, json};
 
 pub const SCHEMA_VERSION: u32 = 1;
 
+/// User JavaScript `decide(ctx)`, run in the sandbox (D-11). An action: its
+/// output is intents, which `authorize` judges like any other.
+pub const CUSTOM_CODE: &str = "custom.code";
+/// Largest `custom.code` source, in UTF-8 bytes (D-41).
+pub const MAX_CUSTOM_CODE_BYTES: usize = 64 << 10;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Graph {
     pub schema_version: u32,
@@ -317,6 +323,26 @@ fn build_catalog() -> Vec<BlockDef> {
                 &[],
             ),
         ),
+        block(
+            CUSTOM_CODE,
+            Action,
+            "Custom code",
+            "Runs your JavaScript `function decide(ctx)` in a sandbox (no network, no keys, \
+             fixed CPU, memory and time). It returns a list of intents such as \
+             {\"type\": \"propose_challenge\", \"stake\": \"2500000\"}; each one is checked \
+             against the agent's policy exactly like a built-in block's.",
+            &[("in", Any)],
+            &[],
+            params(
+                json!({ "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": MAX_CUSTOM_CODE_BYTES,
+                    "description": "JavaScript defining function decide(ctx); at most 64 KiB",
+                } }),
+                &["source"],
+            ),
+        ),
     ]
 }
 
@@ -405,6 +431,24 @@ pub fn validate(graph: &Graph) -> Vec<GraphError> {
                         InvalidParams,
                         Some(id),
                         format!("invalid params for {}: {message}", def.block_type),
+                    ));
+                }
+                // `maxLength` counts characters; the sandbox limit is bytes.
+                // Reported only when the schema did not already flag it.
+                let source = node.params.get("source").and_then(Value::as_str);
+                if def.block_type == CUSTOM_CODE
+                    && source.is_some_and(|s| {
+                        s.len() > MAX_CUSTOM_CODE_BYTES
+                            && s.chars().count() <= MAX_CUSTOM_CODE_BYTES
+                    })
+                {
+                    errors.push(err(
+                        InvalidParams,
+                        Some(id),
+                        format!(
+                            "invalid params for {CUSTOM_CODE}: source is larger than \
+                             {MAX_CUSTOM_CODE_BYTES} bytes"
+                        ),
                     ));
                 }
             }
@@ -661,6 +705,7 @@ mod tests {
                 "action.counter",
                 "action.reject",
                 "action.request_approval",
+                "custom.code",
             ]
         );
     }
@@ -677,6 +722,7 @@ mod tests {
                 BlockKind::Trigger => "trigger.",
                 BlockKind::Reasoning => "reason.",
                 BlockKind::Condition => "cond.",
+                BlockKind::Action if t == CUSTOM_CODE => "custom.",
                 BlockKind::Action => "action.",
             };
             assert!(t.starts_with(prefix), "{t}");
@@ -745,11 +791,62 @@ mod tests {
         assert_eq!(codes(&g), [UnknownNodeType]);
     }
 
+    fn code_graph(source: &str) -> Graph {
+        Graph {
+            schema_version: 1,
+            nodes: vec![
+                node("t", "trigger.schedule", json!({"every_secs": 60})),
+                node("code", CUSTOM_CODE, json!({ "source": source })),
+            ],
+            edges: vec![edge("t", "out", "code")],
+        }
+    }
+
     #[test]
-    fn custom_code_is_not_available_yet() {
+    fn custom_code_is_an_action_fed_by_anything() {
+        let src = "function decide(ctx) { return []; }";
+        assert_eq!(validate(&code_graph(src)), vec![]);
+        // After a reasoning step too (any input type).
         let mut g = valid();
-        g.nodes[1].node_type = "custom.code".into();
-        assert_eq!(codes(&g), [UnknownNodeType]);
+        g.nodes
+            .push(node("code", CUSTOM_CODE, json!({ "source": src })));
+        g.edges.push(edge("conv", "false", "code"));
+        assert_eq!(validate(&g), vec![]);
+        // Nothing may follow it.
+        let mut g = code_graph(src);
+        g.nodes.push(node("rej", "action.reject", json!({})));
+        g.edges.push(edge("code", "out", "rej"));
+        assert_eq!(codes(&g), [UnknownPort]);
+    }
+
+    #[test]
+    fn custom_code_source_is_required_and_capped_in_bytes() {
+        for params in [
+            json!({}),
+            json!({"source": ""}),
+            json!({"source": 5}),
+            json!({"source": "x", "extra": 1}),
+        ] {
+            let mut g = code_graph("x");
+            g.nodes[1].params = params.clone();
+            let got = codes(&g);
+            assert!(
+                !got.is_empty() && got.iter().all(|c| *c == InvalidParams),
+                "{params}: {got:?}"
+            );
+        }
+        assert_eq!(
+            validate(&code_graph(&"x".repeat(MAX_CUSTOM_CODE_BYTES))),
+            vec![]
+        );
+        assert_eq!(
+            codes(&code_graph(&"x".repeat(MAX_CUSTOM_CODE_BYTES + 1))),
+            [InvalidParams]
+        );
+        // 3-byte characters: under the character limit, over the byte limit.
+        let wide = "\u{20ac}".repeat(MAX_CUSTOM_CODE_BYTES / 3 + 1);
+        assert!(wide.chars().count() <= MAX_CUSTOM_CODE_BYTES);
+        assert_eq!(codes(&code_graph(&wide)), [InvalidParams]);
     }
 
     #[test]

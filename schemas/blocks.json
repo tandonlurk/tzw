@@ -411,5 +411,33 @@
       "type": "object"
     },
     "type": "action.request_approval"
+  },
+  {
+    "description": "Runs your JavaScript `function decide(ctx)` in a sandbox (no network, no keys, fixed CPU, memory and time). It returns a list of intents such as {\"type\": \"propose_challenge\", \"stake\": \"2500000\"}; each one is checked against the agent's policy exactly like a built-in block's.",
+    "inputs": [
+      {
+        "data_type": "any",
+        "port": "in"
+      }
+    ],
+    "kind": "action",
+    "label": "Custom code",
+    "outputs": [],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "description": "JavaScript defining function decide(ctx); at most 64 KiB",
+          "maxLength": 65536,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    },
+    "type": "custom.code"
   }
 ]
