@@ -35,3 +35,12 @@ Tests on `recovery`: backend 222, contracts 84, web 25.
 3. Browser pass of the seeded demo in the web app (the lead verified it with curl only).
 4. Blocked on owner: D-3 custody (Arc deploy, signer, Streams ingestion), xAI key + D-8, D-14, review D-22..D-35, D-11, SEC-02 before any tunnel.
 5. Then M3 Streams webhook, M5 full, M6 co-captain / voice / submission write-ups.
+
+## Second wave (from ef8c31d)
+| Name | Worktree | Branch | Owns | Dbs / ports | Status |
+|---|---|---|---|---|---|
+| cocaptain | `~/dev/hackathongs/worktrees/cocaptain` | `cocaptain` | `backend/`, `docs/api.md`, `tasks/backend.md` | `aen_cc_test`, `aen_cc_dev`, port 8092 | running |
+
+Scope: `CoCaptain` trait, rule-based suggestions from real data, Grok behind `XAI_API_KEY` (mock-tested), `suggestions` table, list / generate / accept / dismiss endpoints; accept goes through the normal validated config edit. No frontend yet.
+
+M5 sandbox spike: NOT started. Launching the specialist was denied by the session's permission check (D-11 is on the owner's review list and the spike would download a build tool). Needs the owner's go-ahead.
