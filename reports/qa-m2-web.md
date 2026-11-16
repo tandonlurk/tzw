@@ -30,3 +30,7 @@ Bugs fixed (web)
 Backend notes (not changed)
 - The browser cannot read the 403 body for a CORS/origin refusal, so the web app cannot distinguish it from a dead server; the hint covers both.
 - A second challenge could not be proposed while another was active between the same pair (even with PROPOSAL_COOLDOWN_SECS=0); fine, but approvals queue could not be filled with two at once in the demo.
+
+## Custom code pass (stage 5)
+Via UI: strategy written, dry-run showed `propose_challenge` 20.00 USDC Denied (above max per interaction) + log + fuel; saved v2 ("Saved as version 2", "runs custom code" badge); tick gave `proposal_denied` in agent activity. `for(;;){}` save refused with inline 422 ("did not run on a sample context: strategy used too much CPU"). Strategy that loops only on non-sample ctx saved as v3; ticks (simulated clock) recorded one `custom_code_failed` (shown with plain-language text) and further ticks completed normally. Test run is disabled while creating (no agent id yet).
+Note: `/dev/tick` without `now` did not run the schedule trigger twice within 60 s; used `now` offsets.

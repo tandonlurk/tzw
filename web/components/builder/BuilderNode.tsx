@@ -4,12 +4,16 @@ import { createContext, useContext } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import type { BlockDef } from "@/lib/api";
 import { ParamsForm } from "./ParamsForm";
+import { CodeEditor } from "./CodeEditor";
+import { CODE_BLOCK_TYPE } from "@/lib/customCode";
 
 export interface BuilderCtx {
   blocks: Map<string, BlockDef>;
   errors: Record<string, string[]>;
   setParams: (id: string, params: Record<string, unknown>) => void;
   remove: (id: string) => void;
+  /** Saved agent id (enables code Test run); null while creating. */
+  agentId: string | null;
 }
 
 export const BuilderContext = createContext<BuilderCtx | null>(null);
@@ -25,7 +29,7 @@ export function BuilderNode({ id, data }: NodeProps<FlowNode>) {
   const rows = def ? Math.max(def.inputs.length, def.outputs.length) : 0;
 
   return (
-    <div className={`bnode${errs.length ? " has-error" : ""}`}>
+    <div className={`bnode${errs.length ? " has-error" : ""}${data.blockType === CODE_BLOCK_TYPE ? " code-node" : ""}`}>
       <div className="head">
         <strong className={def ? `k-${def.kind}` : "neg"}>{def?.label ?? data.blockType}</strong>
         <button className="sm nodrag" onClick={() => ctx.remove(id)} aria-label={`Remove ${def?.label ?? id}`}>x</button>
@@ -45,7 +49,15 @@ export function BuilderNode({ id, data }: NodeProps<FlowNode>) {
             );
           })}
           <div className="body">
-            <ParamsForm schema={def.params_schema} params={data.params} onChange={(p) => ctx.setParams(id, p)} />
+            {data.blockType === CODE_BLOCK_TYPE ? (
+              <CodeEditor
+                source={typeof data.params.source === "string" ? data.params.source : ""}
+                onChange={(src) => ctx.setParams(id, { ...data.params, source: src })}
+                agentId={ctx.agentId}
+              />
+            ) : (
+              <ParamsForm schema={def.params_schema} params={data.params} onChange={(p) => ctx.setParams(id, p)} />
+            )}
           </div>
         </>
       ) : (

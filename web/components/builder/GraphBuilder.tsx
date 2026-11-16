@@ -14,6 +14,7 @@ import {
   type Connection,
   type Edge,
 } from "@xyflow/react";
+import { CODE_BLOCK_TYPE, STARTER_SOURCE } from "@/lib/customCode";
 import { api, isApiError, type BlockDef, type Graph, type GraphError } from "@/lib/api";
 import {
   canConnect,
@@ -98,7 +99,7 @@ function Inner({ blocks, initialGraph, storageId, onChange, serverErrors }: Prop
       setNodes((ns) => {
         const id = nextNodeId(ns.map((n) => n.id));
         const position = at ?? { x: 40 + (ns.length % 4) * 40, y: 40 + ns.length * 30 };
-        return [...ns, { id, type: "block", position, data: { blockType: type, params: defaultParams(blockMap.get(type)) } }];
+        return [...ns, { id, type: "block", position, data: { blockType: type, params: type === CODE_BLOCK_TYPE ? { ...defaultParams(blockMap.get(type)), source: STARTER_SOURCE } : defaultParams(blockMap.get(type)) } }];
       });
     },
     [setNodes, blockMap],
@@ -161,13 +162,13 @@ function Inner({ blocks, initialGraph, storageId, onChange, serverErrors }: Prop
   }, [shownErrors]);
   const graphErrors = shownErrors.filter((e) => !e.node_id);
 
-  const ctx = useMemo(() => ({ blocks: blockMap, errors: errorsByNode, setParams, remove }), [blockMap, errorsByNode, setParams, remove]);
+  const ctx = useMemo(() => ({ blocks: blockMap, errors: errorsByNode, setParams, remove, agentId: storageId === "new" ? null : storageId }), [blockMap, errorsByNode, setParams, remove, storageId]);
 
   const kinds = ["trigger", "reasoning", "condition", "action"] as const;
 
   return (
     <BuilderContext.Provider value={ctx}>
-      <div className="builder">
+      <div className={`builder${nodes.some((n) => n.data.blockType === CODE_BLOCK_TYPE) ? " has-code" : ""}`}>
         <div className="palette card">
           <div className="dim" style={{ fontSize: ".8rem" }}>Drag a block onto the canvas, or click to add.</div>
           {blocks.length === 0 && <div className="dim">The backend returned no blocks.</div>}

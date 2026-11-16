@@ -23,6 +23,7 @@ import type {
   SuggestionStatus,
   GenerateSuggestionsResult,
   Template,
+  TestRun,
   Wallet,
 } from "./types";
 
@@ -156,6 +157,8 @@ export const api = {
     post<Collaboration>(`/collaborations/${encodeURIComponent(id)}/fund`, ownerApproved ? { owner_approved: true } : {}),
   cancelCollaboration: (id: string, reason?: string) =>
     post<Collaboration>(`/collaborations/${encodeURIComponent(id)}/cancel`, reason ? { reason } : {}),
+  testRunCode: (agentId: string, source?: string) =>
+    post<TestRun>(`/agents/${encodeURIComponent(agentId)}/code/test-run`, source === undefined ? {} : { source }),
   getPortfolio: () => get<Portfolio>("/stats/portfolio"),
   devTick: () => post<TickReport>("/dev/tick", {}),
 };
