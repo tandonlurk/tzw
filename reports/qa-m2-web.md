@@ -1,17 +1,18 @@
-# QA M2 web
+# QA: web M2/M3 pass (web-m3)
 
-Verified in Chrome against the real backend (fake market): approvals queue (approve both sides -> active), settle via /dev/tick, dashboard totals (allocated 200.00, per-agent P&L +15/-15, outcomes 5 settled/2 cancelled) equal `/stats/portfolio`, interaction detail, builder add/connect/incompatible.
+Run: fresh db, API :8094 (fake market), web :3013, backend/README Demo script incl. co-captain rounds, one Chrome tab (closed).
 
-Not browser-tested: reject, approve-then-cancelled message, agent detail challenge list, create-form description prefill.
+Verified in browser
+- Dashboard: pending co-captain count banner (2) links to /cocaptain; P&L chart by agent (-7.50/+7.50), allocation, outcomes (3 settled) match API.
+- Co-captain: both rule suggestions listed; lower_max_stake shows Max per challenge 10.00 -> 5.00; approval-threshold one shows loosens-control warning. Accept created agent version 2 (Activity shows "suggestion accepted" and "configuration changed (version 2)").
+- Agent detail (Skeptic): version 2, 0 of 3 won, unrealized "n/a", version history v2 diff "Max per interaction 10.00 -> 5.00".
+- Edit: max_per_interaction 999 > aggregate gave server 422 shown inline (`policy.max_per_interaction ... must not exceed`); fixing to 4 saved, landed on `?saved=3`, "Saved as version 3" notice and v3 in history.
+- Interaction detail: decision trace shows "(config v1)" for pre-edit runs; Approvals (empty state after approval), Challenges list, Activity all render.
 
-## Backend/API observations (no edits made)
-1. Negotiation summaries contain raw units ("stake 10000000 minor units", "at or above 5000"), shown as-is on the detail page.
-   `curl -s $API/interactions/$ID | jq '.negotiation[].summary'`
-2. Agents with a lowered `approval_threshold` only ask for approval when conviction is high (stake sizing stays at the threshold otherwise), so a demo needs `POST /dev/fake-market {"move_bps":700}` before the propose tick.
-3. Simulated clock jumps (`/dev/tick {"now":...}`) of many minutes cancel in-flight negotiations ("funding deadline passed"); tick in small steps.
-4. With one open challenge on the fake market, no further proposals are made (not an error, but looks like agents are idle).
+Bugs fixed
+- Dashboard "Settled / wins" showed 6 for 3 challenges (counted per side); relabelled with a note.
 
-## web-m2b follow-up
-Browser-verified (real backend, fake market): reject notice, approve-then-cancelled notice (reproduced by deallocating the agent after the approval was requested; fixed doubled period), agent-detail challenge list (open/history cards), template description prefill, per-agent P&L chart.
-"1 Issue" badge: hydration mismatch from a browser extension (Grammarly attrs on `<body>`), not an app bug; suppressed on body only.
-Backend/API gap: `/stats/portfolio` already has per-agent cumulative series, so no new endpoint is needed. Note: the portfolio series has one event per settled challenge, so a fresh demo shows single-point lines (held to the chart edge).
+Observations (not fixed)
+- Agent detail repeats identical-looking challenge cards (same market/outcome); correct, just visually repetitive.
+- Edit page: mouse wheel over the builder canvas zooms the canvas instead of scrolling the page.
+- Reject path and ledger/versions after simulated-clock jumps not re-tested this pass.
