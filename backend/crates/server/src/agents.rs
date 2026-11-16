@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 use sqlx::{PgConnection, PgExecutor, PgPool};
 use uuid::Uuid;
 
+use crate::custom_code;
 use crate::error::ApiError;
 use crate::extract::{ApiJson, ApiPath};
 use crate::ledger_db::{self, PostOutcome};
@@ -18,6 +19,7 @@ use crate::models::{
     Agent, AgentInput, AgentVersion, AmountBody, Balances, LedgerEntry, Stats, StatusBody,
     display_usdc,
 };
+use crate::state::AppState;
 
 #[derive(sqlx::FromRow)]
 struct AgentRow {
@@ -189,15 +191,19 @@ pub async fn get(
 }
 
 pub async fn create(
-    State(pool): State<PgPool>,
+    State(state): State<AppState>,
     ApiJson(input): ApiJson<AgentInput>,
 ) -> Result<(StatusCode, Json<Agent>), ApiError> {
+    let pool = &state.pool;
     let id = Uuid::new_v4();
+    let input = validated(input)?;
+    // Before the transaction: the dry run holds no connection.
+    custom_code::check_on_save(state.sandbox.as_ref(), &input, id, &state.settings).await?;
     let mut tx = pool.begin().await?;
     insert_agent(&mut tx, id, input).await?;
     tx.commit().await?;
 
-    Ok((StatusCode::CREATED, Json(load_one(&pool, id).await?)))
+    Ok((StatusCode::CREATED, Json(load_one(pool, id).await?)))
 }
 
 /// Validates `input` and writes a new agent (version 1) with the given id.
@@ -232,15 +238,18 @@ pub(crate) async fn insert_agent(
 }
 
 pub async fn update(
-    State(pool): State<PgPool>,
+    State(state): State<AppState>,
     ApiPath(id): ApiPath<Uuid>,
     ApiJson(input): ApiJson<AgentInput>,
 ) -> Result<Json<Agent>, ApiError> {
+    let pool = &state.pool;
+    let input = validated(input)?;
+    custom_code::check_on_save(state.sandbox.as_ref(), &input, id, &state.settings).await?;
     let mut tx = pool.begin().await?;
     apply_update(&mut tx, id, input).await?;
     tx.commit().await?;
 
-    Ok(Json(load_one(&pool, id).await?))
+    Ok(Json(load_one(pool, id).await?))
 }
 
 /// The one way an agent's configuration changes: validates `input`, writes a

@@ -6,6 +6,7 @@ rust-version.workspace = true
 
 [dependencies]
 aen-core = { path = "../core" }
+aen-sandbox = { path = "../sandbox" }
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true

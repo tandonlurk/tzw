@@ -7,14 +7,17 @@
 //! Conditions here are owner preferences, never security.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use aen_core::authorize::Intent;
 use aen_core::challenge::{ChallengeTerms, Party};
-use aen_core::graph::{self, Edge, Graph, Node};
+use aen_core::graph::{self, CUSTOM_CODE, Edge, Graph, Node};
 use aen_core::money::Money;
+use aen_sandbox::Sandbox;
 use serde::Serialize;
 use serde_json::{Value, json};
 
+use crate::custom_code;
 use crate::market::MarketView;
 use crate::models::{display_bps, display_usdc};
 use crate::reasoner::{AgentCtx, ReasonRequest, Reasoner, ReasonerOutput, Task};
@@ -53,6 +56,30 @@ pub struct RunResult {
     /// Set when the run stopped early (reasoner failure, rejected output,
     /// invalid graph). No intents are returned in that case.
     pub error: Option<String>,
+    /// Set when a `custom.code` block ran (or could not).
+    pub code: Option<CodeRun>,
+}
+
+impl RunResult {
+    /// What produced the decision, for `agent_runs.reasoner`.
+    pub fn engine(&self, reasoner: &'static str) -> &'static str {
+        if self.code.is_some() {
+            custom_code::ENGINE
+        } else {
+            reasoner
+        }
+    }
+}
+
+/// What a `custom.code` block did, for the audit trail.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CodeRun {
+    pub node_id: String,
+    pub fuel_used: Option<u64>,
+    /// The strategy's `console.*` lines (capped by the sandbox).
+    pub logs: Vec<String>,
+    pub error: Option<String>,
+    pub module_sha256: Option<String>,
 }
 
 pub struct RunInput<'a> {
@@ -66,6 +93,8 @@ pub struct RunInput<'a> {
     pub incoming: Option<&'a ChallengeTerms>,
     pub party: Party,
     pub funding_window_secs: i64,
+    /// Runs `custom.code` blocks; `None` = unavailable on this server.
+    pub sandbox: Option<&'a Arc<Sandbox>>,
 }
 
 /// What flows along an edge.
@@ -140,6 +169,7 @@ struct Walker<'a> {
     nodes: BTreeMap<&'a str, &'a Node>,
     intents: Vec<PlannedIntent>,
     trace: Vec<TraceStep>,
+    code: Option<CodeRun>,
 }
 
 impl<'a> Walker<'a> {
@@ -351,7 +381,162 @@ impl<'a> Walker<'a> {
                 }
                 Ok(None)
             }
+            CUSTOM_CODE => {
+                self.run_code(node).await?;
+                Ok(None)
+            }
             other => Err(format!("unknown block type {other}")),
+        }
+    }
+
+    /// Runs the node's JavaScript in the sandbox and plans its intents. Any
+    /// sandbox error, or an intent this flow cannot use, ends the run with no
+    /// intents (fail closed).
+    async fn run_code(&mut self, node: &Node) -> Result<(), String> {
+        let mut code = CodeRun {
+            node_id: node.id.clone(),
+            fuel_used: None,
+            logs: Vec::new(),
+            error: None,
+            module_sha256: None,
+        };
+        let result = self.run_code_inner(node, &mut code).await;
+        if let Err(e) = &result {
+            code.error = Some(e.clone());
+        }
+        self.code = Some(code);
+        result
+    }
+
+    async fn run_code_inner(&mut self, node: &Node, code: &mut CodeRun) -> Result<(), String> {
+        let source = node
+            .params
+            .get("source")
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("node {} has no source", node.id))?;
+        let Some(sandbox) = self.input.sandbox else {
+            return Err(format!(
+                "custom code could not run: {}",
+                custom_code::UNAVAILABLE
+            ));
+        };
+        code.module_sha256 = Some(sandbox.module_sha256().to_owned());
+        let ctx = custom_code::build_ctx(self.input);
+        let now_ms = self.input.now.saturating_mul(1000);
+        let seed = custom_code::seed(self.input.agent.id, now_ms, self.input.trigger);
+        let out = sandbox
+            .run_blocking(source.to_owned(), ctx, now_ms, seed)
+            .await
+            .map_err(|e| format!("custom code failed: {e}"))?;
+        code.fuel_used = Some(out.fuel_used);
+        code.logs = out.logs.clone();
+        let mut summary = format!(
+            "Custom code returned {} intent(s) using {} fuel.",
+            out.intents.len(),
+            out.fuel_used
+        );
+        if !out.logs.is_empty() {
+            let logs: String = out.logs.join(" | ").chars().take(300).collect();
+            summary.push_str(&format!(" Logs: {logs}"));
+        }
+        self.note(node, summary);
+        for intent in out.intents {
+            let planned = self.plan_code_intent(intent)?;
+            self.intents.push(planned);
+        }
+        Ok(())
+    }
+
+    /// Turns one intent from custom code into a planned intent with terms,
+    /// using only what the flow allows (D-52):
+    /// - looking for opportunities: `propose_challenge` (the claim is the
+    ///   rule-based template shown as `ctx.proposal`, with the code's stake)
+    ///   or `reject` (do nothing);
+    /// - answering a challenge: `accept_challenge` at the stake on the table,
+    ///   `counter_offer` with a different stake, or `reject`.
+    fn plan_code_intent(&self, intent: Intent) -> Result<PlannedIntent, String> {
+        let name = serde_json::to_value(intent)
+            .ok()
+            .and_then(|v| v.get("type").and_then(Value::as_str).map(str::to_owned))
+            .unwrap_or_default();
+        let unusable = |why: &str| Err(format!("custom code returned {name}, {why}"));
+        let check = |terms: &ChallengeTerms| {
+            let errors = terms.validate();
+            if errors.is_empty() {
+                Ok(())
+            } else {
+                let list: Vec<String> = errors.iter().map(ToString::to_string).collect();
+                Err(format!(
+                    "custom code {name}: invalid terms: {}",
+                    list.join("; ")
+                ))
+            }
+        };
+        match (intent, self.input.incoming) {
+            (Intent::Reject, _) => Ok(PlannedIntent {
+                intent,
+                terms: None,
+                ask_owner: false,
+                summary: "My custom code declined.".into(),
+            }),
+            (Intent::ProposeChallenge { stake }, None) => {
+                let mut terms = custom_code::proposal_template(self.input).ok_or_else(|| {
+                    "no challenge terms could be formed for this market".to_owned()
+                })?;
+                terms.stake = stake;
+                check(&terms)?;
+                Ok(PlannedIntent {
+                    intent,
+                    summary: format!(
+                        "My custom code chose to stake {} on this claim.",
+                        crate::lifecycle::stake_text(stake)
+                    ),
+                    terms: Some(terms),
+                    ask_owner: false,
+                })
+            }
+            (Intent::AcceptChallenge { stake }, Some(incoming)) => {
+                if stake != incoming.stake {
+                    return unusable("but its stake must equal the stake on the table");
+                }
+                Ok(PlannedIntent {
+                    intent,
+                    terms: None,
+                    ask_owner: false,
+                    summary: "My custom code accepted the terms.".into(),
+                })
+            }
+            (Intent::CounterOffer { stake }, Some(incoming)) => {
+                if stake == incoming.stake {
+                    return unusable("but a counter-offer must change the stake");
+                }
+                let terms = ChallengeTerms {
+                    stake,
+                    ..incoming.clone()
+                };
+                check(&terms)?;
+                Ok(PlannedIntent {
+                    intent,
+                    summary: format!(
+                        "My custom code offered {} per side instead.",
+                        crate::lifecycle::stake_text(stake)
+                    ),
+                    terms: Some(terms),
+                    ask_owner: false,
+                })
+            }
+            (Intent::ProposeChallenge { .. }, Some(_)) => {
+                unusable("which cannot answer a received challenge")
+            }
+            (Intent::AcceptChallenge { .. } | Intent::CounterOffer { .. }, None) => {
+                unusable("but there is no challenge to answer")
+            }
+            (Intent::CommitFunds { .. }, _) => {
+                unusable("but stakes are committed by the runtime once both sides agree")
+            }
+            (Intent::ProposeCollaboration { .. }, _) => {
+                unusable("which custom code cannot start yet")
+            }
         }
     }
 
@@ -400,11 +585,13 @@ pub async fn run(reasoner: &dyn Reasoner, input: &RunInput<'_>) -> RunResult {
             .collect(),
         intents: Vec::new(),
         trace: Vec::new(),
+        code: None,
     };
     let fail = |walker: Walker<'_>, error: String| RunResult {
         intents: Vec::new(),
         trace: walker.trace,
         error: Some(error),
+        code: walker.code,
     };
 
     // Graphs are validated on save; validate again so a stored graph that no
@@ -445,6 +632,7 @@ pub async fn run(reasoner: &dyn Reasoner, input: &RunInput<'_>) -> RunResult {
         intents: walker.intents,
         trace: walker.trace,
         error: None,
+        code: walker.code,
     }
 }
 
@@ -528,6 +716,7 @@ mod tests {
                 Party::A
             },
             funding_window_secs: 300,
+            sandbox: None,
         };
         run(reasoner, &input).await
     }
@@ -748,5 +937,174 @@ mod tests {
         .await;
         assert!(r.intents.is_empty());
         assert!(r.error.unwrap().starts_with("graph is not valid"));
+    }
+
+    fn code_graph(trigger: &str, source: &str) -> Graph {
+        let params = if trigger == TRIGGER_CHALLENGE_RECEIVED {
+            json!({})
+        } else {
+            json!({"every_secs": 60})
+        };
+        graph(json!({
+            "schema_version": 1,
+            "nodes": [
+                {"id": "t", "type": trigger, "params": params},
+                {"id": "code", "type": "custom.code", "params": {"source": source}}
+            ],
+            "edges": [{"from": "t", "from_port": "out", "to": "code", "to_port": "in"}]
+        }))
+    }
+
+    /// Runs `source` as the agent's whole flow; `None` if the sandbox guest
+    /// is not built (the test is skipped).
+    async fn run_code(
+        source: &str,
+        incoming: Option<&ChallengeTerms>,
+        with_sandbox: bool,
+    ) -> Option<RunResult> {
+        let sandbox = crate::custom_code::shared_sandbox();
+        if sandbox.is_none() && with_sandbox {
+            eprintln!("SKIP: sandbox guest not built");
+            return None;
+        }
+        let trigger = if incoming.is_some() {
+            TRIGGER_CHALLENGE_RECEIVED
+        } else {
+            TRIGGER_SCHEDULE
+        };
+        let g = code_graph(trigger, source);
+        assert!(graph::validate(&g).is_empty());
+        let (a, view) = (agent("Follow momentum."), market(300));
+        let input = RunInput {
+            graph: &g,
+            trigger,
+            agent: &a,
+            market: &view,
+            now: 1_000,
+            incoming,
+            party: if incoming.is_some() {
+                Party::B
+            } else {
+                Party::A
+            },
+            funding_window_secs: 300,
+            sandbox: if with_sandbox { sandbox.as_ref() } else { None },
+        };
+        Some(run(&RuleBasedReasoner, &input).await)
+    }
+
+    #[tokio::test]
+    async fn custom_code_proposes_with_the_template_claim_and_its_stake() {
+        let src = r#"function decide(ctx) {
+            console.log(ctx.proposal.direction, ctx.balances.available);
+            return [{ type: "propose_challenge", stake: "2500000" }]; }"#;
+        let Some(r) = run_code(src, None, true).await else {
+            return;
+        };
+        assert_eq!(r.error, None);
+        assert_eq!(r.engine("rule_based"), "custom_code");
+        let planned = &r.intents[0];
+        assert_eq!(
+            planned.intent,
+            Intent::ProposeChallenge {
+                stake: m(2_500_000)
+            }
+        );
+        let terms = planned.terms.as_ref().unwrap();
+        assert_eq!(terms.stake, m(2_500_000));
+        assert_eq!(terms.direction, Direction::Above);
+        assert!(terms.start_ts > 1_000);
+        let code = r.code.unwrap();
+        assert_eq!(code.logs, vec!["above 100000000"]);
+        assert!(code.fuel_used.unwrap() > 0);
+        assert!(r.trace.last().unwrap().summary.contains("1 intent(s)"));
+    }
+
+    #[tokio::test]
+    async fn custom_code_answers_a_challenge() {
+        let terms = bull_proposal(300).await.intents[0].terms.clone().unwrap();
+        let answer = |src: String| {
+            let terms = terms.clone();
+            async move { run_code(&src, Some(&terms), true).await }
+        };
+        let accept =
+            "function decide(ctx) { return [{type:'accept_challenge', stake: ctx.incoming.terms.stake}]; }"
+                .to_owned();
+        let Some(r) = answer(accept).await else {
+            return;
+        };
+        assert_eq!(
+            r.intents[0].intent,
+            Intent::AcceptChallenge { stake: terms.stake }
+        );
+
+        let r = answer(
+            "function decide() { return [{type:'counter_offer', stake:'1000000'}]; }".into(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(r.intents[0].terms.as_ref().unwrap().stake, m(1_000_000));
+        assert_eq!(
+            r.intents[0].terms.as_ref().unwrap().threshold,
+            terms.threshold
+        );
+
+        let r = answer("function decide() { return [{type:'reject'}]; }".into())
+            .await
+            .unwrap();
+        assert_eq!(r.intents[0].intent, Intent::Reject);
+
+        // Accepting at another stake, or proposing, is not an answer.
+        for bad in [
+            "function decide() { return [{type:'accept_challenge', stake:'1'}]; }",
+            "function decide() { return [{type:'propose_challenge', stake:'1'}]; }",
+            "function decide(ctx) { return [{type:'counter_offer', stake: ctx.incoming.terms.stake}]; }",
+        ] {
+            let r = answer(bad.into()).await.unwrap();
+            assert!(r.intents.is_empty(), "{bad}");
+            assert!(r.error.is_some(), "{bad}");
+        }
+    }
+
+    #[tokio::test]
+    async fn custom_code_failures_produce_no_intents() {
+        for (src, want) in [
+            ("function decide() { for(;;){} }", "too much CPU"),
+            ("function decide() { throw new Error('boom'); }", "boom"),
+            (
+                "function decide() { return [{type:'propose_challenge', stake: 5}]; }",
+                "invalid intents",
+            ),
+            (
+                "function decide() { return [{type:'propose_challenge', stake:'0'}]; }",
+                "invalid terms",
+            ),
+            (
+                "function decide() { return [{type:'commit_funds', interaction_type:'challenge', stake:'1'}]; }",
+                "committed by the runtime",
+            ),
+            (
+                "function decide() { return [{type:'accept_challenge', stake:'1'}]; }",
+                "no challenge to answer",
+            ),
+        ] {
+            let Some(r) = run_code(src, None, true).await else {
+                return;
+            };
+            assert!(r.intents.is_empty(), "{src}");
+            let error = r.error.unwrap();
+            assert!(error.contains(want), "{src}: {error}");
+            assert_eq!(r.code.unwrap().error.as_deref(), Some(error.as_str()));
+        }
+    }
+
+    #[tokio::test]
+    async fn custom_code_without_a_sandbox_is_a_clear_error() {
+        let r = run_code("function decide() { return []; }", None, false)
+            .await
+            .unwrap();
+        assert!(r.intents.is_empty());
+        assert!(r.error.as_deref().unwrap().contains("not available"));
+        assert_eq!(r.engine("rule_based"), "custom_code");
     }
 }

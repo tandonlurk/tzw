@@ -3,6 +3,7 @@
 pub mod agents;
 pub mod cocaptain;
 pub mod collaborations;
+pub mod custom_code;
 pub mod demo;
 pub mod error;
 pub mod extract;
@@ -51,6 +52,7 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
         .route("/agents/{id}/ledger", get(agents::ledger_entries))
         .route("/agents/{id}/allocate", post(agents::allocate))
         .route("/agents/{id}/deallocate", post(agents::deallocate))
+        .route("/agents/{id}/code/test-run", post(custom_code::test_run))
         .route("/templates", get(misc::templates))
         .route("/graph/blocks", get(misc::blocks))
         .route("/graph/validate", post(misc::validate_graph))

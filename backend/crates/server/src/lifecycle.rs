@@ -149,7 +149,7 @@ pub struct AgentRec {
 }
 
 impl AgentRec {
-    fn ctx(&self) -> AgentCtx {
+    pub fn ctx(&self) -> AgentCtx {
         AgentCtx {
             id: self.id,
             name: self.name.clone(),
@@ -809,6 +809,7 @@ async fn discover_one(
             incoming: None,
             party: Party::A,
             funding_window_secs: settings.funding_window_secs,
+            sandbox: state.sandbox.as_ref(),
         },
     )
     .await;
@@ -830,17 +831,30 @@ async fn discover_one(
         trigger,
         None,
         &result,
-        state.reasoner.name(),
+        result.engine(state.reasoner.name()),
         now,
     )
     .await?;
     if let Some(error) = &result.error {
+        let (kind, summary) = match &result.code {
+            Some(_) => (
+                "custom_code_failed",
+                format!(
+                    "\"{}\"'s {error}. Nothing was proposed and no funds moved.",
+                    agent.name
+                ),
+            ),
+            None => (
+                "reasoning_failed",
+                format!("\"{}\" could not form a proposal: {error}", agent.name),
+            ),
+        };
         record_once(
             &mut tx,
             agent.id,
-            "reasoning_failed",
-            format!("\"{}\" could not form a proposal: {error}", agent.name),
-            json!({ "run_id": run_id }),
+            kind,
+            summary,
+            json!({ "run_id": run_id, "code": result.code }),
         )
         .await?;
         report.errors.push(format!("reasoner: {error}"));
@@ -1096,6 +1110,7 @@ async fn respond_one(
             }],
             trace: Vec::new(),
             error: None,
+            code: None,
         }
     } else {
         let own_flow = graph_exec::find_trigger(&responder.graph, TRIGGER_CHALLENGE_RECEIVED);
@@ -1118,6 +1133,7 @@ async fn respond_one(
                 incoming: Some(&terms),
                 party,
                 funding_window_secs: state.settings.funding_window_secs,
+                sandbox: state.sandbox.as_ref(),
             },
         )
         .await
@@ -1138,20 +1154,34 @@ async fn respond_one(
         TRIGGER_CHALLENGE_RECEIVED,
         Some(id),
         &result,
-        state.reasoner.name(),
+        result.engine(state.reasoner.name()),
         now,
     )
     .await?;
     if let Some(error) = &result.error {
+        let (kind, summary) = match &result.code {
+            Some(_) => (
+                "custom_code_failed",
+                format!(
+                    "\"{}\" could not answer a challenge: {error}. No funds moved; it will try \
+                     again.",
+                    responder.name
+                ),
+            ),
+            None => (
+                "reasoning_failed",
+                format!(
+                    "\"{}\" could not answer a challenge: {error} It will try again.",
+                    responder.name
+                ),
+            ),
+        };
         record_once(
             &mut tx,
             responder.id,
-            "reasoning_failed",
-            format!(
-                "\"{}\" could not answer a challenge: {error} It will try again.",
-                responder.name
-            ),
-            json!({ "run_id": run_id, "interaction_id": id }),
+            kind,
+            summary,
+            json!({ "run_id": run_id, "interaction_id": id, "code": result.code }),
         )
         .await?;
         report.errors.push(format!("reasoner: {error}"));

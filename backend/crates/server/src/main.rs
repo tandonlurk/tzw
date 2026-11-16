@@ -150,12 +150,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let settings_token_required = settings.guard.api_token.is_some();
     let allowed_hosts = settings.guard.allowed_hosts.clone();
     let quicknode_on = settings.quicknode.is_some();
+    // Compiled once here and shared; a missing guest module is logged and
+    // only disables custom.code blocks.
+    let sandbox = aen_server::custom_code::shared_sandbox();
+    tracing::info!(
+        sandbox = sandbox
+            .as_ref()
+            .map_or("unavailable", |s| s.module_sha256()),
+        "custom code sandbox"
+    );
     let state = AppState {
         pool,
         market,
         fake_market,
         reasoner,
         cocaptain,
+        sandbox,
         settings,
     };
 
