@@ -616,6 +616,11 @@ pub struct TickBody {
     /// Simulated clock, accepted only with the fake market: real market data
     /// must never be combined with a made-up time.
     pub now: Option<DateTime<Utc>>,
+    /// Lets a simulated `now` pass the funding deadline of challenges that
+    /// are still being negotiated or approved (they expire, as they would in
+    /// real time). Without it such a jump is refused.
+    #[serde(default)]
+    pub allow_expiry: bool,
 }
 
 /// Runs one lifecycle tick now. Demo / test trigger; the interval scheduler
@@ -632,7 +637,30 @@ pub async fn dev_tick(
                 "`now` can only be set when the server runs on the fake market",
             )]));
         }
-        Some(now) => now,
+        Some(now) => {
+            // A guard on the dev clock only, not a change to the deadline
+            // rule: real ticks expire unfunded challenges exactly as before.
+            let (at_risk, earliest): (i64, Option<DateTime<Utc>>) = sqlx::query_as(
+                "SELECT COUNT(*), MIN(start_ts) FROM interactions WHERE state IN ('proposed', \
+                 'negotiating', 'accepted', 'awaiting_approval') AND start_ts <= $1",
+            )
+            .bind(now)
+            .fetch_one(&state.pool)
+            .await?;
+            if at_risk > 0 && !body.allow_expiry {
+                let deadline = earliest.map(|t| t.to_rfc3339()).unwrap_or_default();
+                return Err(ApiError::conflict(
+                    "clock_jump_would_expire",
+                    format!(
+                        "{at_risk} challenge(s) are not funded yet and their funding deadline \
+                         (earliest {deadline}) is before this simulated time, so they would \
+                         expire. Tick without `now` (and decide pending approvals) until they \
+                         are active, or send `allow_expiry: true`."
+                    ),
+                ));
+            }
+            now
+        }
         None => Utc::now(),
     };
     Ok(Json(lifecycle::tick(&state, now).await?))
