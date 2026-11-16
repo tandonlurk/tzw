@@ -2,13 +2,15 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { api, isApiError, type Agent, type ApiError } from "@/lib/api";
 import { formatMoney, parseMoney } from "@/lib/money";
 import { useAsync } from "@/lib/useAsync";
-import { Async, Empty, ErrorBanner, EnvBadge, Money, StatusBadge, Tile } from "@/components/ui";
+import { Async, Empty, ErrorBanner, EnvBadge, Money, StatusBadge, Tile, formatTs } from "@/components/ui";
 import { LedgerTable } from "@/components/LedgerTable";
 import { InteractionCard } from "@/components/Interactions";
 import { isOpen } from "@/lib/interactions";
+import { interactionCounts, versionHistory, winRateText } from "@/lib/agentView";
 
 export default function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -16,19 +18,30 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
   const ledger = useAsync(() => api.getAgentLedger(id), `ledger:${id}`);
 
   const interactions = useAsync(() => api.listInteractions({ agent_id: id }), `interactions:${id}`);
+  const versions = useAsync(() => api.listAgentVersions(id), `versions:${id}`);
+  const activity = useAsync(() => api.listActivity({ agent_id: id, limit: 20 }), `activity:${id}`);
+  const saved = useSearchParams().get("saved");
 
   function refresh() {
     interactions.reload();
+    versions.reload();
+    activity.reload();
     agent.reload();
     ledger.reload();
   }
 
   return (
     <div>
+      {saved && /^\d+$/.test(saved) && (
+        <div className="notice" role="status" style={{ marginBottom: "1rem" }}>
+          Saved as version {saved}. Earlier versions, past challenges and the ledger were not changed.
+        </div>
+      )}
       <Async state={agent} what="agent">
-        {(a) => <Detail agent={a} onChanged={refresh} />}
+        {(a) => <Detail agent={a} onChanged={refresh} active={interactions.data ? interactionCounts(interactions.data).active : null} />}
       </Async>
       <h2>Challenges</h2>
+      <div className="dim">Collaborations are not available yet; only challenges exist in this version of the product.</div>
       <Async state={interactions} what="challenges">
         {(list) => {
           const open = list.filter((i) => isOpen(i.state));
@@ -41,13 +54,40 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           );
         }}
       </Async>
-      <h2>Ledger</h2>
+      <h2>Wallet transactions</h2>
       <Async state={ledger} what="ledger">{(entries) => <LedgerTable entries={entries} />}</Async>
+      <h2>Recent activity</h2>
+      <Async state={activity} what="activity">
+        {(items) => items.length === 0 ? <Empty>No activity for this agent yet.</Empty> : (
+          <div className="stack">
+            {items.map((it) => (
+              <div key={it.id} className="card">
+                <div className="row spread"><span>{it.summary}</span><span className="dim">{formatTs(it.ts)}</span></div>
+                {it.interaction_id && <Link href={`/interactions/${it.interaction_id}`}>Open challenge</Link>}
+              </div>
+            ))}
+          </div>
+        )}
+      </Async>
+      <h2>Version history</h2>
+      <div className="dim" style={{ marginBottom: ".5rem" }}>Each save creates a new version. Past decisions keep the version they ran under (see Decision trace on a challenge).</div>
+      <Async state={versions} what="versions">
+        {(list) => (
+          <div className="stack">
+            {versionHistory(list).map(({ v, changes }) => (
+              <div key={v.version} className="card">
+                <div className="row spread"><strong>Version {v.version}</strong><span className="dim">{formatTs(v.created_at)}</span></div>
+                {changes.length > 0 ? <ul>{changes.map((c, k) => <li key={k}>{c}</li>)}</ul> : <div className="dim">{v.version === 1 ? "Initial version." : "No config, policy or graph change."}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      </Async>
     </div>
   );
 }
 
-function Detail({ agent: a, onChanged }: { agent: Agent; onChanged: () => void }) {
+function Detail({ agent: a, onChanged, active }: { agent: Agent; onChanged: () => void; active: number | null }) {
   const [amount, setAmount] = useState("10");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
@@ -73,7 +113,7 @@ function Detail({ agent: a, onChanged }: { agent: Agent; onChanged: () => void }
     run(() => (kind === "allocate" ? api.allocate(a.id, minor) : api.deallocate(a.id, minor)));
   }
 
-  const winRate = a.stats.settled > 0 ? `${a.stats.wins} of ${a.stats.settled} won` : "No settled interactions";
+  const winRate = winRateText(a.stats.wins, a.stats.settled);
 
   return (
     <div className="stack">
@@ -96,7 +136,9 @@ function Detail({ agent: a, onChanged }: { agent: Agent; onChanged: () => void }
         <Tile label="Available"><Money value={a.balances.available} /></Tile>
         <Tile label="Committed"><Money value={a.balances.committed} /></Tile>
         <Tile label="Realized P&L"><Money value={a.stats.realized_pnl} signed tone /></Tile>
+        <Tile label="Unrealized P&L" note="Not computed: no fair mark for an unresolved challenge">n/a</Tile>
         <Tile label="Settled" note={winRate}>{a.stats.settled}</Tile>
+        <Tile label="Active challenges">{active === null ? "..." : active}</Tile>
       </div>
       {a.wallet_address && <div className="dim">Wallet: <span className="mono">{a.wallet_address}</span></div>}
 
