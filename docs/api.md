@@ -2,7 +2,14 @@
 
 Backend owns this file. Frontend builds against it. Change it in the same commit as the code.
 
-Conventions: base `http://localhost:8080/api`; JSON; ids are UUID strings; timestamps RFC 3339; **money is a string of integer USDC minor units** (6 decimals, `"1500000"` = 1.5 USDC); `env` is `"arc_testnet"` or `"simulated"`; ratios are integer basis points (0–10000). Errors: HTTP 4xx/5xx with `{"error":{"code":"...","message":"...","details":[...]}}`. Single demo user, no auth (D-9).
+Conventions: base `http://localhost:8080/api`; JSON; ids are UUID strings; timestamps RFC 3339; **money is a string of integer USDC minor units** (6 decimals, `"1500000"` = 1.5 USDC); `env` is `"arc_testnet"` or `"simulated"`; ratios are integer basis points (0–10000). Errors: HTTP 4xx/5xx with `{"error":{"code":"...","message":"...","details":[...]}}`. Single demo user (D-9).
+
+Request guard (SEC-02), always on, checked before any handler:
+- **Host**: only `localhost`, `127.0.0.1`, `[::1]` (any port) plus `ALLOWED_HOSTS` are served; anything else is **403** `host_not_allowed` (DNS rebinding). A request without a Host header (not a browser) passes.
+- **Origin**: a request carrying an `Origin` other than `CORS_ORIGIN` (default `http://localhost:3000`) is **403** `origin_not_allowed`, whatever the method (CSRF). No `Origin` (curl, server-side code) passes.
+- **Token**: when `AEN_API_TOKEN` is set, every request except `GET /health` and `OPTIONS` needs `Authorization: Bearer <token>`, else **401** `unauthorized` (`WWW-Authenticate: Bearer`). The server refuses to start on a non-loopback `BIND_ADDR` without a token. The default local setup (no token, loopback, web app on `localhost:3000`) is unchanged.
+
+Idempotency (SEC-09): `POST /wallet/simulated-deposit`, `/agents/{id}/allocate` and `/deallocate` accept an optional `Idempotency-Key` header (1-128 ASCII chars). Keys are scoped per caller and per env: a client key can never collide with the server's own posting keys or another caller's. Replaying a key with the same request returns the original result without posting again; the same key with a different amount, account, reason or interaction is **409** `idempotency_key_reused`.
 
 Request bodies: every endpoint that takes a body requires `Content-Type: application/json` (optionally with `; charset=...`); anything else is **415** `unsupported_media_type` (browsers can send other types cross-site without a CORS preflight). A body over the size limit is **413** `payload_too_large`. Malformed JSON is 400; well-formed JSON of the wrong shape is 422.
 

@@ -1,6 +1,6 @@
 use std::env;
 use std::error::Error;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -8,6 +8,7 @@ use std::time::Duration;
 use aen_server::cocaptain::{CoCaptain, RuleBasedCoCaptain};
 use aen_server::grok::GrokReasoner;
 use aen_server::grok_cocaptain::GrokCoCaptain;
+use aen_server::guard::{ApiToken, GuardConfig, MIN_TOKEN_LEN, startup_error};
 use aen_server::market::MarketData;
 use aen_server::market::fake::FakeMarket;
 use aen_server::market::gemini::GeminiClient;
@@ -52,7 +53,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
         default_symbol: var("DEFAULT_SYMBOL", defaults.default_symbol)?,
         default_window_secs: defaults.default_window_secs,
         dev_endpoints: var("DEV_ENDPOINTS", defaults.dev_endpoints)?,
+        guard: GuardConfig {
+            api_token: match env::var("AEN_API_TOKEN") {
+                Ok(t) if !t.trim().is_empty() => Some(ApiToken::new(&t).ok_or_else(|| {
+                    format!("AEN_API_TOKEN must be at least {MIN_TOKEN_LEN} characters")
+                })?),
+                _ => None,
+            },
+            ..GuardConfig::default()
+        }
+        .with_extra_hosts(&env::var("ALLOWED_HOSTS").unwrap_or_default()),
     };
+    // Loopback unless asked otherwise; anything else needs a token (SEC-02).
+    let bind: IpAddr = var("BIND_ADDR", IpAddr::from([127, 0, 0, 1]))?;
+    if let Some(problem) = startup_error(bind, &settings.guard) {
+        return Err(problem.into());
+    }
     if settings.max_negotiation_rounds < 1
         || settings.funding_window_secs < 1
         || settings.resolution_grace_secs < 0
@@ -99,6 +115,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         };
     tracing::info!(market_data = %source, reasoner = reasoner.name(), cocaptain = cocaptain.name(), "runtime configured");
 
+    let settings_token_required = settings.guard.api_token.is_some();
+    let allowed_hosts = settings.guard.allowed_hosts.clone();
     let state = AppState {
         pool,
         market,
@@ -129,10 +147,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         tracing::info!("scheduler disabled (TICK_INTERVAL_SECS=0); use POST /api/dev/tick");
     }
 
-    // No auth yet (D-9), so listen on loopback only.
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let addr = SocketAddr::from((bind, port));
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    tracing::info!(%addr, "listening");
+    tracing::info!(
+        %addr,
+        token_required = settings_token_required,
+        allowed_hosts = ?allowed_hosts,
+        "listening"
+    );
     axum::serve(listener, app_with_state(state, cors_origin)).await?;
     Ok(())
 }

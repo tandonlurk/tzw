@@ -6,6 +6,7 @@ use axum::extract::FromRef;
 use sqlx::PgPool;
 
 use crate::cocaptain::{CoCaptain, RuleBasedCoCaptain};
+use crate::guard::GuardConfig;
 use crate::market::MarketData;
 use crate::market::fake::FakeMarket;
 use crate::reasoner::{Reasoner, RuleBasedReasoner};
@@ -30,6 +31,8 @@ pub struct Settings {
     pub default_window_secs: i64,
     /// Whether `/api/dev/*` is mounted.
     pub dev_endpoints: bool,
+    /// Host allowlist and API token (SEC-02).
+    pub guard: GuardConfig,
 }
 
 impl Default for Settings {
@@ -42,6 +45,7 @@ impl Default for Settings {
             default_symbol: "BTCUSD".into(),
             default_window_secs: 3600,
             dev_endpoints: true,
+            guard: GuardConfig::default(),
         }
     }
 }
