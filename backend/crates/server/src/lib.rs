@@ -1,6 +1,7 @@
 //! HTTP API over the core domain logic. See docs/api.md for the contract.
 
 pub mod agents;
+pub mod chain;
 pub mod cocaptain;
 pub mod collaborations;
 pub mod custom_code;
@@ -14,6 +15,7 @@ pub mod guard;
 pub mod interactions;
 pub mod ledger_db;
 pub mod lifecycle;
+pub mod lifecycle_arc;
 pub mod market;
 pub mod misc;
 pub mod models;
@@ -81,7 +83,13 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
         .route("/suggestions", get(suggestions::list))
         .route("/suggestions/generate", post(suggestions::generate_now))
         .route("/suggestions/{id}/accept", post(suggestions::accept))
-        .route("/suggestions/{id}/dismiss", post(suggestions::dismiss));
+        .route("/suggestions/{id}/dismiss", post(suggestions::dismiss))
+        .route("/chain", get(chain::info))
+        .route(
+            "/agents/{id}/vault",
+            get(chain::get_vault).post(chain::link_vault),
+        )
+        .route("/agents/{id}/vault/sync", post(chain::sync_vault));
     if state.settings.quicknode.is_some() {
         api = api.route("/webhooks/quicknode", post(quicknode::webhook));
     }
@@ -90,6 +98,13 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
             .route("/dev/tick", post(interactions::dev_tick))
             .route("/dev/fake-market", post(interactions::dev_fake_market))
             .route("/dev/seed-demo", post(demo::seed_demo));
+        // Signs with the test-owner key: only when explicitly enabled.
+        if state.chain.as_ref().is_some_and(|c| c.dev_owner.is_some()) {
+            api = api.route(
+                "/dev/chain/setup-demo-vaults",
+                post(chain::dev_setup_demo_vaults),
+            );
+        }
     }
 
     let guard = guard::Guard {

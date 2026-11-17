@@ -223,6 +223,7 @@ pub async fn check_on_save(
         id: agent_id,
         name: input.name.trim().to_owned(),
         version: 0,
+        env: aen_core::ledger::Env::Simulated,
         config: input.config.clone(),
         policy: input.policy.clone(),
         available: Money::from_minor(100_000_000).unwrap_or(Money::ZERO),

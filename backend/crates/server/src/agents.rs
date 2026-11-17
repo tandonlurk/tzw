@@ -29,6 +29,8 @@ struct AgentRow {
     status: String,
     env: String,
     wallet_address: Option<String>,
+    vault_address: Option<String>,
+    vault_owner: Option<String>,
     current_version: i32,
     config: Value,
     policy: Value,
@@ -73,6 +75,8 @@ impl TryFrom<AgentRow> for Agent {
             name: r.name,
             description: r.description,
             wallet_address: r.wallet_address,
+            vault_address: r.vault_address,
+            vault_owner: r.vault_owner,
             version: r.current_version,
             config: r.config,
             policy: r.policy,
@@ -87,7 +91,8 @@ impl TryFrom<AgentRow> for Agent {
 /// Realized P&L is the agent's net over `settle` posting sets, so allocations
 /// and refunds are excluded; a win is a settle set with a positive net.
 const AGENTS_SQL: &str = "
-SELECT a.id, a.name, a.description, a.status, a.env, a.wallet_address, a.current_version,
+SELECT a.id, a.name, a.description, a.status, a.env, a.wallet_address, a.vault_address,
+       a.vault_owner, a.current_version,
        v.config, v.policy, v.graph, a.created_at, a.updated_at,
        COALESCE(b.available, 0)::BIGINT AS available,
        COALESCE(b.committed, 0)::BIGINT AS committed,
