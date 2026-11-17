@@ -12,7 +12,11 @@ Lead-owned. `TODO.md` is the user-facing list; this file holds status detail, ri
 
 Token discipline: read sections, not whole files; delegate web research and bulk implementation to subagents (cheaper model for routine work) with reports capped at ~200 words; keep facts in `docs/`, not in conversation.
 
-## Status (2026-11-16, Mon)
+## Status (2026-11-17, Tue)
+
+- Phase: **onchain custody started (PR #1, branch `chain-vaults`).** D-57 owner decision: per-agent `AgentVault`s owned by the owner's browser wallet. Done: vault + factory contracts (contracts 100 tests), `aen-chain` crate with anvil lifecycle test. Not done: Arc deploy (blocked on faucet funds, owner action in `TODO.md` "Start here"), lifecycle wiring, vault endpoints, autonomous-run tooling, wallet UI. Plan + diagram: `reports/handoffs/2026-11-17-chain-vaults.md`.
+
+## Status (2026-11-16, Mon) — historical
 
 - Phase: **M3/M5 done on simulated funds.** Merged today: blocked-proposal cooldown, settlement-time P&L, deterministic co-captain demo step, SEC-02/08/09, collaborations (backend + web), local QuickNode Streams webhook, `aen-sandbox` + `custom.code` block + code editor, agent detail/version history, dashboard suggestions banner. Tests: backend 332 (1 ignored), contracts 84, web 45. Full README demo hand-verified (`docs/demo.md`). Live state: `reports/handoffs/2026-11-16-m3-orchestration.md`.
 - Everything chain-side is blocked on D-3 (custody) + faucet funds; Grok live use on the xAI key + D-8; Streams on a QuickNode account + tunnel decision.

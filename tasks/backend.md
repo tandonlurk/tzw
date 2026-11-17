@@ -342,3 +342,9 @@ Status: done. Tests (own dbs): `aen_sh_test` -> core 100 + 14 + 6 + 4, sandbox 3
 - The concurrency semaphore (4) is shared by ticks, test-runs and save checks; a burst of saves can make a tick wait up to ~0.5 s per queued run.
 - A graph with more than one `custom.code` node on one path runs each one; nothing caps that beyond the 64-step graph limit.
 - Javy builds are not byte-reproducible, so the recorded module SHA-256 identifies the built file, not the source (stage 1 note).
+
+## Log: aen-chain crate (branch chain-vaults, 2026-11-16, D-57..D-59)
+- `crates/chain`: alloy 2.6 client. Resolver (idx 0) create/resolve/resolveVoid; operator (idx 1) vault stake/release; receipt verification (`vaults_created`, `usdc_transfers`); `OwnerWallet` for the test owner (idx 2); `testkit` feature (anvil + deploy from `contracts/out`).
+- Refuses chains other than 5042002/31337; checks escrow `RESOLVER()` is our key and the factory is bound to our escrow. Simple nonce manager (D-59).
+- Tests: `cargo test -p aen-chain` 2 passed (anvil lifecycle, foreign resolver refused). Skips if anvil missing; needs `forge build`.
+- Not done: server integration. Plan: `reports/handoffs/2026-11-17-chain-vaults.md` steps 2–5.

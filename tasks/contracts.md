@@ -59,3 +59,9 @@
 - Tests: boundary, fuzz (refund reachable; out-of-bounds revert), old repro tests converted. 84 pass, `forge fmt` clean.
 - ABI: no new errors/events/constructor change; two new constant getters `MAX_FUND_WINDOW()`, `MAX_RESOLVE_WINDOW()`. Backend must keep deadlines within the windows and never use the resolver address as an agent wallet.
 - New defaults for docs/decisions.md: MAX_RESOLVE_WINDOW = 30 days (matches the report's suggestion; ample for demo/short-horizon challenges, bounds lock-up), MAX_FUND_WINDOW = 7 days (stops a far-future fundDeadline from bypassing the cap). Both are constants, easy to change before deploy.
+
+## Log: AgentVault + VaultFactory (branch chain-vaults, 2026-11-16, D-57)
+- `src/AgentVault.sol`: owner (browser wallet) funds, sets `maxPerChallenge`/`maxExposure`, pauses, replaces/revokes operator, withdraws any time. Operator may only `stake(id)` into an escrow challenge naming the vault, within caps; `release(id)` (anyone) frees exposure once the challenge is terminal. `VaultFactory.createVault(operator, caps, agentRef)` emits `VaultCreated`.
+- `Deploy.s.sol` now deploys the factory too. `MockUSDC` emits `Transfer` (like real USDC).
+- Tests: `forge test` 100 passed (16 new incl. fuzz: operator cannot drain).
+- Not done: Arc testnet deploy (blocked on faucet funds, `docs/setup/arc-testnet-funding.md`).

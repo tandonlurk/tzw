@@ -6,11 +6,16 @@ Legend: `[ ]` not started · `[~]` in progress · `[!]` blocked · `[x]` done an
 
 Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, see D-18). Demo flow working by end of Wed Nov 18. Details and dates: `tasks/project.md`.
 
+## ⚠ Start here (owner action, open next session)
+
+- [ ] **Fund the Arc testnet addresses from the Circle faucet** → step-by-step in `docs/setup/arc-testnet-funding.md`. Blocks the testnet deploy. At minimum fund the resolver `0x599F37a9815e13319E2C3AA04b850876706c4C90`
+- [ ] Add Arc Testnet to MetaMask (same file, section 3). Needed for the browser wallet UI
+- [ ] Then tell the agent "continue": plan is in `reports/handoffs/2026-11-17-chain-vaults.md`. Open PR: https://github.com/tandonlurk/tzw/pull/1
+
 ## Needs you (review list)
 
 - [x] Approve the plan in `docs/architecture.md` (owner said "start running the plan", 2026-11-14)
 - [x] D-3 wallet custody: decided 2026-11-16 → per-agent `AgentVault` contracts owned by your browser wallet (D-57)
-- [ ] Faucet USDC (https://faucet.circle.com, Arc Testnet) to resolver `0x599F37a9815e13319E2C3AA04b850876706c4C90`, operator `0x84dDb2795697e6EE319fe9bb55b5D5c1c3B90eca`, test owner `0x1F0eb73C714Ae0BD1a97c1c8e0F34513073393Fb`, and your MetaMask address (blocks testnet deploy)
 - [?] D-8 use Grok for agent reasoning now (behind a fallback), or keep agents rule-based until later?
 - [x] Toolchain installed: Rust 1.100, Foundry 1.9, PostgreSQL 17 (dbs `aen_dev`, `aen_test`)
 - [?] Provide when ready (in `.env`, never in chat): xAI API key, QuickNode key, Arc testnet faucet funds, ElevenLabs key
@@ -21,7 +26,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [?] D-17 main track "Agentic Payments & AI" + Arc award + all bounties
 - [?] Ask at sponsor office hours (Nov 16-19): what "Grok Bot" means for the xAI bounty
 - [?] Streams: create a QuickNode stream and expose the webhook through a tunnel (needs `AEN_API_TOKEN` + `ALLOWED_HOSTS`); capture one real delivery to confirm the header names and payload (all UNVERIFIED today)
-- [x] Pushed to GitHub `tandonlurk/tzw`; `recovery` is the default branch. Repo is PUBLIC: make it private if you do not want the docs visible
+- [x] Pushed to GitHub `tandonlurk/tzw`; `main` = `recovery` as of 2026-11-16 (consider making `main` the default branch). Repo is PUBLIC: make it private if you do not want the docs visible
 
 ## M0 — Planning and research (Sat Nov 14)
 
