@@ -13,7 +13,8 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [ ] Then tell the agent "continue". Contracts are DEPLOYED (D-60). Next for the agent, in order:
   1. [x] Smoke run on Arc passed (D-61); `resolver()` reverted because the getter is `RESOLVER()`
   2. [x] Verified escrow, factory and AgentVault on Blockscout (D-61)
-  3. Wire chain into the lifecycle (plan: `reports/handoffs/2026-11-17-chain-vaults.md` steps 2-5), then browser wallet UI (step 6)
+  3. [x] Chain wired into the lifecycle (D-63) and browser wallet UI built (D-62); live Arc run settled with drift 0 (`reports/handoffs/2026-11-17-arc-live-run.md`)
+  5. [ ] **You:** try the wallet UI with MetaMask on Arc Testnet (create a vault for an agent, allocate, withdraw). Run instructions: `backend/README.md` "Run against Arc testnet"
   4. [x] Committed the doc edits on `chain-vaults` (2f03581). Open PR: https://github.com/tandonlurk/tzw/pull/1
 
 ## Needs you (review list)
@@ -58,7 +59,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [x] `AgentVault` + `VaultFactory` contracts: onchain caps, pause, operator revoke, owner withdraw; 100 Foundry tests (contracts, P0, D-57)
 - [x] `aen-chain` crate (alloy): escrow + vault calls, receipt verification, owner helpers, anvil test kit; full lifecycle test on anvil (backend, P0)
 - [x] Deploy escrow + factory to Arc testnet (D-60); Blockscout verified + live smoke run passed (D-61) (contracts, P0)
-- [~] Wire chain into lifecycle: create → both vaults stake → active → resolve/void → release; ledger from verified receipts; vault link/sync endpoints; test-owner dev endpoint for autonomous runs (backend, P0)
+- [x] Wire chain into lifecycle (D-63; 341 backend tests; live Arc run settled, drift 0): create → both vaults stake → active → resolve/void → release; ledger from verified receipts; vault link/sync endpoints; test-owner dev endpoint for autonomous runs (backend, P0)
 - [?] Browser wallet UI (built, merged 335d62b, D-62; not yet run with a real MetaMask signature or the real backend endpoints): connect, create vault per agent, allocate (amount or % of wallet), withdraw, live onchain balances + explorer links (frontend, P0)
 - [x] Visual logic builder: add/connect/delete blocks, incompatible connections rejected, validate, save with positions; browser-tested (frontend, P0)
 - [x] Agent detail + config/policy editing: version history with diffs, per-agent activity, "Saved as version N", 422 inline, config version on decision traces; browser-verified 2026-11-16 (frontend, P0)
@@ -66,7 +67,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 ## M3 — Observability (Tue Nov 17)
 
 - [x] QuickNode Streams webhook ingestion, local only: HMAC + skew check, idempotent on (tx hash, log index), reorg-aware, fixture tests (D-49..D-51). Header names and payload shape UNVERIFIED until one real delivery; not exposed (backend, P1)
-- [ ] Full lifecycle end to end on testnet: discover → negotiate → authorize → fund → resolve → settle (lead, P0)
+- [~] Full lifecycle end to end on testnet: done on Arc with the fake market feed (`reports/handoffs/2026-11-17-arc-live-run.md`); repeat with real Gemini data (lead, P0)
 - [x] Wallet overview, Activity view, approvals queue, interactions list/detail, Dashboard charts from `/stats/portfolio` only (per-agent P&L lines by default); 25 web tests. Browser-verified 2026-11-15 incl. reject, approve-then-cancelled notice, agent-detail challenges, template prefill (frontend, P0)
 - [x] Backend gaps from `reports/qa-m2-web.md`: summaries now readable ("5.00 USDC (simulated)"); approvals arise on the counterparty side by design; dev clock jumps past a funding deadline are refused with 409 (D-34) (backend, P1)
 - [x] Collaboration: agreement states, simulated payout split through ledger + `authorize` (D-46..D-48), list/detail/propose views, buttons from `actions`; browser-verified propose → accept → fund → complete and cancel 2026-11-16 (backend/frontend, P2)
