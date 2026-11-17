@@ -147,7 +147,8 @@ export function StanceWheel({ stance, role, onStance, onRole }: {
 
       <text x={CX - R} y={CY + 18} className="axis-label" textAnchor="start">Competitive</text>
       <text x={CX + R} y={CY + 18} className="axis-label" textAnchor="end">Collaborative</text>
-      <text x={CX} y={CY + 18} className="axis-label" textAnchor="middle">cautious ⟶ edge: ambitious</text>
+      <text x={CX} y={CY + 18} className="axis-label" textAnchor="middle">cautious</text>
+      <text x={CX} y={CY - R + 14} className="axis-label" textAnchor="middle" pointerEvents="none">ambitious</text>
     </svg>
   );
 }

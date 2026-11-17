@@ -109,7 +109,8 @@ function FirmForm({ leads }: { leads: Agent[] }) {
   const fieldErr = (k: string) => {
     const server = (error?.details ?? []).filter((d) => (d as { path?: string; field?: string })?.path === k || (d as { field?: string })?.field === k)
       .map((d) => (d as { message?: string }).message).filter(Boolean).join("; ");
-    const msg = local[k] ?? server;
+    // roles: once a submit flagged them, show the live check so fixing the weights clears it
+    const msg = k === "roles" && local.roles ? roleErrs.join(" ") : (local[k] ?? server);
     return msg ? <div className="field-error">{msg}</div> : null;
   };
 

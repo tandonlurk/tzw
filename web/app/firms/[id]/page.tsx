@@ -163,7 +163,7 @@ function Header({ f, agents, onChanged }: { f: Firm; agents: Agent[]; onChanged:
         </div>
       </div>
 
-      {f.actions.includes("join") && free.length > 0 && <JoinForm key={agents.length} f={f} agents={agents} free={free} busy={busy} run={run} />}
+      {f.actions.includes("join") && free.length > 0 && <JoinForm key={`${agents.length}:${f.members.length}:${free.join()}`} f={f} agents={agents} free={free} busy={busy} run={run} />}
       {f.actions.includes("leave") && f.members.length > 0 && (
         <div className="card">
           <h3 style={{ marginTop: 0 }}>Remove a member</h3>
