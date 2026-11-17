@@ -423,6 +423,7 @@ pub(crate) mod tests {
             spot_symbol: "btcusd".into(),
             source: "fake".into(),
             fallback_reason: None,
+            meta: Default::default(),
         }
     }
 

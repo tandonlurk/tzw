@@ -196,6 +196,7 @@ fn sample_market() -> MarketView {
         spot_symbol: "btcusd".into(),
         source: "sample".into(),
         fallback_reason: None,
+        meta: Default::default(),
     }
 }
 

@@ -58,6 +58,9 @@ pub struct RunResult {
     pub error: Option<String>,
     /// Set when a `custom.code` block ran (or could not).
     pub code: Option<CodeRun>,
+    /// The conviction of the last reasoner output in the run, if any (the
+    /// approach's minimum-conviction default is checked against it).
+    pub conviction_bps: Option<u32>,
 }
 
 impl RunResult {
@@ -170,6 +173,7 @@ struct Walker<'a> {
     intents: Vec<PlannedIntent>,
     trace: Vec<TraceStep>,
     code: Option<CodeRun>,
+    conviction: Option<u32>,
 }
 
 impl<'a> Walker<'a> {
@@ -181,7 +185,7 @@ impl<'a> Walker<'a> {
         });
     }
 
-    async fn ask(&self, task: Task, node: &Node) -> Result<ReasonerOutput, String> {
+    async fn ask(&mut self, task: Task, node: &Node) -> Result<ReasonerOutput, String> {
         let req = ReasonRequest {
             task,
             agent: self.input.agent,
@@ -199,6 +203,7 @@ impl<'a> Walker<'a> {
             .map_err(|e| e.to_string())?;
         // Every output is validated, whichever reasoner produced it.
         out.validate(&req).map_err(|e| e.to_string())?;
+        self.conviction = Some(out.conviction_bps);
         Ok(out)
     }
 
@@ -589,12 +594,14 @@ pub async fn run(reasoner: &dyn Reasoner, input: &RunInput<'_>) -> RunResult {
         intents: Vec::new(),
         trace: Vec::new(),
         code: None,
+        conviction: None,
     };
     let fail = |walker: Walker<'_>, error: String| RunResult {
         intents: Vec::new(),
         trace: walker.trace,
         error: Some(error),
         code: walker.code,
+        conviction_bps: walker.conviction,
     };
 
     // Graphs are validated on save; validate again so a stored graph that no
@@ -636,6 +643,7 @@ pub async fn run(reasoner: &dyn Reasoner, input: &RunInput<'_>) -> RunResult {
         trace: walker.trace,
         error: None,
         code: walker.code,
+        conviction_bps: walker.conviction,
     }
 }
 

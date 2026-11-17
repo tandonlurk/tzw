@@ -1170,6 +1170,7 @@ async fn respond_one(
             trace: Vec::new(),
             error: None,
             code: None,
+            conviction_bps: None,
         }
     } else {
         let own_flow = graph_exec::find_trigger(&responder.graph, TRIGGER_CHALLENGE_RECEIVED);
