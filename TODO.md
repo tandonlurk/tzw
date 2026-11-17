@@ -8,9 +8,13 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 ## ⚠ Start here (owner action, open next session)
 
-- [ ] **Fund the Arc testnet addresses from the Circle faucet** → step-by-step in `docs/setup/arc-testnet-funding.md`. Blocks the testnet deploy. At minimum fund the resolver `0x599F37a9815e13319E2C3AA04b850876706c4C90`
-- [ ] Add Arc Testnet to MetaMask (same file, section 3). Needed for the browser wallet UI
-- [ ] Then tell the agent "continue": plan is in `reports/handoffs/2026-11-17-chain-vaults.md`. Open PR: https://github.com/tandonlurk/tzw/pull/1
+- [x] Fund the Arc testnet addresses (done 2026-11-17: idx 0-2 have 20 USDC each; confirm MetaMask account too)
+- [ ] Confirm MetaMask is set up: Arc Testnet added (`docs/setup/arc-testnet-funding.md` section 3), and the account you funded is the one you will connect. Needed for the browser wallet UI
+- [ ] Then tell the agent "continue". Contracts are DEPLOYED (D-60). Next for the agent, in order:
+  1. Smoke run on Arc: create → stake → resolve with the test owner (idx 2); `resolver()` read reverted, check the getter name
+  2. Verify both contracts on Blockscout (`https://explorer.testnet.arc.io`)
+  3. Wire chain into the lifecycle (plan: `reports/handoffs/2026-11-17-chain-vaults.md` steps 2-5), then browser wallet UI (step 6)
+  4. Commit the uncommitted doc edits on `chain-vaults` (TODO, decisions D-60, `.env.example`). Open PR: https://github.com/tandonlurk/tzw/pull/1
 
 ## Needs you (review list)
 
@@ -53,7 +57,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [x] Proposal cooldown (600 s per agent and market, D-33); `schemas/challenge_terms.schema.json`; demo seed `POST /api/dev/seed-demo` + seeded lifecycle test; 222 backend tests (backend, P1)
 - [x] `AgentVault` + `VaultFactory` contracts: onchain caps, pause, operator revoke, owner withdraw; 100 Foundry tests (contracts, P0, D-57)
 - [x] `aen-chain` crate (alloy): escrow + vault calls, receipt verification, owner helpers, anvil test kit; full lifecycle test on anvil (backend, P0)
-- [ ] Deploy escrow + factory to Arc testnet (contracts, P0, needs faucet funds)
+- [x] Deploy escrow + factory to Arc testnet (D-60); Blockscout verify + smoke run pending (contracts, P0)
 - [ ] Wire chain into lifecycle: create → both vaults stake → active → resolve/void → release; ledger from verified receipts; vault link/sync endpoints; test-owner dev endpoint for autonomous runs (backend, P0)
 - [ ] Browser wallet UI: connect, create vault per agent, allocate (amount or % of wallet), withdraw, live onchain balances + explorer links (frontend, P0)
 - [x] Visual logic builder: add/connect/delete blocks, incompatible connections rejected, validate, save with positions; browser-tested (frontend, P0)
