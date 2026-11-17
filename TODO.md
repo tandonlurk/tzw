@@ -9,7 +9,8 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 ## Needs you (review list)
 
 - [x] Approve the plan in `docs/architecture.md` (owner said "start running the plan", 2026-11-14)
-- [?] D-3 wallet custody: per-agent testnet keys from a backend seed (recommended) vs single operator wallet vs Circle wallets
+- [x] D-3 wallet custody: decided 2026-11-16 → per-agent `AgentVault` contracts owned by your browser wallet (D-57)
+- [ ] Faucet USDC (https://faucet.circle.com, Arc Testnet) to resolver `0x599F37a9815e13319E2C3AA04b850876706c4C90`, operator `0x84dDb2795697e6EE319fe9bb55b5D5c1c3B90eca`, test owner `0x1F0eb73C714Ae0BD1a97c1c8e0F34513073393Fb`, and your MetaMask address (blocks testnet deploy)
 - [?] D-8 use Grok for agent reasoning now (behind a fallback), or keep agents rule-based until later?
 - [x] Toolchain installed: Rust 1.100, Foundry 1.9, PostgreSQL 17 (dbs `aen_dev`, `aen_test`)
 - [?] Provide when ready (in `.env`, never in chat): xAI API key, QuickNode key, Arc testnet faucet funds, ElevenLabs key
@@ -45,7 +46,11 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [~] Reasoner trait: rule-based done; Grok wired behind `XAI_API_KEY` but only mock-tested, endpoint/model unverified (backend, P0/P1, needs D-8 + key)
 - [x] Challenge proposal, bounded negotiation, approvals, resolve, settle/void in the simulated ledger; 211 backend tests (backend, P0)
 - [x] Proposal cooldown (600 s per agent and market, D-33); `schemas/challenge_terms.schema.json`; demo seed `POST /api/dev/seed-demo` + seeded lifecycle test; 222 backend tests (backend, P1)
-- [ ] Deploy escrow to Arc testnet; signer + chain executor (contracts/backend, P0, needs D-3 + faucet funds)
+- [x] `AgentVault` + `VaultFactory` contracts: onchain caps, pause, operator revoke, owner withdraw; 100 Foundry tests (contracts, P0, D-57)
+- [x] `aen-chain` crate (alloy): escrow + vault calls, receipt verification, owner helpers, anvil test kit; full lifecycle test on anvil (backend, P0)
+- [ ] Deploy escrow + factory to Arc testnet (contracts, P0, needs faucet funds)
+- [ ] Wire chain into lifecycle: create → both vaults stake → active → resolve/void → release; ledger from verified receipts; vault link/sync endpoints; test-owner dev endpoint for autonomous runs (backend, P0)
+- [ ] Browser wallet UI: connect, create vault per agent, allocate (amount or % of wallet), withdraw, live onchain balances + explorer links (frontend, P0)
 - [x] Visual logic builder: add/connect/delete blocks, incompatible connections rejected, validate, save with positions; browser-tested (frontend, P0)
 - [x] Agent detail + config/policy editing: version history with diffs, per-agent activity, "Saved as version N", 422 inline, config version on decision traces; browser-verified 2026-11-16 (frontend, P0)
 
@@ -78,6 +83,12 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [ ] ElevenLabs voice for co-captain (P3, last)
 - [~] Demo script, seeded demo agents, README run instructions, AGENTS.md 9.4 filled in: simulated run done and hand-verified (`docs/demo.md`); testnet version waits on D-3 (lead, P0)
 - [~] Submission write-ups drafted in `docs/submission/` (one per award, honest status); finalize after D-3 / keys and record the video (lead, P0)
+
+## Vision (owner, 2026-11-16) — after the hackathon unless time allows
+
+- [ ] Optional TZW-held vault: users may choose to let TZW custody funds in exchange for a benefit (e.g. gas sponsorship, instant settlement, yield). Opt-in, never the default
+- [ ] Pluggable custody providers: an agent's vault can be ours, a browser wallet, or another provider the user trusts more; same escrow interface
+- [ ] Minimal platform control and privacy: TZW should have little say over how agents interact. Open items: user-run operators (vault already lets the owner replace the operator), decentralised resolution instead of our resolver key (today resolution is backend-administered, D-6), private negotiation
 
 ## Notes from owner
 
