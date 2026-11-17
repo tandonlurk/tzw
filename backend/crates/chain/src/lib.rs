@@ -220,17 +220,27 @@ pub fn derive_signer(mnemonic: &str, index: u32) -> Result<PrivateKeySigner> {
 /// transaction. alloy's default nonce cache never resynchronises, so a failed send or another
 /// process using the same key would wedge it; we send one transaction at a time, so the extra
 /// `eth_getTransactionCount` is cheap.
+///
+/// Arc's public RPC rate-limits bursts (`-32005 rate limit exceeded`), so requests that hit a rate
+/// limit are retried with backoff. Arc confirms in under a second, so receipts of remote chains
+/// are polled every second instead of alloy's 7 s default.
 pub(crate) fn signing_provider(wallet: EthereumWallet, rpc_url: &str) -> Result<DynProvider> {
     let url = rpc_url
         .parse()
         .map_err(|e| ChainError::Config(format!("rpc url: {e}")))?;
+    let client = alloy::rpc::client::ClientBuilder::default()
+        .layer(alloy::transports::layers::RetryBackoffLayer::new(10, 1_000, 100))
+        .http(url);
+    if !client.is_local() {
+        client.set_poll_interval(Duration::from_secs(1));
+    }
     Ok(ProviderBuilder::new()
         .disable_recommended_fillers()
         .with_gas_estimation()
         .with_simple_nonce_management()
         .fetch_chain_id()
         .wallet(wallet)
-        .connect_http(url)
+        .connect_client(client)
         .erased())
 }
 
