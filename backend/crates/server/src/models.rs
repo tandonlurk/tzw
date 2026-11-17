@@ -122,6 +122,10 @@ pub struct Agent {
     pub status: AgentStatus,
     pub env: Env,
     pub wallet_address: Option<String>,
+    /// The agent's Arc testnet `AgentVault` (lowercase hex), once linked.
+    pub vault_address: Option<String>,
+    /// The vault's owner wallet (lowercase hex), once linked.
+    pub vault_owner: Option<String>,
     pub version: i32,
     pub config: Value,
     pub policy: Value,

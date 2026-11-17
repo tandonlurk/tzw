@@ -489,7 +489,7 @@ impl<'a> Walker<'a> {
                     intent,
                     summary: format!(
                         "My custom code chose to stake {} on this claim.",
-                        crate::lifecycle::stake_text(stake)
+                        crate::lifecycle::stake_text(stake, self.input.agent.env)
                     ),
                     terms: Some(terms),
                     ask_owner: false,
@@ -519,7 +519,7 @@ impl<'a> Walker<'a> {
                     intent,
                     summary: format!(
                         "My custom code offered {} per side instead.",
-                        crate::lifecycle::stake_text(stake)
+                        crate::lifecycle::stake_text(stake, self.input.agent.env)
                     ),
                     terms: Some(terms),
                     ask_owner: false,

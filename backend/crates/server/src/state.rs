@@ -7,6 +7,7 @@ use sqlx::PgPool;
 
 use aen_sandbox::Sandbox;
 
+use crate::chain::ChainState;
 use crate::cocaptain::{CoCaptain, RuleBasedCoCaptain};
 use crate::guard::GuardConfig;
 use crate::market::MarketData;
@@ -70,6 +71,9 @@ pub struct AppState {
     /// guest module is missing (the server still runs, those agents record
     /// that the sandbox is unavailable).
     pub sandbox: Option<Arc<Sandbox>>,
+    /// Arc testnet access. `None` (no `AEN_TESTNET_MNEMONIC`) keeps every
+    /// agent and interaction simulated, exactly as before the chain existed.
+    pub chain: Option<Arc<ChainState>>,
     pub settings: Settings,
 }
 
@@ -85,6 +89,7 @@ impl AppState {
             reasoner: Arc::new(RuleBasedReasoner),
             cocaptain: Arc::new(RuleBasedCoCaptain),
             sandbox: crate::custom_code::shared_sandbox(),
+            chain: None,
             settings: Settings::default(),
         }
     }

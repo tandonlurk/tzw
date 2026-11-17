@@ -159,6 +159,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .map_or("unavailable", |s| s.module_sha256()),
         "custom code sandbox"
     );
+    // Arc testnet only when AEN_TESTNET_MNEMONIC is set; otherwise every
+    // agent stays simulated. The mnemonic is read here and dropped: keys live
+    // inside aen-chain only and are never logged.
+    let chain = aen_server::chain::from_env(settings.dev_endpoints).await?;
+    match &chain {
+        Some(c) => tracing::info!(
+            chain_id = c.chain.chain_id(),
+            escrow = %c.chain.config().escrow,
+            factory = %c.chain.config().factory,
+            operator = %c.chain.operator(),
+            resolver = %c.chain.resolver(),
+            dev_owner = ?c.dev_owner.as_ref().map(|o| o.address()),
+            "Arc testnet connected"
+        ),
+        None => tracing::info!("chain disabled (no AEN_TESTNET_MNEMONIC): simulated funds only"),
+    }
     let state = AppState {
         pool,
         market,
@@ -166,6 +182,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         reasoner,
         cocaptain,
         sandbox,
+        chain: chain.map(Arc::new),
         settings,
     };
 

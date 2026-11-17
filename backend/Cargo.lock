@@ -54,6 +54,7 @@ dependencies = [
 name = "aen-server"
 version = "0.1.0"
 dependencies = [
+ "aen-chain",
  "aen-core",
  "aen-sandbox",
  "axum",
