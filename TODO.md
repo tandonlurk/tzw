@@ -59,7 +59,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [x] `aen-chain` crate (alloy): escrow + vault calls, receipt verification, owner helpers, anvil test kit; full lifecycle test on anvil (backend, P0)
 - [x] Deploy escrow + factory to Arc testnet (D-60); Blockscout verified + live smoke run passed (D-61) (contracts, P0)
 - [~] Wire chain into lifecycle: create → both vaults stake → active → resolve/void → release; ledger from verified receipts; vault link/sync endpoints; test-owner dev endpoint for autonomous runs (backend, P0)
-- [~] Browser wallet UI: connect, create vault per agent, allocate (amount or % of wallet), withdraw, live onchain balances + explorer links (frontend, P0)
+- [?] Browser wallet UI (built, merged 335d62b, D-62; not yet run with a real MetaMask signature or the real backend endpoints): connect, create vault per agent, allocate (amount or % of wallet), withdraw, live onchain balances + explorer links (frontend, P0)
 - [x] Visual logic builder: add/connect/delete blocks, incompatible connections rejected, validate, save with positions; browser-tested (frontend, P0)
 - [x] Agent detail + config/policy editing: version history with diffs, per-agent activity, "Saved as version N", 422 inline, config version on decision traces; browser-verified 2026-11-16 (frontend, P0)
 
