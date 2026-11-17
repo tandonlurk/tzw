@@ -229,9 +229,7 @@ pub(crate) fn signing_provider(wallet: EthereumWallet, rpc_url: &str) -> Result<
         .parse()
         .map_err(|e| ChainError::Config(format!("rpc url: {e}")))?;
     let client = alloy::rpc::client::ClientBuilder::default()
-        .layer(alloy::transports::layers::RetryBackoffLayer::new(
-            10, 1_000, 100,
-        ))
+        .layer(alloy::transports::layers::RetryBackoffLayer::new(10, 1_000, 100))
         .http(url);
     if !client.is_local() {
         client.set_poll_interval(Duration::from_secs(1));
@@ -309,9 +307,7 @@ impl Chain {
         }
         let factory = IVaultFactory::new(chain.cfg.factory, &chain.provider);
         if factory.ESCROW().call().await.map_err(rpc)? != chain.cfg.escrow {
-            return Err(ChainError::Config(
-                "vault factory is bound to another escrow".into(),
-            ));
+            return Err(ChainError::Config("vault factory is bound to another escrow".into()));
         }
         Ok(chain)
     }
@@ -385,14 +381,7 @@ impl Chain {
     ) -> Result<TxHash> {
         let escrow = IChallengeEscrow::new(self.cfg.escrow, &self.provider);
         let call = escrow
-            .create(
-                id,
-                party_a,
-                party_b,
-                U256::from(stake),
-                fund_deadline,
-                resolve_deadline,
-            )
+            .create(id, party_a, party_b, U256::from(stake), fund_deadline, resolve_deadline)
             .from(self.resolver);
         self.confirm(call.send().await.map_err(rpc)?).await
     }
@@ -550,11 +539,7 @@ impl OwnerWallet {
         if chain_id != ARC_TESTNET_CHAIN_ID && chain_id != LOCAL_CHAIN_ID {
             return Err(ChainError::WrongChain(chain_id));
         }
-        Ok(Self {
-            provider,
-            address,
-            cfg,
-        })
+        Ok(Self { provider, address, cfg })
     }
 
     pub fn address(&self) -> Address {

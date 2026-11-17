@@ -17,9 +17,7 @@ async fn escrow_vault_lifecycle_on_anvil() {
         return;
     };
     let d = deploy(&anvil.url, ANVIL_MNEMONIC).await.expect("deploy");
-    let chain = Chain::connect(d.cfg.clone(), ANVIL_MNEMONIC)
-        .await
-        .expect("connect");
+    let chain = Chain::connect(d.cfg.clone(), ANVIL_MNEMONIC).await.expect("connect");
     let owner = OwnerWallet::connect(
         d.cfg.clone(),
         derive_signer(ANVIL_MNEMONIC, TEST_OWNER_INDEX).unwrap(),
@@ -45,17 +43,12 @@ async fn escrow_vault_lifecycle_on_anvil() {
     assert_eq!(created[0].agent_ref, agent_ref(agent_a));
     assert!(chain.is_vault(va).await.unwrap());
 
-    mint(&d.cfg, ANVIL_MNEMONIC, owner.address(), 100 * USDC)
-        .await
-        .unwrap();
+    mint(&d.cfg, ANVIL_MNEMONIC, owner.address(), 100 * USDC).await.unwrap();
     let fund_tx = owner.transfer_usdc(va, 40 * USDC).await.unwrap();
     owner.transfer_usdc(vb, 40 * USDC).await.unwrap();
     let transfers = chain.usdc_transfers(fund_tx).await.unwrap();
     assert_eq!(transfers.len(), 1);
-    assert_eq!(
-        (transfers[0].from, transfers[0].to, transfers[0].value),
-        (owner.address(), va, 40 * USDC)
-    );
+    assert_eq!((transfers[0].from, transfers[0].to, transfers[0].value), (owner.address(), va, 40 * USDC));
 
     // Resolver registers, operator stakes both vaults, resolver pays A.
     let id = challenge_id(Uuid::new_v4());
@@ -64,10 +57,7 @@ async fn escrow_vault_lifecycle_on_anvil() {
         .create_challenge(id, va, vb, 5 * USDC, now + 300, now + 900)
         .await
         .unwrap();
-    assert_eq!(
-        chain.get_challenge(id).await.unwrap().status,
-        EscrowStatus::Created
-    );
+    assert_eq!(chain.get_challenge(id).await.unwrap().status, EscrowStatus::Created);
     chain.vault_stake(va, id).await.unwrap();
     chain.vault_stake(vb, id).await.unwrap();
     let c = chain.get_challenge(id).await.unwrap();
@@ -76,20 +66,11 @@ async fn escrow_vault_lifecycle_on_anvil() {
     assert_eq!(chain.vault_info(va).await.unwrap().exposure, 5 * USDC);
 
     chain.resolve(id, va).await.unwrap();
-    assert_eq!(
-        chain.get_challenge(id).await.unwrap().status,
-        EscrowStatus::Resolved
-    );
+    assert_eq!(chain.get_challenge(id).await.unwrap().status, EscrowStatus::Resolved);
     assert!(chain.vault_release(va, id).await.unwrap().is_some());
     assert!(chain.vault_release(vb, id).await.unwrap().is_some());
-    assert!(
-        chain.vault_release(vb, id).await.unwrap().is_none(),
-        "second release is a no-op"
-    );
-    let (ia, ib) = (
-        chain.vault_info(va).await.unwrap(),
-        chain.vault_info(vb).await.unwrap(),
-    );
+    assert!(chain.vault_release(vb, id).await.unwrap().is_none(), "second release is a no-op");
+    let (ia, ib) = (chain.vault_info(va).await.unwrap(), chain.vault_info(vb).await.unwrap());
     assert_eq!((ia.balance, ia.exposure), (45 * USDC, 0));
     assert_eq!((ib.balance, ib.exposure), (35 * USDC, 0));
 
@@ -110,10 +91,7 @@ async fn escrow_vault_lifecycle_on_anvil() {
         .await
         .unwrap();
     assert!(chain.vault_stake(va, p).await.is_err());
-    let w = owner
-        .vault_withdraw(va, owner.address(), 45 * USDC)
-        .await
-        .unwrap();
+    let w = owner.vault_withdraw(va, owner.address(), 45 * USDC).await.unwrap();
     let t = chain.usdc_transfers(w).await.unwrap();
     assert_eq!((t[0].from, t[0].value), (va, 45 * USDC));
     assert_eq!(chain.vault_info(va).await.unwrap().balance, 0);

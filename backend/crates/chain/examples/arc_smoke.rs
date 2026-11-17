@@ -340,17 +340,8 @@ async fn main() -> Res<()> {
     println!("Balance change per account (gas + vault flows; USDC, 6-decimal ERC-20 view):");
     for ((name, a), b0) in accounts.iter().zip(&before) {
         let b1 = chain.usdc_balance(*a).await?;
-        let (sign, d) = if b1 >= *b0 {
-            ("+", b1 - b0)
-        } else {
-            ("-", b0 - b1)
-        };
-        println!(
-            "  {name}: {} -> {} ({sign}{})",
-            usdc(*b0),
-            usdc(b1),
-            usdc(d)
-        );
+        let (sign, d) = if b1 >= *b0 { ("+", b1 - b0) } else { ("-", b0 - b1) };
+        println!("  {name}: {} -> {} ({sign}{})", usdc(*b0), usdc(b1), usdc(d));
     }
     println!("vaults: A {va}  B {vb}");
     println!("challenges: #1 {id1}  #2 {id2}");
