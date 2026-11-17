@@ -25,6 +25,9 @@ import type {
   Template,
   TestRun,
   Wallet,
+  ChainConfig,
+  VaultView,
+  VaultSyncResult,
 } from "./types";
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api").replace(/\/+$/, "");
@@ -160,5 +163,14 @@ export const api = {
   testRunCode: (agentId: string, source?: string) =>
     post<TestRun>(`/agents/${encodeURIComponent(agentId)}/code/test-run`, source === undefined ? {} : { source }),
   getPortfolio: () => get<Portfolio>("/stats/portfolio"),
+
+  getChain: () => get<ChainConfig>("/chain"),
+  getVault: (agentId: string) => get<VaultView>(`/agents/${encodeURIComponent(agentId)}/vault`),
+  /** Link the vault created by `txHash` (a VaultFactory.createVault tx) to the agent. */
+  linkVault: (agentId: string, txHash: string) =>
+    post<VaultView>(`/agents/${encodeURIComponent(agentId)}/vault`, { tx_hash: txHash }),
+  /** Record USDC moved into or out of the agent's vault by `txHash` in the ledger. Idempotent per tx. */
+  syncVault: (agentId: string, txHash: string) =>
+    post<VaultSyncResult>(`/agents/${encodeURIComponent(agentId)}/vault/sync`, { tx_hash: txHash }),
   devTick: () => post<TickReport>("/dev/tick", {}),
 };

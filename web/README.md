@@ -13,4 +13,5 @@ npm run build && npm run lint && npm test
 - `lib/money.ts`: BigInt-only formatting/parsing of minor-unit money strings.
 - `lib/graph.ts`: contract `Graph` <-> canvas conversion; node positions are UI-only (localStorage `agent-graph-ui:<agentId>`).
 - `components/builder`: React Flow builder; block palette and param forms come from `GET /graph/blocks`.
-- `scripts/dev-mock-server.mjs`: throwaway mock of part of the API for UI checks (`npm run dev-mock`, port 8080). Not used by the app.
+- `scripts/dev-mock-server.mjs`: throwaway mock of part of the API for UI checks (`npm run dev-mock`, port 8080 or `PORT`). Not used by the app. Seeds three agents for the vault UI; `MOCK_CHAIN=disabled|missing` turns `/chain` off, `MOCK_OWNER=<address>` sets the mock vault owner (use your wallet to see owner-only actions), `MOCK_SEED=0` starts empty.
+- Wallet / vault UI (Arc testnet, D-57): `lib/chain.ts` (pure: ABIs, calldata, amounts, add-chain params, error mapping), `lib/wallet.ts` (EIP-1193 + viem), `lib/txlog.ts`, `lib/vault.ts`, components in `components/wallet/`. Uses `viem` only; chain addresses come from `GET /api/chain` at runtime.
