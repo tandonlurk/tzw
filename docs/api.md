@@ -22,7 +22,9 @@ AgentConfig  { goals, strategy, categories: string[], horizon_secs, risk_toleran
 AgentPolicy  { max_per_interaction: money, max_aggregate_exposure: money, approval_threshold: money,
                allowed_interaction_types: ("challenge"|"collaboration")[], min_conviction_bps, stop_loss: money|null }
 Graph        { schema_version: 1, nodes: [{id, type, params: object}], edges: [{from, from_port, to, to_port}] }
-Agent        { id, name, description, status: "active"|"paused", env, wallet_address: string|null, version: int,
+Agent        { id, name, description, status: "active"|"paused", env, wallet_address: string|null,
+               vault_address: string|null, vault_owner: string|null,   // Arc testnet vault (lowercase hex), see "Arc testnet"
+               version: int,
                config: AgentConfig, policy: AgentPolicy, graph: Graph,
                balances: { available: money, committed: money },
                stats: { realized_pnl: money (signed), settled: int, wins: int }, created_at, updated_at }
@@ -31,7 +33,8 @@ Template     { id, name, description, config, policy, graph }
 BlockDef     { type, kind: "trigger"|"reasoning"|"condition"|"action", label, description,
                inputs: [{port, data_type}], outputs: [{port, data_type}], params_schema: JSON Schema }
 GraphError   { code, message, node_id: string|null }
-LedgerEntry  { id, ts, env, account, delta: money (signed), reason, interaction_id: string|null, collaboration_id: string|null, tx_hash: string|null }
+LedgerEntry  { id, ts, env, account, delta: money (signed), reason, interaction_id: string|null, collaboration_id: string|null,
+               tx_hash: string|null }   // tx_hash: the onchain transaction behind the entry (arc_testnet), else null
 ActivityItem { id, ts, agent_id: string|null, interaction_id: string|null, collaboration_id: string|null, kind, summary, detail: object|null }
 ```
 
@@ -83,7 +86,8 @@ Interaction    { id, kind: "challenge", env, state, proposer_id, proposer_name, 
                  winner_id: string|null, observed: int|null, observed_display: string|null, observed_at,
                  status_reason: string|null,    // why it was cancelled / how it was resolved
                  resolution: "backend_administered",
-                 start_at, end_at, created_at, updated_at }
+                 start_at, end_at, created_at, updated_at,
+                 escrow: { create_tx, proposer_stake_tx, counterparty_stake_tx, settle_tx: string|null }|null }  // arc_testnet only
 InteractionDetail = Interaction + {
                  negotiation: [{ seq, agent_id, action: "propose"|"counter"|"accept"|"reject", terms, summary, ts }],
                  runs: [Run], approvals: [Approval], ledger: [LedgerEntry], activity: [ActivityItem] (oldest first) }
@@ -118,7 +122,7 @@ Units: `pm_yes_price_bps_v1` = the contract's YES price in basis points of 1.00 
 | GET | `/interactions?agent_id=&state=&limit=` | → `Interaction[]` | newest first; `agent_id` matches either side; limit default 100, max 500 |
 | GET | `/interactions/{id}` | → `InteractionDetail` | negotiation rounds, graph-run traces, approvals, ledger entries, activity |
 | GET | `/approvals?status=` | → `Approval[]` | default `pending`; `all` or a specific status |
-| POST | `/approvals/{id}/approve` | `{}` → `{approval, interaction}` | Records the approval, then **re-runs authorization** against current balances and limits. The interaction comes back `active`, still `awaiting_approval` (the other side is pending) or `cancelled` (authorization denied; reason in `status_reason`). 409 `approval_not_pending`, `approval_stale`, `approval_expired` |
+| POST | `/approvals/{id}/approve` | `{}` → `{approval, interaction}` | Records the approval, then **re-runs authorization** against current balances and limits. The interaction comes back `active` (`funded` for an `arc_testnet` challenge: the vaults stake on the next tick), still `awaiting_approval` (the other side is pending) or `cancelled` (authorization denied; reason in `status_reason`). 409 `approval_not_pending`, `approval_stale`, `approval_expired` |
 | POST | `/approvals/{id}/reject` | `{}` → `{approval, interaction}` | Cancels the challenge; no funds move |
 | GET | `/stats/portfolio` | → `Portfolio` | Every metric's formula is in `formulas` |
 | POST | `/dev/tick` | `{}` or `{now: ts, allow_expiry?: bool}` → `TickReport` | Runs one lifecycle step now (the interval scheduler calls the same code). `now` is a simulated clock, accepted only when the server runs on the fake market (422 otherwise). A `now` at or after the funding deadline (`start_at`) of a challenge that is not funded yet is refused with 409 `clock_jump_would_expire` unless `allow_expiry: true` (then it expires, as in real time). Not mounted when `DEV_ENDPOINTS=false` |
@@ -343,3 +347,52 @@ TestRun { ok: bool,
 ```
 
 The verdict is `core::authorize` as the intent would be judged when used: a proposal as a new interaction, an answer in state `proposed`, `commit_funds` in state `accepted`.
+
+## Arc testnet (onchain vaults and escrow)
+
+Enabled only when the server has `AEN_TESTNET_MNEMONIC` and the `ARC_*` settings (`backend/README.md`). Without them every agent and challenge stays simulated exactly as above, `GET /chain` says `{"enabled": false}` and the vault endpoints answer **503** `chain_unavailable`.
+
+Custody (D-57): each agent may be linked to one `AgentVault`, created and owned by the owner's browser wallet through our `VaultFactory`. The backend's operator key can only stake vault funds into an escrow challenge that names the vault, within the vault's onchain caps. Our own policy (`authorize`) still gates every stake first; the onchain caps are a second layer. Resolution remains **backend-administered**: the backend's resolver key decides the winner.
+
+An agent linked to a vault has `env: "arc_testnet"`: its balances, ledger entries and challenges are in that env (its old simulated balance stays in the simulated ledger, unused). Challenges are only formed between two agents of the same env.
+
+### Endpoints
+
+| Method | Path | Body → Response | Notes |
+|---|---|---|---|
+| GET | `/chain` | → `ChainInfo` | Config for the web app. Never a key, never the backend's own RPC URL |
+| GET | `/agents/{id}/vault` | → `VaultView` | 404 `not_found` (agent), 404 `vault_not_linked`, 503 `chain_unavailable` (chain disabled or RPC down) |
+| POST | `/agents/{id}/vault` | `{tx_hash}` → `VaultView` | Links the vault created in `tx_hash`. Verified from the receipt: a `VaultCreated` log from **our** factory whose `agentRef` is this agent (UUID left-padded to 32 bytes) and whose operator is our operator, and the vault's current operator is still ours. Then the agent switches to `arc_testnet`. 422 `invalid_vault_tx` (bad hash, unknown / reverted tx, other factory, other agent, other operator; `message` says which), 409 `vault_already_linked`, 409 `agent_has_open_interactions` (open challenge or collaboration), 503 `chain_unavailable` |
+| POST | `/agents/{id}/vault/sync` | `{tx_hash}` → `SyncReport` | Posts the USDC transfers into (`vault_deposit`) or out of (`vault_withdraw`) the vault found in that transaction's receipt. Transfers between the vault and the escrow (stakes, payouts) are the lifecycle's and are ignored here. Idempotent per log (`chain:{tx}:{log_index}`): replaying a tx credits nothing. A withdrawal larger than the agent's ledger available is **skipped** (listed in `skipped`, visible as `drift`), never forced. 404 `vault_not_linked`, 422 `invalid_vault_tx`, 503 `chain_unavailable` |
+| POST | `/dev/chain/setup-demo-vaults` | `{amount?: money}` → `{env, owner, agents: [{id, link_tx, funding_tx, credited, vault: VaultView}], note}` | Dev only: mounted when dev endpoints are on **and** `AEN_DEV_CHAIN_OWNER=1`. Plays the owner with the test-owner key (HD index 2): for the seed-demo agents (`…00d1`, `…00d2`, run `/dev/seed-demo` first, else 409 `demo_not_seeded`) creates and links a vault if missing (caps = `amount`), tops it up to `amount` (default 5 USDC) and syncs the transfer, all through the same verification as the public endpoints. Renames "(simulated)" to "(Arc testnet)". 409 `dev_owner_tx_failed` if the test owner cannot pay |
+
+```
+ChainInfo  { enabled: true, chain_id: 5042002, chain_name: "Arc Testnet", rpc_url, explorer_url, usdc_address,
+             usdc_decimals: 6, escrow_address, vault_factory_address, operator_address }
+           | { enabled: false }
+VaultView  { address, owner, operator,              // checksummed
+             paused: bool, max_per_challenge: money, max_exposure: money,   // onchain caps
+             onchain_balance: money,                 // USDC held by the vault (ERC-20 view, 6 decimals)
+             onchain_exposure: money,                // its stakes in escrow not yet released
+             ledger_available: money, ledger_committed: money,   // arc_testnet ledger
+             drift: money (signed),                  // (onchain_balance + onchain_exposure) - (ledger_available + ledger_committed)
+             explorer_url: string|null }             // {explorer}/address/{vault}
+SyncReport { credited: LedgerEntry[],                // the agent's lines only: deposits positive, withdrawals negative
+             skipped: [{ log_index, amount: money, reason: "insufficient_ledger_available" }],
+             vault: VaultView }
+```
+
+`drift` is 0 when the ledger matches the vault. Positive = more onchain than in the ledger (usually a deposit not synced yet); negative = the ledger holds funds the vault no longer has (a skipped withdrawal).
+
+### Challenge lifecycle on Arc testnet
+
+Same states, same `authorize` checks, same ledger posting sets as simulated; what changes:
+
+1. Commit (`accepted`/`awaiting_approval` → `funded`): both stakes are authorized and **reserved** in the ledger (`commit_stake`), and the challenge stops at `funded`.
+2. Next phase of the same tick: the resolver registers the challenge in the escrow (`fundDeadline` = `start_at`, `resolveDeadline` = `end_at` + `RESOLUTION_GRACE_SECS`), the operator stakes each vault, and the challenge becomes `active` once the escrow is Active. If a vault cannot stake (paused, onchain cap, balance, operator revoked, revert) or the funding deadline passes, the escrow is voided onchain (`resolveVoid`), both reservations are refunded (`refund`) and the challenge is `cancelled` with `outcome: "void"`.
+3. At `end_at` (wall clock; never earlier, whatever `/dev/tick`'s `now` says) the outcome is decided once from market data, then `resolve(winner vault)` / `resolveVoid` is sent, then the ledger settles (`settle` / `refund`, `tx_hash` = that transaction), then both vaults' exposure is released.
+4. An RPC failure leaves everything as it was; the next tick reads the escrow first and continues. Nothing is sent or posted twice.
+
+`arc_testnet` challenges use the wall clock everywhere; the simulated clock of `/dev/tick` applies to simulated challenges only. Tick reports may contain `chain_unavailable: …` errors (RPC down, or arc challenges waiting while the chain is not configured).
+
+Activity kinds added: `vault_linked`, `vault_deposit`, `vault_withdraw`, `stake_reserved`, `escrow_created`, `stake_deposited` (plus `stake_committed`, `challenge_settled`, `challenge_voided` with `detail.tx_hash` / `explorer_url` for arc). Amounts read `2.50 USDC (Arc testnet USDC)` in summaries.
