@@ -288,7 +288,9 @@ pub struct TestRunBody {
 /// used, so the test-run verdict matches the live one.
 fn judged_in(intent: &Intent) -> Option<InteractionState> {
     match intent {
-        Intent::ProposeChallenge { .. } | Intent::ProposeCollaboration { .. } => None,
+        Intent::ProposeChallenge { .. }
+        | Intent::ProposeCollaboration { .. }
+        | Intent::PayTaskFee { .. } => None,
         Intent::AcceptChallenge { .. } | Intent::CounterOffer { .. } | Intent::Reject => {
             Some(InteractionState::Proposed)
         }

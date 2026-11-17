@@ -151,7 +151,13 @@ pub struct TickReport {
     pub accepted: u32,
     pub rejected: u32,
     pub approvals_requested: u32,
+    /// Ledger reservations made this tick (`accepted -> funded`). An owner
+    /// approval through the REST API reserves outside a tick and is not
+    /// counted here.
     pub funded: u32,
+    /// Arc testnet challenges whose escrow went live this tick
+    /// (`funded -> active`, both stakes deposited onchain).
+    pub activated: u32,
     pub resolving: u32,
     pub settled: u32,
     pub voided: u32,

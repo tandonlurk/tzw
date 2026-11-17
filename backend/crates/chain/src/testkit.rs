@@ -59,7 +59,13 @@ pub async fn spawn_anvil() -> Option<Anvil> {
         .ok()?
         .port();
     let child = tokio::process::Command::new(bin)
-        .args(["--port", &port.to_string(), "--silent", "--chain-id", "31337"])
+        .args([
+            "--port",
+            &port.to_string(),
+            "--silent",
+            "--chain-id",
+            "31337",
+        ])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .kill_on_drop(true)

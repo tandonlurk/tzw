@@ -537,6 +537,9 @@ impl<'a> Walker<'a> {
             (Intent::ProposeCollaboration { .. }, _) => {
                 unusable("which custom code cannot start yet")
             }
+            (Intent::PayTaskFee { .. }, _) => {
+                unusable("but firm task fees are paid by the runtime")
+            }
         }
     }
 

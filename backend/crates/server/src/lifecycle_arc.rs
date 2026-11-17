@@ -416,7 +416,7 @@ async fn fund_one(
     }
 
     match c.status {
-        EscrowStatus::Active => activate(pool, &row, (&a_name, &b_name)).await,
+        EscrowStatus::Active => activate(pool, &row, (&a_name, &b_name), report).await,
         EscrowStatus::Voided | EscrowStatus::Refunded => {
             void_funding(
                 state,
@@ -441,6 +441,7 @@ async fn activate(
     pool: &PgPool,
     seen: &InteractionRow,
     (a_name, b_name): (&String, &String),
+    report: &mut TickReport,
 ) -> Result<(), ApiError> {
     let now = Utc::now();
     let mut tx = pool.begin().await?;
@@ -475,6 +476,7 @@ async fn activate(
         .await?;
     }
     tx.commit().await?;
+    report.activated += 1;
     Ok(())
 }
 

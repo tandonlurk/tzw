@@ -124,6 +124,12 @@ pub enum Reason {
     /// USDC left an agent's onchain vault to the owner (verified receipt):
     /// agent available -> external. `arc_testnet` only.
     VaultWithdraw,
+    /// A firm lead pays a member's guaranteed task fee for a used
+    /// contribution: lead available -> member available. Simulated only.
+    FirmTaskFee,
+    /// A firm lead shares a challenge's profit with its members: lead
+    /// available -> member available. Simulated only.
+    FirmPayout,
 }
 
 impl Reason {
@@ -140,6 +146,8 @@ impl Reason {
             Reason::CollabRefund => "collab_refund",
             Reason::VaultDeposit => "vault_deposit",
             Reason::VaultWithdraw => "vault_withdraw",
+            Reason::FirmTaskFee => "firm_task_fee",
+            Reason::FirmPayout => "firm_payout",
         }
     }
 }
@@ -514,6 +522,63 @@ pub fn collab_refund(
         postings.into(),
     )?
     .for_collaboration(collaboration))
+}
+
+/// A firm lead pays a member the task fee for one used contribution. The key
+/// is derived from the contribution, so a fee is paid at most once.
+pub fn firm_task_fee(
+    env: Env,
+    lead: Uuid,
+    member: Uuid,
+    contribution: Uuid,
+    interaction: Option<Uuid>,
+    amount: Money,
+) -> Result<PostingSet, LedgerError> {
+    let amount = positive(amount)?;
+    if lead == member {
+        return Err(LedgerError::SameParty);
+    }
+    let postings = transfer(
+        Account::AgentAvailable(lead),
+        Account::AgentAvailable(member),
+        amount,
+    );
+    PostingSet::new(
+        env,
+        Reason::FirmTaskFee,
+        &format!("firm_task_fee:{contribution}"),
+        interaction,
+        postings.into(),
+    )
+}
+
+/// A firm lead shares one settled challenge's profit with the members whose
+/// contributions were used (see `firm::split_profit`). Zero amounts get no
+/// posting; one set per interaction, so it is paid at most once.
+pub fn firm_payout(
+    env: Env,
+    lead: Uuid,
+    interaction: Uuid,
+    payouts: &[(Uuid, Money)],
+) -> Result<PostingSet, LedgerError> {
+    let mut postings = Vec::with_capacity(payouts.len() * 2);
+    for (member, amount) in payouts.iter().filter(|(_, a)| !a.is_zero()) {
+        if *member == lead {
+            return Err(LedgerError::SameParty);
+        }
+        postings.extend(transfer(
+            Account::AgentAvailable(lead),
+            Account::AgentAvailable(*member),
+            *amount,
+        ));
+    }
+    PostingSet::new(
+        env,
+        Reason::FirmPayout,
+        &format!("firm_payout:{interaction}"),
+        Some(interaction),
+        postings,
+    )
 }
 
 /// The idempotency key of a ledger set derived from one onchain log, so a
@@ -917,5 +982,52 @@ mod tests {
             deposit(ENV, m(1), "k").unwrap().check_balances(&balances),
             Err(LedgerError::Overflow)
         );
+    }
+
+    #[test]
+    fn firm_transfers_move_available_to_available() {
+        let (lead, a, b, i, c) = (id(1), id(2), id(3), id(4), id(5));
+        let fee = firm_task_fee(ENV, lead, a, c, Some(i), m(5)).unwrap();
+        assert_eq!(fee.reason(), Reason::FirmTaskFee);
+        assert_eq!(fee.idempotency_key(), format!("firm_task_fee:{c}"));
+        assert_eq!(fee.net_deltas()[&Account::AgentAvailable(lead)], s(-5));
+        assert_eq!(fee.net_deltas()[&Account::AgentAvailable(a)], s(5));
+        assert_eq!(
+            firm_task_fee(ENV, lead, a, c, None, m(0)),
+            Err(LedgerError::ZeroAmount)
+        );
+        assert_eq!(
+            firm_task_fee(ENV, lead, lead, c, None, m(1)),
+            Err(LedgerError::SameParty)
+        );
+
+        let pay = firm_payout(ENV, lead, i, &[(a, m(120)), (b, m(0)), (b, m(40))]).unwrap();
+        assert_eq!(pay.idempotency_key(), format!("firm_payout:{i}"));
+        assert_eq!(pay.interaction_id(), Some(i));
+        assert_eq!(sum(&pay), 0);
+        let net = pay.net_deltas();
+        assert_eq!(net[&Account::AgentAvailable(lead)], s(-160));
+        assert_eq!(net[&Account::AgentAvailable(b)], s(40));
+        // Nothing to pay is not a posting set.
+        assert_eq!(
+            firm_payout(ENV, lead, i, &[(a, m(0))]),
+            Err(LedgerError::NoPostings)
+        );
+        assert_eq!(
+            firm_payout(ENV, lead, i, &[(lead, m(1))]),
+            Err(LedgerError::SameParty)
+        );
+
+        // A lead cannot pay more than it has.
+        let mut balances = BTreeMap::new();
+        balances.insert(Account::AgentAvailable(lead), s(100));
+        assert_eq!(
+            apply(&mut balances, &pay),
+            Err(LedgerError::InsufficientFunds {
+                account: Account::AgentAvailable(lead)
+            })
+        );
+        apply(&mut balances, &fee).unwrap();
+        assert_eq!(bal(&balances, Account::AgentAvailable(lead)), 95);
     }
 }
