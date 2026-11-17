@@ -15,7 +15,10 @@ import {
   type Edge,
 } from "@xyflow/react";
 import { CODE_BLOCK_TYPE, STARTER_SOURCE } from "@/lib/customCode";
-import { api, isApiError, type BlockDef, type Graph, type GraphError } from "@/lib/api";
+import { api, isApiError, type BlockDef, type Graph, type GraphError, type Money } from "@/lib/api";
+import { APPROACH_BLOCK_TYPE, approachNodeOf, approachToParams, defaultApproach, ensureApproachNode, normalizeApproach } from "@/lib/approach";
+import { ApproachEditor } from "@/components/approach/ApproachEditor";
+import { ApproachNode } from "./ApproachNode";
 import {
   canConnect,
   canvasToGraph,
@@ -28,7 +31,8 @@ import {
 } from "@/lib/graph";
 import { BuilderContext, BuilderNode, type FlowNode } from "./BuilderNode";
 
-const nodeTypes = { block: BuilderNode };
+const nodeTypes = { block: BuilderNode, approach: ApproachNode };
+const isApproach = (n: FlowNode) => n.data.blockType === APPROACH_BLOCK_TYPE;
 const DRAG_MIME = "application/x-block-type";
 
 interface Props {
@@ -40,6 +44,8 @@ interface Props {
   onChange: (graph: Graph) => void;
   /** Errors from a rejected save (422), shown until the next Validate. */
   serverErrors?: GraphError[];
+  /** Agent's max_per_interaction (minor units) for the approach editor's stake target; null if unknown. */
+  maxPerInteraction?: Money | null;
 }
 
 export function GraphBuilder(props: Props) {
@@ -50,14 +56,23 @@ export function GraphBuilder(props: Props) {
   );
 }
 
-function Inner({ blocks, initialGraph, storageId, onChange, serverErrors }: Props) {
+function Inner({ blocks, initialGraph, storageId, onChange, serverErrors, maxPerInteraction = null }: Props) {
   const blockMap = useMemo(() => new Map(blocks.map((b) => [b.type, b])), [blocks]);
   const rf = useReactFlow<FlowNode, Edge>();
 
-  const [init] = useState(() => graphToCanvas(initialGraph, loadPositions(storageId)));
+  // Every graph gets exactly one pinned approach node; a graph without one shows defaults and gains it on save.
+  const [init] = useState(() => ({
+    ...graphToCanvas(ensureApproachNode(initialGraph), loadPositions(storageId)),
+    addedApproach: !approachNodeOf(initialGraph),
+  }));
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(
-    init.nodes.map((n) => ({ id: n.id, type: "block", position: n.position, data: { blockType: n.type, params: n.params } })),
+    init.nodes.map((n) =>
+      n.type === APPROACH_BLOCK_TYPE
+        ? { id: n.id, type: "approach", position: n.position, deletable: false, connectable: false, data: { blockType: n.type, params: n.params } }
+        : { id: n.id, type: "block", position: n.position, data: { blockType: n.type, params: n.params } },
+    ),
   );
+  const [panelOpen, setPanelOpen] = useState(true);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(
     init.edges.map((e, i) => ({ id: `e${i}-${e.source}-${e.target}`, ...e })),
   );
@@ -88,7 +103,7 @@ function Inner({ blocks, initialGraph, storageId, onChange, serverErrors }: Prop
   );
   const remove = useCallback(
     (id: string) => {
-      setNodes((ns) => ns.filter((n) => n.id !== id));
+      setNodes((ns) => ns.filter((n) => n.id !== id || isApproach(n)));
       setEdges((es) => es.filter((e) => e.source !== id && e.target !== id));
     },
     [setNodes, setEdges],
@@ -162,7 +177,12 @@ function Inner({ blocks, initialGraph, storageId, onChange, serverErrors }: Prop
   }, [shownErrors]);
   const graphErrors = shownErrors.filter((e) => !e.node_id);
 
-  const ctx = useMemo(() => ({ blocks: blockMap, errors: errorsByNode, setParams, remove, agentId: storageId === "new" ? null : storageId }), [blockMap, errorsByNode, setParams, remove, storageId]);
+  const openApproach = useCallback(() => setPanelOpen(true), []);
+  const ctx = useMemo(
+    () => ({ blocks: blockMap, errors: errorsByNode, setParams, remove, agentId: storageId === "new" ? null : storageId, openApproach }),
+    [blockMap, errorsByNode, setParams, remove, storageId, openApproach],
+  );
+  const approachNode = nodes.find(isApproach);
 
   const kinds = ["trigger", "reasoning", "condition", "action"] as const;
 
@@ -202,6 +222,7 @@ function Inner({ blocks, initialGraph, storageId, onChange, serverErrors }: Prop
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onNodeClick={(_, n) => { if (isApproach(n)) setPanelOpen(true); }}
             isValidConnection={isValidConnection}
             colorMode="dark"
             fitView
@@ -212,6 +233,36 @@ function Inner({ blocks, initialGraph, storageId, onChange, serverErrors }: Prop
           </ReactFlow>
         </div>
       </div>
+      {approachNode && (
+        <div className="card approach-panel" style={{ marginTop: ".75rem" }}>
+          <div className="row spread">
+            <h3 style={{ margin: 0 }}>Approach <span className="badge dim">pinned block</span></h3>
+            <span className="row">
+              {panelOpen && (
+                <button type="button" className="sm" onClick={() => { if (window.confirm("Reset the approach to the defaults?")) setParams(approachNode.id, approachToParams(defaultApproach())); }}>
+                  Reset to defaults
+                </button>
+              )}
+              <button type="button" className="sm" aria-expanded={panelOpen} onClick={() => setPanelOpen((o) => !o)}>{panelOpen ? "Hide" : "Edit approach"}</button>
+            </span>
+          </div>
+          {init.addedApproach && <div className="notice info" style={{ margin: ".5rem 0" }}>This graph had no approach block, so the defaults below apply. Saving adds the block.</div>}
+          {!blockMap.has(APPROACH_BLOCK_TYPE) && <div className="notice" style={{ margin: ".5rem 0" }}>The backend&apos;s block catalog does not list approach.profile yet; it may reject the save.</div>}
+          {(errorsByNode[approachNode.id] ?? []).length > 0 && (
+            <div className="banner-error" style={{ margin: ".5rem 0" }}><ul>{errorsByNode[approachNode.id].map((e, i) => <li key={i}>{e}</li>)}</ul></div>
+          )}
+          {panelOpen ? (
+            <ApproachEditor
+              value={normalizeApproach(approachNode.data.params)}
+              onChange={(p) => setParams(approachNode.id, approachToParams(p))}
+              maxPerInteraction={maxPerInteraction}
+              agentId={storageId === "new" ? null : storageId}
+            />
+          ) : (
+            <div className="dim small">Select the Approach block on the canvas or press Edit approach.</div>
+          )}
+        </div>
+      )}
       <div className="row" style={{ marginTop: ".5rem" }}>
         <button type="button" onClick={validate} disabled={validation === "busy"}>{validation === "busy" ? "Validating..." : "Validate"}</button>
         {validation === "valid" && <span className="pos">Graph is valid.</span>}
