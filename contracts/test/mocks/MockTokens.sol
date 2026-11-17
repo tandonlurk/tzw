@@ -12,6 +12,8 @@ contract MockUSDC {
     mapping(address => mapping(address => uint256)) public allowance;
     mapping(address => bool) public blocked;
 
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
     function mint(address to, uint256 amount) external {
         balanceOf[to] += amount;
         totalSupply += amount;
@@ -41,6 +43,7 @@ contract MockUSDC {
         require(!blocked[from] && !blocked[to], "blocked");
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
+        emit Transfer(from, to, amount);
     }
 }
 

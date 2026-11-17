@@ -3,8 +3,9 @@ pragma solidity ^0.8.24;
 
 import {Script, console} from "forge-std/Script.sol";
 import {ChallengeEscrow} from "../src/ChallengeEscrow.sol";
+import {VaultFactory} from "../src/AgentVault.sol";
 
-/// @notice Deploys ChallengeEscrow. Reads USDC_ADDRESS and RESOLVER_ADDRESS from the environment.
+/// @notice Deploys ChallengeEscrow and the VaultFactory bound to it. Reads USDC_ADDRESS and RESOLVER_ADDRESS from the environment.
 ///         The deployer key is never read from a file or env var here: pass it on the command line
 ///         with a Foundry keystore (`--account <name>`).
 /// @dev Refuses to run anywhere except Arc testnet and a local dev chain. Mainnet deployment needs
@@ -16,7 +17,7 @@ contract Deploy is Script {
     error UnsupportedChain(uint256 chainId);
     error TokenIsNotSixDecimals();
 
-    function run() external returns (ChallengeEscrow escrow) {
+    function run() external returns (ChallengeEscrow escrow, VaultFactory factory) {
         if (block.chainid != ARC_TESTNET && block.chainid != LOCAL) revert UnsupportedChain(block.chainid);
 
         address usdc = vm.envAddress("USDC_ADDRESS");
@@ -27,9 +28,11 @@ contract Deploy is Script {
 
         vm.startBroadcast();
         escrow = new ChallengeEscrow(usdc, resolver);
+        factory = new VaultFactory(usdc, address(escrow));
         vm.stopBroadcast();
 
         console.log("ChallengeEscrow:", address(escrow));
+        console.log("VaultFactory:", address(factory));
         console.log("USDC:", usdc);
         console.log("Resolver:", resolver);
     }
