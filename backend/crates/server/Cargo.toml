@@ -31,6 +31,6 @@ sha2 = "0.11"
 [dev-dependencies]
 # Local anvil + contract deployment for the onchain lifecycle tests.
 aen-chain = { path = "../chain", features = ["testkit"] }
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["sync", "io-util"] }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
