@@ -109,9 +109,13 @@ pub struct Balances {
 
 #[derive(Debug, Serialize)]
 pub struct Stats {
+    /// Settled challenge P&L, net of payments to firm members.
     pub realized_pnl: SignedMoney,
     pub settled: i64,
     pub wins: i64,
+    /// Task fees and profit shares received as a firm member (simulated).
+    /// Not part of `realized_pnl`.
+    pub firm_income: Money,
 }
 
 #[derive(Debug, Serialize)]
@@ -175,6 +179,9 @@ pub struct ActivityItem {
     pub agent_id: Option<Uuid>,
     pub interaction_id: Option<Uuid>,
     pub collaboration_id: Option<Uuid>,
+    /// Set on firm activity. Queries that do not select it read `null`.
+    #[sqlx(default)]
+    pub firm_id: Option<Uuid>,
     pub kind: String,
     pub summary: String,
     pub detail: Option<Value>,

@@ -114,6 +114,7 @@ pub struct ActivityParams {
     agent_id: Option<String>,
     interaction_id: Option<String>,
     collaboration_id: Option<String>,
+    firm_id: Option<String>,
     limit: Option<String>,
 }
 
@@ -141,6 +142,12 @@ pub async fn activity(
         ),
         None => None,
     };
+    let firm_id = match params.firm_id.as_deref().filter(|s| !s.is_empty()) {
+        Some(s) => {
+            Some(Uuid::parse_str(s).map_err(|_| ApiError::bad_request("firm_id must be a UUID"))?)
+        }
+        None => None,
+    };
     let limit = match params.limit.as_deref().filter(|s| !s.is_empty()) {
         Some(s) => s
             .parse::<i64>()
@@ -151,15 +158,18 @@ pub async fn activity(
         None => DEFAULT_ACTIVITY_LIMIT,
     };
     let rows: Vec<ActivityItem> = sqlx::query_as(
-        "SELECT id, ts, agent_id, interaction_id, collaboration_id, kind, summary, detail FROM activity \
+        "SELECT id, ts, agent_id, interaction_id, collaboration_id, firm_id, kind, summary, detail \
+         FROM activity \
          WHERE ($1::uuid IS NULL OR agent_id = $1) \
            AND ($3::uuid IS NULL OR interaction_id = $3) \
-           AND ($4::uuid IS NULL OR collaboration_id = $4) ORDER BY seq DESC LIMIT $2",
+           AND ($4::uuid IS NULL OR collaboration_id = $4) \
+           AND ($5::uuid IS NULL OR firm_id = $5) ORDER BY seq DESC LIMIT $2",
     )
     .bind(agent_id)
     .bind(limit)
     .bind(interaction_id)
     .bind(collaboration_id)
+    .bind(firm_id)
     .fetch_all(&pool)
     .await?;
     Ok(Json(rows))

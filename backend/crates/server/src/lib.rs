@@ -8,6 +8,7 @@ pub mod custom_code;
 pub mod demo;
 pub mod error;
 pub mod extract;
+pub mod firms;
 pub mod graph_exec;
 pub mod grok;
 pub mod grok_cocaptain;
@@ -80,6 +81,12 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
             post(collaborations::complete),
         )
         .route("/collaborations/{id}/cancel", post(collaborations::cancel))
+        .route("/firms", get(firms::list).post(firms::create))
+        .route("/firms/{id}", get(firms::get))
+        .route("/firms/{id}/join", post(firms::join))
+        .route("/firms/{id}/leave", post(firms::leave))
+        .route("/firms/{id}/close", post(firms::close))
+        .route("/firms/{id}/contributions", get(firms::contributions))
         .route("/suggestions", get(suggestions::list))
         .route("/suggestions/generate", post(suggestions::generate_now))
         .route("/suggestions/{id}/accept", post(suggestions::accept))
