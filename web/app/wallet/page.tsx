@@ -6,6 +6,7 @@ import { parseMoney } from "@/lib/money";
 import { useAsync } from "@/lib/useAsync";
 import { Async, ErrorBanner, EnvBadge, Money, Tile } from "@/components/ui";
 import { LedgerTable } from "@/components/LedgerTable";
+import { TestnetWallet } from "@/components/wallet/TestnetWallet";
 
 export default function WalletPage() {
   const wallet = useAsync(api.getWallet, "wallet");
@@ -60,6 +61,7 @@ export default function WalletPage() {
           </div>
         )}
       </Async>
+      <TestnetWallet />
     </div>
   );
 }
