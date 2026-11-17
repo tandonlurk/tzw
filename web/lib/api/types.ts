@@ -445,3 +445,45 @@ export interface TestRun {
   module_sha256: string;
   simulated: true;
 }
+
+// ---- Arc testnet chain + agent vaults (D-57; contract in reports/handoffs/2026-11-17-wallet-ui.md) ----
+
+/** `GET /chain`. When `enabled` is false the other fields are absent and the wallet UI stays off. */
+export type ChainConfig =
+  | { enabled: false }
+  | {
+      enabled: true;
+      chain_id: number;
+      chain_name: string;
+      rpc_url: string;
+      explorer_url: string;
+      usdc_address: string;
+      usdc_decimals: number;
+      escrow_address: string;
+      vault_factory_address: string;
+      operator_address: string;
+    };
+
+export type EnabledChain = Extract<ChainConfig, { enabled: true }>;
+
+/** `GET /agents/{id}/vault`: onchain state read by the backend, next to the agent's ledger balances. */
+export interface VaultView {
+  address: string;
+  owner: string;
+  operator: string;
+  paused: boolean;
+  max_per_challenge: Money;
+  max_exposure: Money;
+  onchain_balance: Money;
+  onchain_exposure: Money;
+  ledger_available: Money;
+  ledger_committed: Money;
+  /** Signed. Onchain minus ledger as computed by the backend; zero when they agree. */
+  drift: Money;
+  explorer_url: string;
+}
+
+export interface VaultSyncResult {
+  credited: LedgerEntry[];
+  vault: VaultView;
+}
