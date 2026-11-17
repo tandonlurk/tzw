@@ -28,6 +28,13 @@ import type {
   ChainConfig,
   VaultView,
   VaultSyncResult,
+  ApproachMarkets,
+  Contribution,
+  Firm,
+  FirmInput,
+  FirmRoleName,
+  MarketCategories,
+  MarketPreview,
 } from "./types";
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api").replace(/\/+$/, "");
@@ -173,4 +180,16 @@ export const api = {
   syncVault: (agentId: string, txHash: string) =>
     post<VaultSyncResult>(`/agents/${encodeURIComponent(agentId)}/vault/sync`, { tx_hash: txHash }),
   devTick: () => post<TickReport>("/dev/tick", {}),
+
+  getMarketCategories: () => get<MarketCategories>("/markets/categories"),
+  previewMarkets: (markets: ApproachMarkets, agentId?: string) =>
+    post<MarketPreview>("/markets/preview", agentId ? { markets, agent_id: agentId } : { markets }),
+  listFirms: () => get<Firm[]>("/firms"),
+  getFirm: (id: string) => get<Firm>(`/firms/${encodeURIComponent(id)}`),
+  createFirm: (input: FirmInput) => post<Firm>("/firms", input),
+  joinFirm: (id: string, agentId: string, role: FirmRoleName) =>
+    post<Firm>(`/firms/${encodeURIComponent(id)}/join`, { agent_id: agentId, role }),
+  leaveFirm: (id: string, agentId: string) => post<Firm>(`/firms/${encodeURIComponent(id)}/leave`, { agent_id: agentId }),
+  closeFirm: (id: string) => post<Firm>(`/firms/${encodeURIComponent(id)}/close`, {}),
+  listFirmContributions: (id: string) => get<Contribution[]>(`/firms/${encodeURIComponent(id)}/contributions`),
 };
