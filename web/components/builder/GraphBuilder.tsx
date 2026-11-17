@@ -169,7 +169,7 @@ function Inner({ blocks, initialGraph, storageId, onChange, serverErrors, maxPer
     }
   }
 
-  const shownErrors = validation === "idle" ? (serverErrors ?? []) : errors;
+  const shownErrors = useMemo(() => (validation === "idle" ? (serverErrors ?? []) : errors), [validation, serverErrors, errors]);
   const errorsByNode = useMemo(() => {
     const m: Record<string, string[]> = {};
     for (const e of shownErrors) if (e.node_id) (m[e.node_id] ??= []).push(`${e.code}: ${e.message}`);
