@@ -34,7 +34,7 @@ Branch: `overnight-1118` (from `main` a2bcdcc, which now holds PRs #1–#3 via #
 - [x] 4. Starter templates with an approach node; rerun the simulated demo on a fresh db and update `docs/demo.md` numbers from the actual run. (TODO M3b, P2)
   - Migration 0012 (D-69): bull 15 %/100 %, skeptic 25 %/50 %, cautious 30 %/20 %, any market; firm seed + firm tests replace the template node. `cargo test --workspace` 392 passed, 1 ignored (templates test now checks the stances; Cautious approval test now 0.72); clippy clean. Commit 168bf87.
   - Fresh-db reruns over HTTP (`aen_item4_demo`, `aen_item4_firm`): BTC demo, co-captain, collaboration and firm demo numbers all unchanged; recorded in `docs/demo.md`. No web change needed (`ensureApproachNode` only adds when missing).
-- [ ] 5. Testnet demo script for recording the video: exact steps, expected screens, fallbacks if the RPC is slow. In `docs/demo.md` (testnet section). (TODO M6)
+- [~] 5. Testnet demo script for recording the video: exact steps, expected screens, fallbacks if the RPC is slow. In `docs/demo.md` (testnet section). (TODO M6)
 - [ ] 6. Full E2E regression on a fresh db: simulated demo end to end over HTTP + `npm run build`; browser walkthrough if Chrome tools are available, else say so. Findings → `reports/qa-overnight.md`; fix small P0/P1 bugs, list the rest.
 - [ ] 7. Refresh `docs/submission/` with honest current status (what is live on Arc, what is simulated, what is unverified). (TODO M6)
 - [ ] 8. Stretch: web app sends `AEN_API_TOKEN` when configured (SEC-02 gap); then `docs/design/explainers-storyboard.md`, a storyboard only (what to animate: discovery, negotiation, escrow lock, resolution, firm payout). No animation code.
