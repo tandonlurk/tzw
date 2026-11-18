@@ -113,4 +113,4 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 ## Notes from owner
 
-- 2026-11-17 — not started, think about only: after the UI redesign (owner, Wed night), the app still needs animated explainers. Most of the product happens in the background (discovery, negotiation, escrow lock, resolution, firm payouts); the user mostly sees agent performance summaries and a transaction/position log, so the hard parts (escrow above all) need visual explaining. Owner will look for Claude visual tools/skills on GitHub.
+- 2026-11-17 — storyboard drafted 2026-11-18 (`docs/design/explainers-storyboard.md`, no code); otherwise think about only: after the UI redesign (owner, Wed night), the app still needs animated explainers. Most of the product happens in the background (discovery, negotiation, escrow lock, resolution, firm payouts); the user mostly sees agent performance summaries and a transaction/position log, so the hard parts (escrow above all) need visual explaining. Owner will look for Claude visual tools/skills on GitHub.
