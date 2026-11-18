@@ -67,7 +67,7 @@ Client behaviour: 5 s timeout per request, 3 attempts, backoff 250 ms doubling, 
 
 ## Not verified (do not rely on)
 
-- `resolutionSide: "no"`: only `"yes"` was seen. We accept `"no"` by symmetry and treat anything else as missing data.
+- ~~`resolutionSide: "no"`~~ Seen live on 2026-11-17 (`BTC2611172200`, settled ladder contracts, `prices: {"buy":{},"sell":{}}`). Settled BTC events showed `resolvedAt` about 6-9 s after `expiryDate`. Anything other than `"yes"`/`"no"` is still treated as missing data.
 - Other `status` values (e.g. suspended, cancelled) and how a cancelled contract is reported. An unknown state without a price or resolution ends in a void, which is the safe outcome.
 - `get-event-strike` endpoint, the WebSocket streams, and all authenticated endpoints.
 - Candle timeframes other than `1m` and `1hr`.
