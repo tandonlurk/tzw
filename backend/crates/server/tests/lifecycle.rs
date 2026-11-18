@@ -733,6 +733,20 @@ async fn settlement_pays_the_winner_and_keeps_the_ledger_balanced() {
         .unwrap();
     assert_eq!(winner["win_rate_bps"], 10_000);
 
+    // One environment per response: nothing simulated shows up as testnet.
+    assert_eq!(
+        get(&c.app, "/api/stats/portfolio?env=simulated").await["totals"],
+        portfolio["totals"]
+    );
+    let arc = get(&c.app, "/api/stats/portfolio?env=arc_testnet").await;
+    assert_eq!(arc["env"], "arc_testnet");
+    assert_eq!(arc["totals"]["allocated"], "0");
+    assert_eq!(arc["outcomes"]["settled"], 0);
+    assert!(arc["pnl_over_time"].as_array().unwrap().is_empty());
+    assert!(arc["agents"].as_array().unwrap().is_empty());
+    let (status, _) = send(&c.app, "GET", "/api/stats/portfolio?env=mainnet", None).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
     // A later tick changes nothing.
     let report = tick(&c, after_end(&c) + Duration::seconds(60)).await;
     assert_eq!(report.settled, 0);
@@ -1505,6 +1519,8 @@ async fn full_lifecycle_through_http() {
 async fn owner_approval_flow_through_http() {
     let c = setup().await;
     // "Cautious": approval threshold 0 and a flow ending in request_approval.
+    // Its approach (ambition 20 %, D-69) caps the stake at 36 % of the 2.00
+    // max per interaction: 0.72 instead of 1.00.
     let a = agent_from_template(&c, "Cautious", json!({}), 100).await;
     let b = skeptic(&c, 100).await;
     c.fake.set_move_bps(700); // enough conviction for both
@@ -1518,7 +1534,7 @@ async fn owner_approval_flow_through_http() {
     let id = uuid(&interaction["id"]);
     assert_eq!(interaction["state"], "awaiting_approval");
     assert_eq!(interaction["pending_approvals"], 1);
-    assert_eq!(interaction["stake"], "1000000");
+    assert_eq!(interaction["stake"], "720000");
     assert_eq!(committed(&c.pool, a).await, 0);
     assert_eq!(
         committed(&c.pool, b).await,
@@ -1550,8 +1566,8 @@ async fn owner_approval_flow_through_http() {
     .await;
     assert_eq!(result["approval"]["status"], "approved");
     assert_eq!(result["interaction"]["state"], "active");
-    assert_eq!(committed(&c.pool, a).await, USDC);
-    assert_eq!(committed(&c.pool, b).await, USDC);
+    assert_eq!(committed(&c.pool, a).await, 720_000);
+    assert_eq!(committed(&c.pool, b).await, 720_000);
     assert!(
         get(&c.app, "/api/approvals")
             .await

@@ -31,6 +31,22 @@ The autonomous scheduler ran one full challenge on Arc testnet from a live Gemin
 
 Vaults: bull [0xC287…8F11](https://explorer.testnet.arc.io/address/0xC287CA5b10CAE2F6486F5B9E355f9bf3Df848F11), skeptic [0xD6C9…9Ee4](https://explorer.testnet.arc.io/address/0xD6C940Af8282584b2f36cCdd8FbE7eCE03E09Ee4). Market: `GEMI-BTC15M2611180000-UP`; claim "YES price at or above 0.14 at 00:01:54 UTC", 1.25 per side after one counter-offer and one owner approval; Gemini resolved the contract **no**, so the skeptic won. Ledger = onchain after settlement (bull 1.25, skeptic 3.75, exposure 0) and after the withdrawals (0 / 0).
 
+## Further live runs (2026-11-18, after release txs were recorded)
+
+Both runs: same contracts, two fresh vaults funded 2.50 each by the test owner, 1.25 staked per side after one counter-offer and one owner approval, every vault `release` now stored and listed (with explorer links) on the challenge page, `/stats/portfolio?env=arc_testnet` kept apart from simulated totals, ledger = onchain afterwards (drift 0), all 5.00 withdrawn back to the owner.
+
+- **Gemini spot fallback** (Gemini PM API was returning HTTP 500): claim "BTCUSD spot below 64,321.41"; Gemini's `last` did not move for 17 min, so it resolved as a tie for the skeptic. Record: `reports/handoffs/2026-11-18-testnet-gaps.md`. Gas ~0.088 testnet USDC.
+- **Video script rehearsal** on the fake feed (`docs/demo.md` "Testnet video script"): proposal to settled in 4 min, bull +1.25 / skeptic −1.25. Gas ~0.07 testnet USDC.
+
+| Step | Spot-fallback run | Rehearsal run |
+|---|---|---|
+| Escrow `create` | [0x19643b…18a5](https://explorer.testnet.arc.io/tx/0x19643bae86291031a856b12b7ff36433c8960615fc4f464aa2edc6d9348d18a5) | [0x8c3865…c2b1](https://explorer.testnet.arc.io/tx/0x8c3865598eb5621178f09717e739f020615df80c0c076c4ac427c49749a4c2b1) |
+| Bull `stake` | [0x6a8413…7cd1](https://explorer.testnet.arc.io/tx/0x6a8413f7bf63a7d75ef02a6abd8a307305d2a9255e64ac04da2cce16ac0f7cd1) | [0xf96343…55ae](https://explorer.testnet.arc.io/tx/0xf963437dda4a611127b2e4e6436312e834160ae892f193cc66cd3bec20d355ae) |
+| Skeptic `stake` | [0x2b4f88…2557](https://explorer.testnet.arc.io/tx/0x2b4f880d69c5946edca1a2adbd829ef1040fc3a393bfc0026f47d31bd1e2a557) | [0xe98b86…72bb](https://explorer.testnet.arc.io/tx/0xe98b861d79ead2c5ed38db556cd397be245f724a8f3dc14ec03182a446be72bb) |
+| `resolve` | [0x8f4f7c…1ddf](https://explorer.testnet.arc.io/tx/0x8f4f7c22108b0c53e55c999c09ece8b7f5fb809dd49872dee72b0b97b8d61ddf) → skeptic | [0xf5c622…24a3](https://explorer.testnet.arc.io/tx/0xf5c622f8075800e63628417202da335ec249f76b8a86b37b2af2cbe8275624a3) → bull |
+| Bull vault `release` | [0xb83df8…66e7](https://explorer.testnet.arc.io/tx/0xb83df8d5e98bd7c70b462160a428b5fb7cc9e42bcc3c526f07f81fa223ea66e7) | [0xfaa1e8…5863](https://explorer.testnet.arc.io/tx/0xfaa1e822c34c1995564cf7b0ba226c9737d53f21ebf76580045c48e358625863) |
+| Skeptic vault `release` | [0xdba6bc…080d](https://explorer.testnet.arc.io/tx/0xdba6bc0cfb08842a5dceb593dfee146de51e0db66ef7591e8c9ee256a87f080d) | [0xcce32e…7529](https://explorer.testnet.arc.io/tx/0xcce32eb5382a4c568d9c6926d7c21ffe069dacff5d7440ac19f61a0c97567529) |
+
 An earlier live run on the fake market feed (same contracts) is in `reports/handoffs/2026-11-17-arc-live-run.md`; a contract-level smoke run (create/stake/resolve/release/withdraw and `resolveVoid`) in `reports/handoffs/2026-11-17-chain-smoke.md`.
 
 ## Not done

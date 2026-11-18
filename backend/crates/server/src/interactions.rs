@@ -1,6 +1,7 @@
 //! M2 endpoints: interactions, approvals, portfolio stats and the dev tick.
 
 use std::collections::BTreeMap;
+use std::str::FromStr;
 
 use aen_core::challenge::ChallengeTerms;
 use aen_core::ledger::Env;
@@ -91,6 +92,10 @@ pub struct EscrowTxs {
     pub counterparty_stake_tx: Option<String>,
     /// `resolve(winner)` or `resolveVoid`.
     pub settle_tx: Option<String>,
+    /// Each vault's `release` once the escrow is final; stays `null` when
+    /// that vault had nothing staked.
+    pub proposer_release_tx: Option<String>,
+    pub counterparty_release_tx: Option<String>,
 }
 
 fn to_interaction(joined: JoinedRow, max_rounds: i32) -> Result<Interaction, ApiError> {
@@ -106,6 +111,8 @@ fn to_interaction(joined: JoinedRow, max_rounds: i32) -> Result<Interaction, Api
         proposer_stake_tx: row.proposer_stake_tx.clone(),
         counterparty_stake_tx: row.counterparty_stake_tx.clone(),
         settle_tx: row.escrow_settle_tx.clone(),
+        proposer_release_tx: row.proposer_release_tx.clone(),
+        counterparty_release_tx: row.counterparty_release_tx.clone(),
     });
     Ok(Interaction {
         escrow,
@@ -516,8 +523,22 @@ const FORMULAS: [(&str, &str); 11] = [
     ),
 ];
 
-pub async fn portfolio(State(pool): State<PgPool>) -> Result<Json<Portfolio>, ApiError> {
-    let env = Env::Simulated;
+#[derive(Deserialize)]
+pub struct PortfolioParams {
+    env: Option<String>,
+}
+
+/// One environment per response, `?env=simulated` (default) or
+/// `?env=arc_testnet`: simulated and testnet funds are never summed.
+pub async fn portfolio(
+    State(pool): State<PgPool>,
+    ApiQuery(params): ApiQuery<PortfolioParams>,
+) -> Result<Json<Portfolio>, ApiError> {
+    let env = match params.env.as_deref().filter(|s| !s.is_empty()) {
+        None => Env::Simulated,
+        Some(s) => Env::from_str(s)
+            .map_err(|()| ApiError::bad_request("env must be simulated or arc_testnet"))?,
+    };
     let agent_rows = agents::load(&pool, None).await?;
     let unallocated: i64 = sqlx::query_scalar(
         "SELECT COALESCE(SUM(delta), 0)::BIGINT FROM ledger_entries \

@@ -10,5 +10,5 @@ Criteria as published: "Grok Bot must do real work in the project." The exact me
 
 ## Honest status
 
-- Endpoint `https://api.x.ai/v1`, default model `grok-4.7`: **not yet called live**. Both paths are tested against a mock server only (request shape, timeouts, malformed output rejected). Waiting on the owner's key and D-8.
+- Endpoint `https://api.x.ai/v1`, default model `grok-4.7`: **not yet called live**. Both paths are tested against a mock server only (request shape, timeouts, malformed output rejected). Waiting on the owner's key and D-8; no `XAI_API_KEY` as of 2026-11-18.
 - Rule-based reasoning is what the recorded demo uses unless a key is provided before submission.

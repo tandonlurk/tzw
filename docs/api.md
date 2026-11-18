@@ -7,7 +7,7 @@ Conventions: base `http://localhost:8080/api`; JSON; ids are UUID strings; times
 Request guard (SEC-02), always on, checked before any handler:
 - **Host**: only `localhost`, `127.0.0.1`, `[::1]` (any port) plus `ALLOWED_HOSTS` are served; anything else is **403** `host_not_allowed` (DNS rebinding). A request without a Host header (not a browser) passes.
 - **Origin**: a request carrying an `Origin` other than `CORS_ORIGIN` (default `http://localhost:3000`) is **403** `origin_not_allowed`, whatever the method (CSRF). No `Origin` (curl, server-side code) passes.
-- **Token**: when `AEN_API_TOKEN` is set, every request except `GET /health` and `OPTIONS` needs `Authorization: Bearer <token>`, else **401** `unauthorized` (`WWW-Authenticate: Bearer`). The server refuses to start on a non-loopback `BIND_ADDR` without a token. The default local setup (no token, loopback, web app on `localhost:3000`) is unchanged.
+- **Token**: when `AEN_API_TOKEN` is set, every request except `GET /health` and `OPTIONS` needs `Authorization: Bearer <token>`, else **401** `unauthorized` (`WWW-Authenticate: Bearer`). The server refuses to start on a non-loopback `BIND_ADDR` without a token. The default local setup (no token, loopback, web app on `localhost:3000`) is unchanged. With a token, the web app calls the backend through its own same-origin proxy (`NEXT_PUBLIC_API_URL=/backend`, server-only `AEN_API_TOKEN`; `web/README.md`, D-70), so the token never reaches the browser.
 
 Idempotency (SEC-09): `POST /wallet/simulated-deposit`, `/agents/{id}/allocate` and `/deallocate` accept an optional `Idempotency-Key` header (1-128 ASCII chars). Keys are scoped per caller and per env: a client key can never collide with the server's own posting keys or another caller's. Replaying a key with the same request returns the original result without posting again; the same key with a different amount, account, reason or interaction is **409** `idempotency_key_reused`.
 
@@ -60,7 +60,7 @@ ActivityItem { id, ts, agent_id: string|null, interaction_id: string|null, colla
 | GET | `/agents/{id}/ledger` | → `LedgerEntry[]` | newest first |
 | POST | `/agents/{id}/allocate` | `{amount: money}` → `Agent` | Moves user unallocated → agent available. `simulated` env only in M1 |
 | POST | `/agents/{id}/deallocate` | `{amount: money}` → `Agent` | Reverse; fails if amount > available |
-| GET | `/templates` | → `Template[]` | |
+| GET | `/templates` | → `Template[]` | Each starter graph carries an `approach.profile` node (D-69): Momentum bull collaboration 15 % / ambition 100 %, Skeptic 25 % / 50 %, Cautious 30 % / 20 %; firm role none, any market |
 | GET | `/graph/blocks` | → `BlockDef[]` | The block catalog the builder renders |
 | POST | `/graph/validate` | `Graph` → `{valid: bool, errors: GraphError[]}` | Always 200 |
 | GET | `/wallet` | → `{env, unallocated: money, allocated: money, committed: money, entries: LedgerEntry[]}` | User-level overview |
@@ -95,7 +95,7 @@ Interaction    { id, kind: "challenge", env, state, proposer_id, proposer_name, 
                  status_reason: string|null,    // why it was cancelled / how it was resolved
                  resolution: "backend_administered",
                  start_at, end_at, created_at, updated_at,
-                 escrow: { create_tx, proposer_stake_tx, counterparty_stake_tx, settle_tx: string|null }|null,  // arc_testnet only
+                 escrow: { create_tx, proposer_stake_tx, counterparty_stake_tx, settle_tx, proposer_release_tx, counterparty_release_tx: string|null }|null,  // arc_testnet only; a release tx stays null when that vault had nothing staked
                  firm_id: string|null }  // set on a firm lead's firm challenges (see "Approach and firms")
 InteractionDetail = Interaction + {
                  negotiation: [{ seq, agent_id, action: "propose"|"counter"|"accept"|"reject", terms, summary, ts }],
@@ -129,7 +129,7 @@ Portfolio      { env, as_of,
 
 `state` is one of `proposed, negotiating, accepted, awaiting_approval, funded, active, resolving, settled, cancelled, disputed, failed`. A voided challenge is `cancelled` with `outcome: "void"`.
 
-Units: `pm_yes_price_bps_v1` = the contract's YES price in basis points of 1.00 (`5500` = 0.55; `10000` / `0` once the contract resolved yes / no). `spot_last_price_micros_v1` = spot `last` in micro-USD. The "above" side wins when `observed >= threshold`, the "below" side when `observed < threshold`; no observation = void, both stakes refunded.
+Units: `pm_yes_price_bps_v1` = the contract's YES price in basis points of 1.00 (`5500` = 0.55; `10000` / `0` once the contract resolved yes / no). `spot_last_price_micros_v1` = spot `last` in micro-USD. Discovery sets a prediction-contract threshold from the YES bid/ask mid (rounded down) when both sides are quoted and not crossed, else the last trade (D-67); resolution reads as above. The "above" side wins when `observed >= threshold`, the "below" side when `observed < threshold`; no observation = void, both stakes refunded.
 
 ### Endpoints
 
@@ -140,10 +140,11 @@ Units: `pm_yes_price_bps_v1` = the contract's YES price in basis points of 1.00 
 | GET | `/approvals?status=` | → `Approval[]` | default `pending`; `all` or a specific status |
 | POST | `/approvals/{id}/approve` | `{}` → `{approval, interaction}` | Records the approval, then **re-runs authorization** against current balances and limits. The interaction comes back `active` (`funded` for an `arc_testnet` challenge: the vaults stake on the next tick), still `awaiting_approval` (the other side is pending) or `cancelled` (authorization denied; reason in `status_reason`). 409 `approval_not_pending`, `approval_stale`, `approval_expired` |
 | POST | `/approvals/{id}/reject` | `{}` → `{approval, interaction}` | Cancels the challenge; no funds move |
-| GET | `/stats/portfolio` | → `Portfolio` | Every metric's formula is in `formulas` |
+| GET | `/stats/portfolio?env=simulated\|arc_testnet` | → `Portfolio` | One env per response (default `simulated`, anything else 400; never summed across envs, D-67). Every metric's formula is in `formulas` |
 | POST | `/dev/tick` | `{}` or `{now: ts, allow_expiry?: bool}` → `TickReport` | Runs one lifecycle step now (the interval scheduler calls the same code). `now` is a simulated clock, accepted only when the server runs on the fake market (422 otherwise). A `now` at or after the funding deadline (`start_at`) of a challenge that is not funded yet is refused with 409 `clock_jump_would_expire` unless `allow_expiry: true` (then it expires, as in real time). Not mounted when `DEV_ENDPOINTS=false` |
-| POST | `/dev/fake-market` | `{move_bps?, yes_price_bps?, resolution_side?: "yes"|"no"|"open", prediction_markets?: bool, fail?: bool}` → `{status}` | Fake market only (404 otherwise) |
+| POST | `/dev/fake-market` | `{move_bps?, yes_price_bps?, resolution_side?: "yes"|"no"|"open", prediction_markets?: bool, fail?: bool}` → `{status}` | Fake market only (404 otherwise). Prices and resolution apply to the BTC contract only; `move_bps` moves both fake spot prices (BTC, ETH); `prediction_markets: false` hides the whole fake catalog (D-66) |
 | POST | `/dev/seed-demo` | `{}` → `{env: "simulated", agents: [{id, name, role: "proposer"|"counterparty", created}], funds_per_agent: Money, note}` | Idempotent. Creates "Demo Bull (simulated)" and "Demo Skeptic (simulated)" with fixed ids (`…00d1`, `…00d2`) from the starter templates and allocates 100 simulated USDC to each, once. Existing demo agents are left untouched. Uses the same validation and ledger code as `POST /agents` and `/allocate`; the agents get no special treatment afterwards |
+| POST | `/dev/seed-firm-demo` | `{}` → `{env: "simulated", agents: [{id, name, role: "scout"\|"analyst"\|"counterparty"\|"lead", created}], firm_id, firm_created, funds_per_agent: Money, note}` | Idempotent. Creates Firm Scout, Firm Analyst, Firm Rival and Firm Lead "(simulated)" (ids `…00f1`..`…00f4`, 100 simulated USDC each, once) with an `approach.profile` node each, and the open firm `…00fa` (lead 80 %, task fee 0.10, one scout and one analyst slot, 60/40) with both members joined, through the same code as `POST /firms` and `/join`. Existing agents, firm and members are left untouched. Independent of `/dev/seed-demo`, but use a fresh database (agents of both seeds can trade with each other). Walkthrough: `backend/README.md` "Firm demo" |
 
 Runtime rules worth knowing when reading these endpoints:
 
@@ -411,7 +412,7 @@ Same states, same `authorize` checks, same ledger posting sets as simulated; wha
 
 `arc_testnet` challenges use the wall clock everywhere; the simulated clock of `/dev/tick` applies to simulated challenges only. Tick reports may contain `chain_unavailable: …` errors (RPC down, or arc challenges waiting while the chain is not configured).
 
-Activity kinds added: `vault_linked`, `vault_deposit`, `vault_withdraw`, `stake_reserved`, `escrow_created`, `stake_deposited` (plus `stake_committed`, `challenge_settled`, `challenge_voided` with `detail.tx_hash` / `explorer_url` for arc). Amounts read `2.50 USDC (Arc testnet USDC)` in summaries.
+Activity kinds added: `vault_linked`, `vault_deposit`, `vault_withdraw`, `stake_reserved`, `escrow_created`, `stake_deposited`, `vault_released` (plus `stake_committed`, `challenge_settled`, `challenge_voided` with `detail.tx_hash` / `explorer_url` for arc). Amounts read `2.50 USDC (Arc testnet USDC)` in summaries.
 
 ## Approach and firms (simulated funds)
 
@@ -457,7 +458,7 @@ Effects (deterministic, never an LLM decision; `authorize` still applies to ever
 
 ```
 PreviewMarket { market_id, title, category, subcategory: string|null, structure: string|null, symbol: string|null,
-                yes_price_bps: int|null, move_bps: int|null, expiry_ts: int|null, volume_delta_24h_bps: int|null, source }
+                yes_price_bps: int|null /* bid/ask mid, else last trade (D-67) */, move_bps: int|null, expiry_ts: int|null, volume_delta_24h_bps: int|null, source }
 ```
 
 ### Firms

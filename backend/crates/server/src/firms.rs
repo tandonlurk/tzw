@@ -619,6 +619,20 @@ pub async fn create(
     State(pool): State<PgPool>,
     ApiJson(body): ApiJson<CreateBody>,
 ) -> Result<(StatusCode, Json<Firm>), ApiError> {
+    let mut tx = pool.begin().await?;
+    let firm = create_in_tx(&mut tx, Uuid::new_v4(), body).await?;
+    tx.commit().await?;
+    Ok((StatusCode::CREATED, Json(firm)))
+}
+
+/// The body of `POST /firms` inside the caller's transaction, with a chosen
+/// id. Also used by the dev firm-demo seed, so it goes through the same
+/// validation and writes as the public API.
+pub(crate) async fn create_in_tx(
+    tx: &mut PgConnection,
+    id: Uuid,
+    body: CreateBody,
+) -> Result<Firm, ApiError> {
     let terms = FirmTerms {
         name: body.name.trim().to_owned(),
         mandate: body.mandate.trim().to_owned(),
@@ -637,10 +651,8 @@ pub async fn create(
     }
 
     let now = Utc::now();
-    let id = Uuid::new_v4();
-    let mut tx = pool.begin().await?;
-    advisory_lock(&mut tx, &format!("aen:firm-lead:{}", body.lead_agent_id)).await?;
-    let lead = load_agent(&mut tx, body.lead_agent_id)
+    advisory_lock(tx, &format!("aen:firm-lead:{}", body.lead_agent_id)).await?;
+    let lead = load_agent(tx, body.lead_agent_id)
         .await?
         .ok_or_else(|| at(ApiError::not_found("agent"), "lead_agent_id"))?;
     let refuse = |code, message: &str| at(ApiError::unprocessable(code, message), "lead_agent_id");
@@ -657,13 +669,13 @@ pub async fn create(
             "the agent's approach must have firm_role \"lead\" and collaboration of at least 30%",
         ));
     }
-    if led_firm(&mut tx, lead.id).await?.is_some() {
+    if led_firm(tx, lead.id).await?.is_some() {
         return Err(refuse(
             "already_leads_firm",
             "the agent already leads an open firm",
         ));
     }
-    if is_current_member(&mut tx, lead.id).await? {
+    if is_current_member(tx, lead.id).await? {
         return Err(refuse(
             "already_member",
             "the agent is a member of another firm; it must leave first",
@@ -693,7 +705,7 @@ pub async fn create(
     .execute(&mut *tx)
     .await?;
     record(
-        &mut tx,
+        tx,
         Some(lead.id),
         id,
         None,
@@ -713,10 +725,8 @@ pub async fn create(
         }),
     )
     .await?;
-    let row = load_row(&mut tx, id).await?;
-    let firm = view(&mut tx, row).await?;
-    tx.commit().await?;
-    Ok((StatusCode::CREATED, Json(firm)))
+    let row = load_row(tx, id).await?;
+    view(tx, row).await
 }
 
 pub async fn join(
@@ -725,21 +735,31 @@ pub async fn join(
     ApiJson(body): ApiJson<JoinBody>,
 ) -> Result<Json<Firm>, ApiError> {
     let mut tx = pool.begin().await?;
-    let firm = lock_row(&mut tx, id).await?;
-    let agent = load_agent(&mut tx, body.agent_id)
+    join_in_tx(&mut tx, id, body).await?;
+    tx.commit().await?;
+    respond(&pool, id).await
+}
+
+/// The body of `POST /firms/{id}/join` inside the caller's transaction
+/// (shared with the dev firm-demo seed).
+pub(crate) async fn join_in_tx(
+    tx: &mut PgConnection,
+    id: Uuid,
+    body: JoinBody,
+) -> Result<(), ApiError> {
+    let firm = lock_row(tx, id).await?;
+    let agent = load_agent(tx, body.agent_id)
         .await?
         .ok_or_else(|| at(ApiError::not_found("agent"), "agent_id"))?;
     add_member(
-        &mut tx,
+        tx,
         &firm,
         &agent,
         body.role,
         " (added by its owner)",
         Utc::now(),
     )
-    .await?;
-    tx.commit().await?;
-    respond(&pool, id).await
+    .await
 }
 
 pub async fn leave(

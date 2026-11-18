@@ -1,4 +1,5 @@
 import type {
+  Env,
   ActivityItem,
   ApprovalDecision,
   Approval,
@@ -88,6 +89,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
   if (!res.ok) {
     const err = (json as { error?: { code?: string; message?: string; details?: unknown[] } } | undefined)?.error;
+    // The same-origin proxy (/backend, D-70) answers 502 when it cannot reach the backend: same as unreachable.
+    if (res.status === 502 && err?.code === "upstream_unreachable") {
+      throw new ApiError("unreachable", `Cannot reach the backend through ${API_URL}`, 0, [], true);
+    }
     throw new ApiError(
       err?.code ?? `http_${res.status}`,
       err?.message ?? `Request failed with status ${res.status}`,
@@ -169,7 +174,8 @@ export const api = {
     post<Collaboration>(`/collaborations/${encodeURIComponent(id)}/cancel`, reason ? { reason } : {}),
   testRunCode: (agentId: string, source?: string) =>
     post<TestRun>(`/agents/${encodeURIComponent(agentId)}/code/test-run`, source === undefined ? {} : { source }),
-  getPortfolio: () => get<Portfolio>("/stats/portfolio"),
+  /** One environment per response; simulated and testnet funds are never summed. */
+  getPortfolio: (env: Env = "simulated") => get<Portfolio>(`/stats/portfolio?env=${env}`),
 
   getChain: () => get<ChainConfig>("/chain"),
   getVault: (agentId: string) => get<VaultView>(`/agents/${encodeURIComponent(agentId)}/vault`),

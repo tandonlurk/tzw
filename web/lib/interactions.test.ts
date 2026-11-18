@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChallengeTerms, Interaction } from "./api";
-import { formatThreshold, isOpen, outcomeText, stateTone, termsRows } from "./interactions";
+import { escrowRows, formatThreshold, isOpen, outcomeText, stateTone, termsRows } from "./interactions";
 import { barPercents, scaleSeries, stepPath } from "./charts";
 
 const terms: ChallengeTerms = {
@@ -24,6 +24,21 @@ describe("interactions helpers", () => {
     expect(rows["Resolved by"]).toContain("backend-administered");
     expect(rows["Environment"]).toContain("simulated");
     expect(rows["Stake (each side)"]).toBe("2.50 USDC");
+  });
+  it("names the offline fake market as the resolver when the challenge ran on it", () => {
+    expect(Object.fromEntries(termsRows(terms, "simulated", "gemini"))["Resolved by"]).toBe("Gemini prediction markets data, backend-administered (not trustless)");
+    const fake = Object.fromEntries(termsRows(terms, "simulated", "fake"))["Resolved by"];
+    expect(fake).toMatch(/^Offline fake market/);
+    expect(fake).toContain("backend-administered");
+    expect(Object.fromEntries(termsRows(terms, "arc_testnet"))["Environment"]).toBe("Arc testnet USDC, not real funds");
+  });
+  it("lists escrow transactions in lifecycle order, null for steps not reached", () => {
+    const rows = escrowRows(
+      { create_tx: "0xc", proposer_stake_tx: "0xp", counterparty_stake_tx: "0xq", settle_tx: null, proposer_release_tx: null, counterparty_release_tx: null },
+      "Bull", "Skeptic",
+    );
+    expect(rows.map(([k]) => k)).toEqual(["Escrow created", "Bull stake", "Skeptic stake", "Resolved", "Released to Bull's vault", "Released to Skeptic's vault"]);
+    expect(rows.map(([, h]) => h)).toEqual(["0xc", "0xp", "0xq", null, null, null]);
   });
   it("maps state tones and openness", () => {
     expect(stateTone("awaiting_approval")).toBe("pend");

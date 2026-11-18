@@ -1,4 +1,4 @@
-import type { ChallengeTerms, Interaction, InteractionState, MarketRef } from "./api";
+import type { ChallengeTerms, EscrowTxs, Interaction, InteractionState, MarketRef } from "./api";
 import { formatMoney } from "./money";
 
 export type Tone = "pos" | "neg" | "pend" | "info" | "dim";
@@ -61,8 +61,10 @@ export const RESOLUTION_LABEL: Record<ChallengeTerms["resolution_source"], strin
   gemini_spot_ticker: "Gemini spot ticker",
 };
 
-/** Plain-language rows for the terms block. Resolution is always backend-administered (not trustless). */
-export function termsRows(t: ChallengeTerms, env: string): [string, string][] {
+/** Plain-language rows for the terms block. Resolution is always backend-administered (not trustless).
+ *  On the offline fake market the terms still name the Gemini source, but the fake feed resolves it. */
+export function termsRows(t: ChallengeTerms, env: string, marketSource?: Interaction["market_source"]): [string, string][] {
+  const source = marketSource === "fake" ? `Offline fake market (stands in for ${RESOLUTION_LABEL[t.resolution_source]})` : RESOLUTION_LABEL[t.resolution_source];
   return [
     ["Market", marketLabel(t.market)],
     [
@@ -72,8 +74,8 @@ export function termsRows(t: ChallengeTerms, env: string): [string, string][] {
     ["Stake (each side)", formatMoney(t.stake)],
     ["Funding deadline", formatUnix(t.start_ts)],
     ["Ends", formatUnix(t.end_ts)],
-    ["Resolved by", `${RESOLUTION_LABEL[t.resolution_source]}, backend-administered (not trustless)`],
-    ["Environment", env === "simulated" ? "simulated funds, not real money" : env],
+    ["Resolved by", `${source}, backend-administered (not trustless)`],
+    ["Environment", env === "simulated" ? "simulated funds, not real money" : env === "arc_testnet" ? "Arc testnet USDC, not real funds" : env],
   ];
 }
 
@@ -94,4 +96,16 @@ export function outcomeText(i: Interaction): string | null {
 export function reasonSuffix(reason: string | null | undefined): string {
   const r = (reason ?? "").trim().replace(/\.+$/, "");
   return r ? ` Reason: ${r}.` : "";
+}
+
+/** Escrow transactions of an Arc testnet challenge in lifecycle order; null hashes are steps not reached (or not needed). */
+export function escrowRows(e: EscrowTxs, proposer: string, counterparty: string): [string, string | null][] {
+  return [
+    ["Escrow created", e.create_tx],
+    [`${proposer} stake`, e.proposer_stake_tx],
+    [`${counterparty} stake`, e.counterparty_stake_tx],
+    ["Resolved", e.settle_tx],
+    [`Released to ${proposer}'s vault`, e.proposer_release_tx],
+    [`Released to ${counterparty}'s vault`, e.counterparty_release_tx],
+  ];
 }

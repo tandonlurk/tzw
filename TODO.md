@@ -69,10 +69,10 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 - [?] Approach block: stance wheel (competitive ↔ collaborative, cautious ↔ ambitious, firm role) + market wheel (any → category → subcategory, structure, keywords, symbols, ranges) with live preview; backend gates discovery and incoming challenges; ambition sizes stakes when an approach node exists (D-64). Design: `docs/design/approach-and-firms.md`
 - [?] Firms: lead keeps 80%, scouts/analysts share 20% by role weight, optional task fee, losses on the lead; simulated only (D-64, D-65). E2E over HTTP + browser-checked against the real backend (`reports/handoffs/2026-11-18-approach-firms.md`)
-- [ ] Fake market catalog with several markets (incl. a commodities/energy one) so the market wheel demos offline; today fake mode has one BTC market (backend, P1)
-- [ ] Testnet run gaps: record vault release tx + activity; `/stats/portfolio` for `arc_testnet`; discovery threshold from bid/ask mid, not a stale last trade (backend, P1)
-- [ ] Firm demo seed endpoint + README firm demo (script exists in the handoff) (backend, P2)
-- [ ] Starter templates with an approach node (changes demo numbers, so recompute `docs/demo.md`) (backend, P2)
+- [x] Fake market catalog: BTC + 6 fixed events (ETH, WTI and natural gas under Commodities/Energy, gold, Fed decision, sports final), 14 contracts; `/markets/categories` and `/markets/preview` demo offline; BTC demo numbers unchanged (D-66) (backend, P1)
+- [x] Testnet run gaps: vault release txs + `vault_released` activity; `/stats/portfolio?env=arc_testnet` + dashboard panel; discovery at bid/ask mid (D-67). Live Arc run settled, drift 0; mid not verified live (Gemini PM API 500 all night), stale spot `last` finding (`reports/handoffs/2026-11-18-testnet-gaps.md`) (backend, P1)
+- [x] Firm demo seed: `POST /api/dev/seed-firm-demo` + README "Firm demo"; lead +3.80, scout 0.70, analyst 0.50 over HTTP (D-68) (backend, P2)
+- [x] Starter templates with an approach node: bull 15 %/100 %, skeptic 25 %/50 %, cautious 30 %/20 %; demo and firm-demo numbers unchanged on a fresh-db rerun, Cautious stakes 0.72 (D-69) (backend, P2)
 
 ## M3 — Observability (Tue Nov 17)
 
@@ -88,7 +88,8 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [x] Threat model → `docs/security/threat-model.md` (webhook, sandbox, custody are design-level only: features not built) (qa, P0)
 - [x] Fixed SEC-01 (415 unless JSON), SEC-03 (double settle rejected), SEC-05 (413); repro tests now pass (backend, P0)
 - [x] SEC-04 escrow deadline caps (7 d fund, 30 d resolve) and SEC-07 resolver cannot be a party: 84 Foundry tests, local only, D-32 (contracts, P1)
-- [x] SEC-02 Host + Origin guard always on, bearer token when `AEN_API_TOKEN` set; SEC-08 TRUNCATE guard + balanced-set trigger; SEC-09 scoped idempotency keys; 266 backend tests (backend, P1). Web app sends no token yet
+- [x] SEC-02 Host + Origin guard always on, bearer token when `AEN_API_TOKEN` set; SEC-08 TRUNCATE guard + balanced-set trigger; SEC-09 scoped idempotency keys; 266 backend tests (backend, P1). Web app: opt-in same-origin proxy adds the token server-side (D-70, 2026-11-18)
+- [x] Overnight E2E regression 2026-11-18: README demo + co-captain + collaboration over HTTP on a fresh db, all numbers match; 14 web routes rendered in headless Chrome; fixed escrow tx hashes on the challenge page and the fake-market "Resolved by" label; 114 web tests (`reports/qa-overnight.md`) (qa, P1)
 
 ## M5 — Custom-code agents (Tue eve – Wed Nov 18) — committed, not optional
 
@@ -101,8 +102,8 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 - [x] Co-captain text suggestions: backend (6 rules, list/generate/accept/dismiss, D-36/D-37) and "Co-captain" page (accept, dismiss, loosens-control warning); 254 backend + 30 web tests. Grok variant mock-tested only; suggestions with a proposed change were browser-tested from inserted rows, not rule-generated ones (backend/frontend, P2)
 - [ ] ElevenLabs voice for co-captain (P3, last)
-- [~] Demo script, seeded demo agents, README run instructions, AGENTS.md 9.4 filled in: simulated run done and hand-verified (`docs/demo.md`); testnet version waits on D-3 (lead, P0)
-- [~] Submission write-ups drafted in `docs/submission/` (one per award, honest status); finalize after D-3 / keys and record the video (lead, P0)
+- [x] Demo script, seeded demo agents, README run instructions, AGENTS.md 9.4 filled in: simulated run hand-verified; testnet video script (setup, 15-shot list, fallbacks) rehearsed live on Arc 2026-11-18, bull +1.25 / skeptic -1.25, drift 0 (`docs/demo.md` "Testnet video script") (lead, P0)
+- [~] Submission write-ups drafted in `docs/submission/` (one per award, honest status; refreshed 2026-11-18 overnight with all three Arc testnet runs, firms, and the unverified bid/ask mid); finalize after keys and record the video (lead, P0)
 
 ## Vision (owner, 2026-11-16) — after the hackathon unless time allows
 
@@ -112,4 +113,4 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 ## Notes from owner
 
-- 2026-11-17 — not started, think about only: after the UI redesign (owner, Wed night), the app still needs animated explainers. Most of the product happens in the background (discovery, negotiation, escrow lock, resolution, firm payouts); the user mostly sees agent performance summaries and a transaction/position log, so the hard parts (escrow above all) need visual explaining. Owner will look for Claude visual tools/skills on GitHub.
+- 2026-11-17 — storyboard drafted 2026-11-18 (`docs/design/explainers-storyboard.md`, no code); otherwise think about only: after the UI redesign (owner, Wed night), the app still needs animated explainers. Most of the product happens in the background (discovery, negotiation, escrow lock, resolution, firm payouts); the user mostly sees agent performance summaries and a transaction/position log, so the hard parts (escrow above all) need visual explaining. Owner will look for Claude visual tools/skills on GitHub.

@@ -302,6 +302,19 @@ struct RawContract {
 #[serde(rename_all = "camelCase")]
 struct RawPrices {
     last_trade_price: Option<String>,
+    best_bid: Option<String>,
+    best_ask: Option<String>,
+}
+
+/// A contract price (`"0.56"`) in basis points; out of range is a decode
+/// error, never clamped.
+fn price_bps(text: Option<&str>) -> Result<Option<i64>, MarketError> {
+    text.map(|p| {
+        parse_decimal_scaled(p, BPS_DECIMALS)
+            .filter(|bps| (0..=10_000).contains(bps))
+            .ok_or_else(|| MarketError::Decode(format!("contract price out of range: {p:?}")))
+    })
+    .transpose()
 }
 
 fn timestamp(text: Option<&str>) -> Result<Option<i64>, MarketError> {
@@ -319,18 +332,9 @@ fn event(raw: RawEvent) -> Result<PmEvent, MarketError> {
         .contracts
         .into_iter()
         .map(|c| {
-            let last = c
-                .prices
-                .last_trade_price
-                .as_deref()
-                .map(|p| {
-                    parse_decimal_scaled(p, BPS_DECIMALS)
-                        .filter(|bps| (0..=10_000).contains(bps))
-                        .ok_or_else(|| {
-                            MarketError::Decode(format!("contract price out of range: {p:?}"))
-                        })
-                })
-                .transpose()?;
+            let last = price_bps(c.prices.last_trade_price.as_deref())?;
+            let best_bid_bps = price_bps(c.prices.best_bid.as_deref())?;
+            let best_ask_bps = price_bps(c.prices.best_ask.as_deref())?;
             Ok(PmContract {
                 instrument_symbol: c.instrument_symbol,
                 label: c.label,
@@ -338,6 +342,8 @@ fn event(raw: RawEvent) -> Result<PmEvent, MarketError> {
                 market_state: c.market_state,
                 expiry_ts: timestamp(c.expiry_date.as_deref())?,
                 last_trade_price_bps: last,
+                best_bid_bps,
+                best_ask_bps,
                 resolution_side: c.resolution_side,
             })
         })
@@ -555,6 +561,17 @@ mod tests {
         assert_eq!(e.contracts[0].last_trade_price_bps, Some(9900));
         assert_eq!(e.contracts[0].market_state.as_deref(), Some("open"));
         assert_eq!(e.contracts[1].last_trade_price_bps, Some(5600));
+        assert_eq!(
+            (e.contracts[1].best_bid_bps, e.contracts[1].best_ask_bps),
+            (Some(5500), Some(5800))
+        );
+        // One-sided book: discovery falls back to the last trade.
+        assert_eq!(
+            (e.contracts[0].best_bid_bps, e.contracts[0].best_ask_bps),
+            (Some(9500), None)
+        );
+        assert_eq!(e.contracts[0].quote_bps(), Some(9900));
+        assert_eq!(e.contracts[1].quote_bps(), Some(5650));
 
         let s = parse_event(SETTLED_EVENT).unwrap();
         assert_eq!(s.contracts[0].resolution_side.as_deref(), Some("yes"));
@@ -583,6 +600,8 @@ mod tests {
         assert!(parse_event(r#"{"ticker":"X"}"#).is_err());
         let over = OPEN_EVENT.replace(r#""lastTradePrice":"0.99""#, r#""lastTradePrice":"1.50""#);
         assert!(matches!(parse_event(&over), Err(MarketError::Decode(_))));
+        let bad_bid = OPEN_EVENT.replace(r#""bestBid":"0.55""#, r#""bestBid":"-0.1""#);
+        assert!(matches!(parse_event(&bad_bid), Err(MarketError::Decode(_))));
         let bad_date = OPEN_EVENT.replace("2026-11-15T22:00:00.000Z", "tomorrow");
         assert!(parse_event(&bad_date).is_err());
     }
@@ -625,7 +644,9 @@ mod tests {
     #[tokio::test]
     async fn discovery_and_resolution_work_on_real_shapes() {
         let (client, _) = server().await;
-        // The contested contract (0.56) is chosen over the one-sided one (0.99).
+        // The contested contract (book 0.55/0.58, last 0.56) is chosen over
+        // the one-sided one (bid 0.95, no ask: last 0.99). Its value is the
+        // book mid, 0.565 rounded down (D-67).
         let view = discover(&client, "hypeusd", 3600, 1_794_700_000)
             .await
             .unwrap();
@@ -637,7 +658,7 @@ mod tests {
             }
         );
         assert_eq!(view.title, "HYPE price on November 15: $65 or above");
-        assert_eq!((view.value, view.source.as_str()), (5600, "gemini"));
+        assert_eq!((view.value, view.source.as_str()), (5650, "gemini"));
         // 63758.59 -> 65033.76 over the hour.
         assert_eq!(view.move_bps, 199);
         assert_eq!(view.fallback_reason, None);
