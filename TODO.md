@@ -14,9 +14,9 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
   1. [x] Smoke run on Arc passed (D-61); `resolver()` reverted because the getter is `RESOLVER()`
   2. [x] Verified escrow, factory and AgentVault on Blockscout (D-61)
   3. [x] Chain wired into the lifecycle (D-63) and browser wallet UI built (D-62); live Arc run settled with drift 0 (`reports/handoffs/2026-11-17-arc-live-run.md`)
-  5. [ ] **You:** review the approach wheels and Firms pages (PR #3), and confirm D-65 (80/20 reading, task fee as the "guarantee")
-  6. [ ] **You:** try the wallet UI with MetaMask on Arc Testnet (create a vault for an agent, allocate, withdraw). Run instructions: `backend/README.md` "Run against Arc testnet"
   4. [x] Committed the doc edits on `chain-vaults` (2f03581). Open PR: https://github.com/tandonlurk/tzw/pull/1
+  5. [ ] **You:** merge the stacked PRs in order #1 → #2 → #3; review the approach wheels and Firms pages (PR #3), and confirm D-65 (80/20 reading, task fee as the "guarantee")
+  6. [ ] **You:** try the wallet UI with MetaMask on Arc Testnet (create a vault for an agent, allocate, withdraw). Run instructions: `backend/README.md` "Run against Arc testnet"
 
 ## Needs you (review list)
 
@@ -112,4 +112,4 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 ## Notes from owner
 
-(write here)
+- 2026-11-17 — not started, think about only: after the UI redesign (owner, Wed night), the app still needs animated explainers. Most of the product happens in the background (discovery, negotiation, escrow lock, resolution, firm payouts); the user mostly sees agent performance summaries and a transaction/position log, so the hard parts (escrow above all) need visual explaining. Owner will look for Claude visual tools/skills on GitHub.
