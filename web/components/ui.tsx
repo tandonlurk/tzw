@@ -54,7 +54,7 @@ export function EnvBadge({ env }: { env: Env }) {
   return env === "simulated" ? (
     <span className="badge sim" title="Simulated balance. Not real funds.">simulated</span>
   ) : (
-    <span className="badge chain" title="Real testnet USDC on Arc testnet.">arc_testnet</span>
+    <span className="badge chain" title="Arc testnet USDC: onchain testnet tokens, not real funds.">arc_testnet</span>
   );
 }
 

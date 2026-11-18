@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Nav } from "@/components/Nav";
+import { WalletProvider } from "@/components/wallet/WalletProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="brand">Agent Network</div>
             <Nav />
           </aside>
-          <main className="main">{children}</main>
+          <main className="main"><WalletProvider>{children}</WalletProvider></main>
         </div>
       </body>
     </html>

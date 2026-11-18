@@ -65,3 +65,9 @@
 - `Deploy.s.sol` now deploys the factory too. `MockUSDC` emits `Transfer` (like real USDC).
 - Tests: `forge test` 100 passed (16 new incl. fuzz: operator cannot drain).
 - Not done: Arc testnet deploy (blocked on faucet funds, `docs/setup/arc-testnet-funding.md`).
+
+## Log: Arc testnet smoke + verification (branch chain-smoke, 2026-11-17)
+- `backend/crates/chain/examples/arc_smoke.rs`: live create → stake → resolve → release → withdraw, plus a `resolveVoid` path, via `aen-chain` on Arc testnet. Passed; 23 txs over two runs (first stopped by an RPC rate limit, resumed with `SMOKE_VAULT_A/B`), ~0.11 USDC gas total. Tx hashes: `reports/handoffs/2026-11-17-chain-smoke.md`.
+- `aen-chain` fix: retry `-32005` rate limits (alloy `RetryBackoffLayer`) and poll receipts every 1 s on remote chains (was 7 s per tx). `cargo test -p aen-chain` passes.
+- Blockscout: ChallengeEscrow, VaultFactory and AgentVault `0xa4CC…f90F` fully verified (0.8.28, opt 200, prague); other vaults match as a verified twin.
+- Resolved questions: stock forge deploys on Arc; evm_version prague works. Resolver getter is `RESOLVER()` (`resolver()` reverts). Blocklist behaviour still untested on Arc.

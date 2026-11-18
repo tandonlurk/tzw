@@ -1,6 +1,6 @@
 // DEV MOCK ONLY. Throwaway stand-in for the Rust backend, used to eyeball the UI before the real API exists.
 // Implements a subset of docs/api.md with in-memory state. Never imported by the app.
-// Run: npm run dev-mock   (listens on :8080, base path /api)
+// Run: npm run dev-mock   (listens on :8080 or $PORT, base path /api). Chain/vault env switches: see "MOCK chain" below.
 import http from "node:http";
 import { randomUUID } from "node:crypto";
 
@@ -33,6 +33,29 @@ const TEMPLATES = [
     policy: { max_per_interaction: "5000000", max_aggregate_exposure: "20000000", approval_threshold: "2000000", allowed_interaction_types: ["challenge"], min_conviction_bps: 6000, stop_loss: null }, graph },
 ];
 
+// ---- MOCK chain + vaults. Nothing here touches a chain: vault numbers are made up and labelled "(mock)".
+// MOCK_CHAIN=disabled -> GET /chain says {enabled:false}; MOCK_CHAIN=missing -> 404 like an older backend.
+// MOCK_OWNER=<address> -> owner of seeded/linked mock vaults (set it to your wallet to see owner-only actions).
+// Tx hash hooks for POST /agents/{id}/vault: ending in "dead" -> 409 agent_has_open_interactions.
+const MOCK_CHAIN = process.env.MOCK_CHAIN ?? "enabled";
+const MOCK_OWNER = process.env.MOCK_OWNER ?? "0x1F0eb73C714Ae0BD1a97c1c8e0F34513073393Fb";
+const CHAIN = {
+  enabled: true, chain_id: 5042002, chain_name: "Arc Testnet", rpc_url: "https://rpc.testnet.arc.io",
+  explorer_url: "https://explorer.testnet.arc.io", usdc_address: "0x3600000000000000000000000000000000000000", usdc_decimals: 6,
+  escrow_address: "0x4179f2e314410D10C2906B1914bAAe8DD93b5698", vault_factory_address: "0x4EA6ac6A9F7b8fcf01ba04b177F0A098d9664C45",
+  operator_address: "0x84dDb2795697e6EE319fe9bb55b5D5c1c3B90eca",
+};
+const vaults = {}; // agentId -> mock vault view
+const chainDown = new Set(); // agentIds whose GET vault answers 503
+const randAddr = () => "0x" + randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "").slice(0, 8);
+const isHash = (h) => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
+function mockVault(owner, avail, extra = {}) {
+  const address = randAddr();
+  return { address, owner, operator: CHAIN.operator_address, paused: false, max_per_challenge: "5000000", max_exposure: "20000000",
+    onchain_balance: avail, onchain_exposure: "0", ledger_available: avail, ledger_committed: "0", drift: "0",
+    explorer_url: `${CHAIN.explorer_url}/address/${address}`, ...extra };
+}
+
 const agents = [];
 const wallet = { env: "simulated", unallocated: 0n, allocated: 0n, committed: 0n, entries: [] };
 const activity = [];
@@ -40,6 +63,23 @@ const ledgers = {};
 const entry = (account, delta, reason) => ({ id: randomUUID(), ts: new Date().toISOString(), env: "simulated", account, delta: delta.toString(), reason, interaction_id: null, tx_hash: null });
 const walletOut = () => ({ ...wallet, unallocated: wallet.unallocated.toString(), allocated: wallet.allocated.toString(), committed: wallet.committed.toString() });
 const agentOut = (a) => ({ ...a, balances: { available: a._avail.toString(), committed: "0" }, _avail: undefined });
+
+// Seed three agents covering the vault states (set MOCK_SEED=0 to start empty).
+function seed(name, env, avail) {
+  const t = TEMPLATES[0];
+  const a = { id: randomUUID(), name, description: "Seeded by the dev mock.", config: t.config, policy: t.policy, graph: t.graph, status: "active", env,
+    wallet_address: null, version: 1, _avail: BigInt(avail), stats: { realized_pnl: "0", settled: 0, wins: 0 }, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+  agents.push(a);
+  ledgers[a.id] = [];
+  return a;
+}
+if (process.env.MOCK_SEED !== "0") {
+  const linked = seed("Vault agent (mock)", "arc_testnet", "7500000");
+  vaults[linked.id] = mockVault(MOCK_OWNER, "7500000", { onchain_balance: "9500000", onchain_exposure: "2000000", ledger_committed: "2000000", drift: "2000000" });
+  linked.wallet_address = vaults[linked.id].address;
+  seed("Unlinked agent (mock)", "simulated", "0");
+  chainDown.add(seed("Chain down agent (mock)", "arc_testnet", "0").id);
+}
 
 function validateInput(i) {
   const details = [];
@@ -95,6 +135,34 @@ http.createServer(async (req, res) => {
     activity.unshift({ id: randomUUID(), ts: a.created_at, agent_id: a.id, kind: "agent_created", summary: `Agent ${a.name} created`, detail: { version: 1 } });
     return send(res, 201, agentOut(a));
   }
+  if ((p === "/interactions" || p === "/collaborations") && req.method === "GET") return send(res, 200, []);
+  if (p === "/chain" && req.method === "GET") {
+    if (MOCK_CHAIN === "missing") return err(res, 404, "not_found", `no route ${req.method} ${p}`);
+    return send(res, 200, MOCK_CHAIN === "disabled" ? { enabled: false } : CHAIN);
+  }
+  if ((m = p.match(/^\/agents\/([^/]+)\/vault(\/sync)?$/))) {
+    const a = agents.find((x) => x.id === m[1]);
+    if (!a) return err(res, 404, "not_found", "agent not found");
+    if (MOCK_CHAIN !== "enabled") return err(res, 503, "chain_unavailable", "chain is not configured (mock)");
+    if (chainDown.has(a.id)) return err(res, 503, "chain_unavailable", "RPC request failed (mock)");
+    const v = vaults[a.id];
+    if (!m[2] && req.method === "GET") return v ? send(res, 200, v) : err(res, 404, "vault_not_linked", "this agent has no vault (mock)");
+    if (!m[2] && req.method === "POST") {
+      if (!isHash(body.tx_hash)) return err(res, 422, "invalid_vault_tx", "tx_hash must be 0x + 64 hex (mock)");
+      if (v) return err(res, 409, "vault_already_linked", "agent already has a vault (mock)");
+      if (body.tx_hash.toLowerCase().endsWith("dead")) return err(res, 409, "agent_has_open_interactions", "agent has open interactions (mock)");
+      vaults[a.id] = mockVault(MOCK_OWNER, "0");
+      a.env = "arc_testnet";
+      a.wallet_address = vaults[a.id].address;
+      a._avail = 0n;
+      return send(res, 200, vaults[a.id]);
+    }
+    if (m[2] && req.method === "POST") {
+      if (!v) return err(res, 404, "vault_not_linked", "this agent has no vault (mock)");
+      if (!isHash(body.tx_hash)) return err(res, 422, "invalid_vault_tx", "tx_hash must be 0x + 64 hex (mock)");
+      return send(res, 200, { credited: [], vault: v }); // mock cannot read the chain, so it never credits anything
+    }
+  }
   if ((m = p.match(/^\/agents\/([^/]+)(?:\/(status|ledger|allocate|deallocate|versions))?$/))) {
     const a = agents.find((x) => x.id === m[1]);
     if (!a) return err(res, 404, "not_found", "agent not found");
@@ -125,4 +193,4 @@ http.createServer(async (req, res) => {
     }
   }
   err(res, 404, "not_found", `no route ${req.method} ${p}`);
-}).listen(8080, () => console.log("DEV MOCK listening on http://localhost:8080/api"));
+}).listen(Number(process.env.PORT ?? 8080), () => console.log(`DEV MOCK listening on http://localhost:${process.env.PORT ?? 8080}/api (chain: ${MOCK_CHAIN})`));

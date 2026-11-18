@@ -348,3 +348,11 @@ Status: done. Tests (own dbs): `aen_sh_test` -> core 100 + 14 + 6 + 4, sandbox 3
 - Refuses chains other than 5042002/31337; checks escrow `RESOLVER()` is our key and the factory is bound to our escrow. Simple nonce manager (D-59).
 - Tests: `cargo test -p aen-chain` 2 passed (anvil lifecycle, foreign resolver refused). Skips if anvil missing; needs `forge build`.
 - Not done: server integration. Plan: `reports/handoffs/2026-11-17-chain-vaults.md` steps 2–5.
+
+## chain-wiring: Arc testnet in the lifecycle (branch `chain-wiring`, 2026-11-17)
+
+- Objective: chain-vaults handoff steps 2-5 (lifecycle wiring, endpoints, dev autonomous runs, anvil E2E). Assigned: backend specialist. Status: done, awaiting lead review.
+- Files: `core/src/ledger.rs` (`VaultDeposit`/`VaultWithdraw`, `chain:{tx}:{log}` keys, `PostingSet::with_tx_hash`); migration `0009_chain_wiring.sql`; `server/src/chain.rs` (config from env, `GET /chain`, vault link/view/sync, dev setup-demo-vaults); `server/src/lifecycle_arc.rs` (fund / resolve / release phases); `lifecycle.rs` (arc commit stops at `funded`, wall clock for arc, settle split into `decide_outcome` + `apply_outcome`, env-labelled amounts); `ledger_db.rs` (writes `tx_hash`); `agents.rs`/`models.rs` (`vault_address`, `vault_owner`); `interactions.rs` (`escrow` tx hashes); `main.rs`, `state.rs` (`AppState.chain`); `tests/chain.rs`.
+- Tests: `cargo test --workspace` 341 passed, 0 failed, 1 ignored (6 new anvil tests in `tests/chain.rs`, 1 new core test). Clippy clean. Manual E2E: real server binary + local anvil + `setup-demo-vaults` + demo ticks, settled onchain, drift 0 (README "Autonomous demo").
+- Decisions proposed: `reports/handoffs/2026-11-17-chain-wiring.md`.
+- Not done: live Arc run (lead), QuickNode as event source, browser-wallet withdraw sync is manual (UI posts the tx).

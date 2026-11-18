@@ -118,6 +118,12 @@ pub enum Reason {
     CollabPayout,
     /// A cancelled, funded collaboration returns a contribution.
     CollabRefund,
+    /// USDC arrived in an agent's onchain vault (verified receipt):
+    /// external -> agent available. `arc_testnet` only.
+    VaultDeposit,
+    /// USDC left an agent's onchain vault to the owner (verified receipt):
+    /// agent available -> external. `arc_testnet` only.
+    VaultWithdraw,
 }
 
 impl Reason {
@@ -132,6 +138,8 @@ impl Reason {
             Reason::CollabCommit => "collab_commit",
             Reason::CollabPayout => "collab_payout",
             Reason::CollabRefund => "collab_refund",
+            Reason::VaultDeposit => "vault_deposit",
+            Reason::VaultWithdraw => "vault_withdraw",
         }
     }
 }
@@ -169,6 +177,8 @@ pub struct PostingSet {
     idempotency_key: String,
     interaction_id: Option<Uuid>,
     collaboration_id: Option<Uuid>,
+    /// The onchain transaction this set records, if any.
+    tx_hash: Option<String>,
     postings: Vec<Posting>,
 }
 
@@ -202,8 +212,20 @@ impl PostingSet {
             idempotency_key: idempotency_key.to_owned(),
             interaction_id,
             collaboration_id: None,
+            tx_hash: None,
             postings,
         })
+    }
+
+    /// Records the onchain transaction behind this set (for display and
+    /// audit; it is not part of the idempotency key).
+    pub fn with_tx_hash(mut self, tx_hash: &str) -> PostingSet {
+        self.tx_hash = Some(tx_hash.to_owned());
+        self
+    }
+
+    pub fn tx_hash(&self) -> Option<&str> {
+        self.tx_hash.as_deref()
     }
 
     /// Marks the set as belonging to a collaboration.
@@ -492,6 +514,52 @@ pub fn collab_refund(
         postings.into(),
     )?
     .for_collaboration(collaboration))
+}
+
+/// The idempotency key of a ledger set derived from one onchain log, so a
+/// verified log is posted at most once whoever reports it.
+pub fn chain_key(tx_hash: &str, log_index: u64) -> String {
+    format!("chain:{}:{log_index}", tx_hash.to_ascii_lowercase())
+}
+
+/// USDC transferred into an agent's vault becomes available to the agent.
+/// Always `arc_testnet`; one set per transfer log.
+pub fn vault_deposit(
+    agent: Uuid,
+    amount: Money,
+    tx_hash: &str,
+    log_index: u64,
+) -> Result<PostingSet, LedgerError> {
+    let amount = positive(amount)?;
+    let postings = transfer(Account::External, Account::AgentAvailable(agent), amount);
+    Ok(PostingSet::new(
+        Env::ArcTestnet,
+        Reason::VaultDeposit,
+        &chain_key(tx_hash, log_index),
+        None,
+        postings.into(),
+    )?
+    .with_tx_hash(&tx_hash.to_ascii_lowercase()))
+}
+
+/// USDC the owner withdrew from an agent's vault leaves its available
+/// balance. Fails like any other posting if available would go negative.
+pub fn vault_withdraw(
+    agent: Uuid,
+    amount: Money,
+    tx_hash: &str,
+    log_index: u64,
+) -> Result<PostingSet, LedgerError> {
+    let amount = positive(amount)?;
+    let postings = transfer(Account::AgentAvailable(agent), Account::External, amount);
+    Ok(PostingSet::new(
+        Env::ArcTestnet,
+        Reason::VaultWithdraw,
+        &chain_key(tx_hash, log_index),
+        None,
+        postings.into(),
+    )?
+    .with_tx_hash(&tx_hash.to_ascii_lowercase()))
 }
 
 #[cfg(test)]
@@ -803,6 +871,42 @@ mod tests {
         apply(&mut balances, &refund(ENV, a, i, m(200)).unwrap()).unwrap();
         assert_eq!(bal(&balances, Account::AgentAvailable(a)), 500);
         assert_eq!(bal(&balances, Account::AgentCommitted(a)), 0);
+    }
+
+    #[test]
+    fn vault_deposit_and_withdraw_are_keyed_by_log_and_bounded_by_available() {
+        let a = id(1);
+        let tx = "0xABCDEF";
+        let dep = vault_deposit(a, m(40), tx, 3).unwrap();
+        assert_eq!(dep.env(), Env::ArcTestnet);
+        assert_eq!(dep.reason().as_str(), "vault_deposit");
+        assert_eq!(dep.idempotency_key(), "chain:0xabcdef:3");
+        assert_eq!(dep.tx_hash(), Some("0xabcdef"));
+        assert_eq!(dep.net_deltas()[&Account::AgentAvailable(a)], s(40));
+        assert_eq!(dep.net_deltas()[&Account::External], s(-40));
+        // Another log in the same transaction is another set.
+        assert_eq!(
+            vault_deposit(a, m(1), tx, 4).unwrap().idempotency_key(),
+            "chain:0xabcdef:4"
+        );
+
+        let mut balances = BTreeMap::new();
+        apply(&mut balances, &dep).unwrap();
+        let too_much = vault_withdraw(a, m(41), "0x01", 0).unwrap();
+        assert_eq!(
+            too_much.check_balances(&balances),
+            Err(LedgerError::InsufficientFunds {
+                account: Account::AgentAvailable(a)
+            })
+        );
+        let w = vault_withdraw(a, m(40), "0x01", 0).unwrap();
+        assert_eq!(w.reason().as_str(), "vault_withdraw");
+        apply(&mut balances, &w).unwrap();
+        assert_eq!(bal(&balances, Account::AgentAvailable(a)), 0);
+        assert_eq!(
+            vault_deposit(a, Money::ZERO, tx, 0),
+            Err(LedgerError::ZeroAmount)
+        );
     }
 
     #[test]

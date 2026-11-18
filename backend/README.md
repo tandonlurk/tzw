@@ -283,6 +283,78 @@ Behind a tunnel (owner decision, not set up here): add the tunnel host to
 `ALLOWED_HOSTS` and set `AEN_API_TOKEN` (required then); the webhook is exempt
 from the token and authenticated by its HMAC. Details: `docs/api.md`.
 
+## Arc testnet (onchain vaults and escrow)
+
+Off unless `AEN_TESTNET_MNEMONIC` is set: without it the server is exactly the
+simulated server above. With it, `ARC_RPC_URL`, `ARC_ESCROW_ADDRESS` and
+`ARC_VAULT_FACTORY_ADDRESS` are required (values in `.env.example`, D-60) and
+the server refuses to start if the RPC is unreachable, the chain id is not
+5042002 / 31337, or the escrow's resolver is not our index-0 key. The mnemonic
+is read once and handed to `aen-chain`; keys never leave that crate and are
+never logged. Contract: `docs/api.md`, "Arc testnet".
+
+| Module | Role |
+|---|---|
+| `crates/chain` (`aen-chain`) | alloy calls to `ChallengeEscrow` / `AgentVault`, receipt checks; holds the resolver (0) and operator (1) keys |
+| `server::chain` | `GET /api/chain`, link / view / sync a vault, dev test-owner helper |
+| `server::lifecycle_arc` | tick phases for `arc_testnet` challenges: fund (create + stake), resolve onchain then settle the ledger, release vault exposure |
+
+Rules: `authorize()` still gates every stake (onchain caps are a second layer);
+the ledger is credited only from verified receipts, once per log; every step
+reads the escrow before acting, so RPC failures are retried on the next tick;
+arc challenges run on the wall clock and never resolve before `end_ts`.
+
+### Run against Arc testnet (owner's browser wallet)
+
+```sh
+cd backend
+set -a; source .env; set +a      # DATABASE_URL, AEN_TESTNET_MNEMONIC, ARC_* (see .env.example)
+cargo run -p aen-server
+curl -s localhost:8080/api/chain  # {"enabled":true,"chain_id":5042002,...}
+```
+
+In the web app the owner connects a wallet, creates a vault per agent through
+the factory (operator = `operator_address` from `/api/chain`, `agentRef` = the
+agent id), and the app posts the receipt to `POST /api/agents/{id}/vault`;
+funding transfers are posted to `.../vault/sync`. Short horizons make a demo
+watchable: set the agents' `config.horizon_secs` to ~300-600 and run with
+`FUNDING_WINDOW_SECS=120 TICK_INTERVAL_SECS=10`.
+
+### Autonomous demo with the test owner (dev only)
+
+`AEN_DEV_CHAIN_OWNER=1` mounts `POST /api/dev/chain/setup-demo-vaults`, which
+signs as the test owner (index 2; it needs testnet USDC from the faucet, see
+`docs/setup/arc-testnet-funding.md`) to create, link and fund vaults for the
+two seed-demo agents through the same verification as the public endpoints.
+
+```sh
+AEN_DEV_CHAIN_OWNER=1 MARKET_DATA=fake TICK_INTERVAL_SECS=0 FUNDING_WINDOW_SECS=60 cargo run -p aen-server
+B=localhost:8080/api; H='content-type: application/json'
+curl -s -XPOST -H "$H" $B/dev/seed-demo -d '{}'
+curl -s -XPOST -H "$H" $B/dev/chain/setup-demo-vaults -d '{}'   # 5 USDC each (or {"amount":"3000000"})
+# shorten the bull's horizon (PUT /agents/…00d1 with config.horizon_secs = 30), then:
+curl -s -XPOST -H "$H" $B/dev/fake-market -d '{"move_bps":300,"yes_price_bps":5500,"resolution_side":"open"}'
+curl -s -XPOST -H "$H" $B/dev/tick -d '{}'            # proposed 1, countered 1
+curl -s -XPOST -H "$H" $B/dev/tick -d '{}'            # accepted 1, approvals_requested 1
+curl -s -XPOST -H "$H" $B/approvals/<id>/approve -d '{}'   # reserved in the ledger: funded
+curl -s -XPOST -H "$H" $B/dev/tick -d '{}'            # escrow created, both vaults staked: active
+curl -s -XPOST -H "$H" $B/dev/fake-market -d '{"yes_price_bps":7000}'
+# after end_at (wall clock):
+curl -s -XPOST -H "$H" $B/dev/tick -d '{}'            # resolving 1, settled 1 (resolve tx onchain)
+curl -s $B/agents/00000000-0000-4000-8000-0000000000d1/vault   # onchain 7.50, ledger 7.50, drift 0
+```
+
+Verified on a local anvil with the real server binary (2026-11-17): exactly
+the outputs above; bull vault 7.50 / skeptic 2.50 USDC, drift 0, exposure 0.
+
+### Tests
+
+`tests/chain.rs` runs the server against a local anvil with the real compiled
+contracts (needs Foundry and `forge build` in `contracts/`; skips without
+anvil): full challenge to settlement with ledger = vaults, RPC outage during
+funding and resolution, funding deadline void, paused vault void, sync
+idempotency and skipped withdrawals, link refusals. It never touches Arc.
+
 ## Schemas
 
 `../schemas/graph.schema.json`, `../schemas/challenge_terms.schema.json` and

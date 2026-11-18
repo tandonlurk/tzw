@@ -7,12 +7,14 @@ rust-version.workspace = true
 [dependencies]
 aen-core = { path = "../core" }
 aen-sandbox = { path = "../sandbox" }
+# Arc testnet escrow + vault calls; holds the testnet-only keys (D-58).
+aen-chain = { path = "../chain" }
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
 thiserror.workspace = true
 axum = { version = "0.8", features = ["macros"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "sync"] }
 # HTTP client for Gemini exchange market data (and later xAI). rustls: no system OpenSSL.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres", "macros", "migrate", "json", "uuid", "chrono"] }
@@ -27,6 +29,8 @@ hmac = "0.13"
 sha2 = "0.11"
 
 [dev-dependencies]
-tokio = { version = "1", features = ["sync"] }
+# Local anvil + contract deployment for the onchain lifecycle tests.
+aen-chain = { path = "../chain", features = ["testkit"] }
+tokio = { version = "1", features = ["sync", "io-util"] }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
