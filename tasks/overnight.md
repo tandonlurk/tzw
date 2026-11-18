@@ -34,7 +34,8 @@ Branch: `overnight-1118` (from `main` a2bcdcc, which now holds PRs #1–#3 via #
 - [x] 4. Starter templates with an approach node; rerun the simulated demo on a fresh db and update `docs/demo.md` numbers from the actual run. (TODO M3b, P2)
   - Migration 0012 (D-69): bull 15 %/100 %, skeptic 25 %/50 %, cautious 30 %/20 %, any market; firm seed + firm tests replace the template node. `cargo test --workspace` 392 passed, 1 ignored (templates test now checks the stances; Cautious approval test now 0.72); clippy clean. Commit 168bf87.
   - Fresh-db reruns over HTTP (`aen_item4_demo`, `aen_item4_firm`): BTC demo, co-captain, collaboration and firm demo numbers all unchanged; recorded in `docs/demo.md`. No web change needed (`ensureApproachNode` only adds when missing).
-- [~] 5. Testnet demo script for recording the video: exact steps, expected screens, fallbacks if the RPC is slow. In `docs/demo.md` (testnet section). (TODO M6)
+- [x] 5. Testnet demo script for recording the video: exact steps, expected screens, fallbacks if the RPC is slow. In `docs/demo.md` (testnet section). (TODO M6)
+  - `docs/demo.md` "Testnet video script": path check (RPC, Gemini PM, owner balance), setup, 15-shot list with expected screens, rehearsal tx table, cleanup, 9-row fallback table. Rehearsed verbatim live on Arc (fake market, 2.50/vault, 1.25 staked/side): proposal → settled in 4 min, bull +1.25 / skeptic −1.25, drift 0, release txs recorded, 5.00 withdrawn back, ~0.07 USDC gas. No code change, no new decision.
 - [ ] 6. Full E2E regression on a fresh db: simulated demo end to end over HTTP + `npm run build`; browser walkthrough if Chrome tools are available, else say so. Findings → `reports/qa-overnight.md`; fix small P0/P1 bugs, list the rest.
 - [ ] 7. Refresh `docs/submission/` with honest current status (what is live on Arc, what is simulated, what is unverified). (TODO M6)
 - [ ] 8. Stretch: web app sends `AEN_API_TOKEN` when configured (SEC-02 gap); then `docs/design/explainers-storyboard.md`, a storyboard only (what to animate: discovery, negotiation, escrow lock, resolution, firm payout). No animation code.
@@ -42,5 +43,8 @@ Branch: `overnight-1118` (from `main` a2bcdcc, which now holds PRs #1–#3 via #
 ## Notes
 
 - Item 2: re-check the bid/ask mid live (read-only `/markets/preview`) if Gemini prediction markets answer again; item 6 or 7 can do it.
+
+- Item 5: Gemini prediction-markets API still HTTP 500 at 06:18 UTC; BTC spot `last` stuck at 64,321.41 since ~05:44 UTC. So the video script defaults to the fake-market path on Arc.
+- Item 5 finding (for item 6): interaction detail page does not render the `escrow` tx hashes (create, stakes, resolve, releases); they are only in Activity's expandable detail and, after settle, the ledger rows. Small functional web fix candidate.
 
 ## Morning summary

@@ -101,7 +101,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 - [x] Co-captain text suggestions: backend (6 rules, list/generate/accept/dismiss, D-36/D-37) and "Co-captain" page (accept, dismiss, loosens-control warning); 254 backend + 30 web tests. Grok variant mock-tested only; suggestions with a proposed change were browser-tested from inserted rows, not rule-generated ones (backend/frontend, P2)
 - [ ] ElevenLabs voice for co-captain (P3, last)
-- [~] Demo script, seeded demo agents, README run instructions, AGENTS.md 9.4 filled in: simulated run done and hand-verified (`docs/demo.md`); testnet version waits on D-3 (lead, P0)
+- [x] Demo script, seeded demo agents, README run instructions, AGENTS.md 9.4 filled in: simulated run hand-verified; testnet video script (setup, 15-shot list, fallbacks) rehearsed live on Arc 2026-11-18, bull +1.25 / skeptic -1.25, drift 0 (`docs/demo.md` "Testnet video script") (lead, P0)
 - [~] Submission write-ups drafted in `docs/submission/` (one per award, honest status); finalize after D-3 / keys and record the video (lead, P0)
 
 ## Vision (owner, 2026-11-16) — after the hackathon unless time allows
