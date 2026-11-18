@@ -6,6 +6,7 @@ pub mod cocaptain;
 pub mod collaborations;
 pub mod custom_code;
 pub mod demo;
+pub mod demo_firm;
 pub mod error;
 pub mod extract;
 pub mod firms;
@@ -107,7 +108,8 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
         api = api
             .route("/dev/tick", post(interactions::dev_tick))
             .route("/dev/fake-market", post(interactions::dev_fake_market))
-            .route("/dev/seed-demo", post(demo::seed_demo));
+            .route("/dev/seed-demo", post(demo::seed_demo))
+            .route("/dev/seed-firm-demo", post(demo_firm::seed_firm_demo));
         // Signs with the test-owner key: only when explicitly enabled.
         if state.chain.as_ref().is_some_and(|c| c.dev_owner.is_some()) {
             api = api.route(

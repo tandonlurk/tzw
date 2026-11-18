@@ -998,3 +998,142 @@ async fn market_categories_and_preview() {
     assert_eq!(s, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(detail_paths(&err), ["markets.ranges.yes_price_bps"]);
 }
+
+/// The `backend/README.md` "Firm demo" script, entirely over the HTTP router.
+#[tokio::test]
+async fn seed_firm_demo_walks_the_whole_script() {
+    const LEAD: &str = "00000000-0000-4000-8000-0000000000f4";
+    const SCOUT: &str = "00000000-0000-4000-8000-0000000000f1";
+    const ANALYST: &str = "00000000-0000-4000-8000-0000000000f2";
+    const RIVAL: &str = "00000000-0000-4000-8000-0000000000f3";
+    let c = setup().await;
+
+    let seeded = ok(&c.app, "/api/dev/seed-firm-demo", json!({})).await;
+    assert_eq!(seeded["env"], "simulated");
+    assert_eq!(seeded["firm_created"], true);
+    assert_eq!(seeded["funds_per_agent"], "100000000");
+    assert_eq!(seeded["agents"].as_array().unwrap().len(), 4);
+    assert!(
+        seeded["agents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|a| a["created"] == true && a["name"].as_str().unwrap().ends_with("(simulated)"))
+    );
+    let fid = seeded["firm_id"].as_str().unwrap().to_owned();
+    let firm = get(&c.app, &format!("/api/firms/{fid}")).await;
+    assert_eq!(firm["lead_agent_id"], LEAD);
+    assert_eq!(firm["lead_share_bps"], 8000);
+    assert_eq!(firm["member_pool_bps"], 2000);
+    assert_eq!(firm["task_fee"], "100000");
+    assert_eq!(firm["members"].as_array().unwrap().len(), 2);
+
+    // Idempotent: nothing changes the second time.
+    let counts = |pool: PgPool| async move {
+        let n = |sql: &'static str| {
+            let pool = pool.clone();
+            async move {
+                sqlx::query_scalar::<_, i64>(sql)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap()
+            }
+        };
+        (
+            n("SELECT COUNT(*) FROM ledger_entries").await,
+            n("SELECT COUNT(*) FROM agents").await,
+            n("SELECT COUNT(*) FROM firms").await,
+            n("SELECT COUNT(*) FROM firm_members").await,
+            n("SELECT COUNT(*) FROM activity").await,
+        )
+    };
+    let before = counts(c.pool.clone()).await;
+    let again = ok(&c.app, "/api/dev/seed-firm-demo", json!({})).await;
+    assert_eq!(again["firm_created"], false);
+    assert!(
+        again["agents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|a| a["created"] == false)
+    );
+    assert_eq!(counts(c.pool.clone()).await, before);
+
+    ok(
+        &c.app,
+        "/api/dev/fake-market",
+        json!({"move_bps": 300, "yes_price_bps": 5500, "resolution_side": "open"}),
+    )
+    .await;
+    let t1 = ok(&c.app, "/api/dev/tick", json!({})).await;
+    assert_eq!(t1["proposed"], 1, "{t1}");
+    assert_eq!(t1["firm_contributions"], 2, "{t1}");
+    assert_eq!(t1["accepted"], 1, "{t1}");
+    assert_eq!(t1["approvals_requested"], 1, "{t1}");
+    ok(&c.app, "/api/dev/tick", json!({})).await;
+    ok(&c.app, "/api/dev/tick", json!({})).await;
+
+    // The rival's owner approves its 5.00 USDC stake.
+    let approvals = get(&c.app, "/api/approvals").await;
+    let approvals = approvals.as_array().unwrap();
+    assert_eq!(approvals.len(), 1);
+    assert_eq!(approvals[0]["agent_id"], RIVAL);
+    assert_eq!(approvals[0]["stake"], "5000000");
+    let path = format!(
+        "/api/approvals/{}/approve",
+        approvals[0]["id"].as_str().unwrap()
+    );
+    ok(&c.app, &path, json!({})).await;
+
+    let list = get(&c.app, "/api/interactions").await;
+    assert_eq!(list.as_array().unwrap().len(), 1);
+    assert_eq!(list[0]["state"], "active", "{}", list[0]);
+    assert_eq!(list[0]["firm_id"], fid);
+    let end: DateTime<Utc> = list[0]["end_at"].as_str().unwrap().parse().unwrap();
+
+    ok(
+        &c.app,
+        "/api/dev/fake-market",
+        json!({"yes_price_bps": 7000}),
+    )
+    .await;
+    let now = (end + Duration::seconds(60)).to_rfc3339();
+    let t4 = ok(&c.app, "/api/dev/tick", json!({ "now": now })).await;
+    assert_eq!(t4["settled"], 1, "{t4}");
+    let list = get(&c.app, "/api/interactions").await;
+    assert_eq!(list[0]["state"], "settled");
+    assert_eq!(list[0]["winner_id"], LEAD);
+
+    // Profit 5.00: pool 20 % = 1.00 (scout 0.60, analyst 0.40), plus a 0.10 task
+    // fee each; the lead keeps 5.00 - 1.00 - 0.20 = 3.80.
+    let firm = get(&c.app, &format!("/api/firms/{fid}")).await;
+    assert_eq!(firm["stats"]["lead_realized_pnl"], "3800000");
+    assert_eq!(firm["stats"]["paid_to_members"], "1200000");
+    let earned = |id: &str| {
+        firm["members"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["agent_id"] == id)
+            .unwrap()["earned"]
+            .clone()
+    };
+    assert_eq!(earned(SCOUT), "700000");
+    assert_eq!(earned(ANALYST), "500000");
+    let stats = |id: &str| {
+        let id = id.to_owned();
+        let app = c.app.clone();
+        async move { get(&app, &format!("/api/agents/{id}")).await }
+    };
+    let lead = stats(LEAD).await;
+    assert_eq!(lead["stats"]["realized_pnl"], "3800000");
+    assert_eq!(lead["balances"]["available"], "103800000");
+    assert_eq!(stats(SCOUT).await["stats"]["firm_income"], "700000");
+    assert_eq!(stats(SCOUT).await["balances"]["available"], "100700000");
+    assert_eq!(stats(ANALYST).await["stats"]["firm_income"], "500000");
+    assert_eq!(stats(ANALYST).await["balances"]["available"], "100500000");
+    let rival = stats(RIVAL).await;
+    assert_eq!(rival["stats"]["realized_pnl"], "-5000000");
+    assert_eq!(rival["balances"]["available"], "95000000");
+    assert_ledger_sound(&c.pool).await;
+}

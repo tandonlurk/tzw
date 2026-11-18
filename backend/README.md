@@ -153,6 +153,47 @@ With `MARKET_DATA=gemini` the same flow runs on live Gemini prediction-market
 contracts (public data, no key) with simulated stakes, in real time: `now`
 cannot be overridden and a challenge lasts the agent's `horizon_secs`.
 
+### Firm demo (offline, simulated funds)
+
+A firm of four agents on simulated funds: a lead, a scout and an analyst
+(members) and a rival. Run it on a **fresh database**: agents from
+`/dev/seed-demo` (or any other active agent) would also take part and change
+the numbers. It does not touch the demo bull and skeptic. Needs `jq`.
+
+```sh
+createdb aen_firm_demo
+DATABASE_URL="postgres://$USER@localhost/aen_firm_demo" PORT=8099 DEV_ENDPOINTS=true MARKET_DATA=fake TICK_INTERVAL_SECS=0 \
+  cargo run -p aen-server &
+API=http://127.0.0.1:8099/api
+post() { curl -sS -X POST "$API$1" -H 'Content-Type: application/json' -d "$2"; }
+
+post /dev/seed-firm-demo '{}' | jq -c '{env, firm_created, agents: [.agents[] | {name, role}]}'   # 4 "(simulated)" agents, 100 USDC each, firm "Firm demo desk (simulated)"; safe to repeat
+post /dev/fake-market '{"move_bps":300,"yes_price_bps":5500,"resolution_side":"open"}'
+post /dev/tick '{}' | jq -c '{proposed, firm_contributions, accepted, approvals_requested}'   # {"proposed":1,"firm_contributions":2,"accepted":1,"approvals_requested":1}
+post /dev/tick '{}'        # the scout looks again (firm_contributions 1); nothing else moves
+post /dev/tick '{}'        # all zeros: waiting for the rival's owner
+curl -sS $API/approvals | jq -c '.[0] | {agent_name, stake}'      # {"agent_name":"Firm Rival (simulated)","stake":"5000000"}
+post /approvals/$(curl -sS $API/approvals | jq -r '.[0].id')/approve '{}' | jq .interaction.state   # "active"
+ID=$(curl -sS $API/interactions | jq -r '.[0].id')
+AFTER_END=$(curl -sS $API/interactions/$ID | jq -r '.end_at | fromdateiso8601 + 60 | todateiso8601')
+post /dev/fake-market '{"yes_price_bps":7000}'
+post /dev/tick "{\"now\":\"$AFTER_END\"}" | jq -c '{resolving, settled}'   # {"resolving":1,"settled":1}: the lead's side wins
+curl -sS $API/firms/00000000-0000-4000-8000-0000000000fa | jq -c '{stats, members: [.members[] | {role, earned}]}'
+# {"stats":{"challenges":1,"settled":1,"lead_realized_pnl":"3800000","paid_to_members":"1200000"},
+#  "members":[{"role":"scout","earned":"700000"},{"role":"analyst","earned":"500000"}]}
+curl -sS $API/agents | jq -c '.[] | {name, available: .balances.available}'
+# scout 100.70, analyst 100.50, rival 95.00, lead 103.80 USDC (simulated)
+```
+
+The lead wins its 5.00 USDC challenge. Firm terms: lead keeps 80%, 20% (1.00)
+goes to the member pool split 60/40 between scout (0.60) and analyst (0.40),
+plus a 0.10 task fee to each member for its used contribution. Lead net
+5.00 - 1.00 - 0.20 = +3.80; scout +0.70, analyst +0.50; rival -5.00. The ledger
+sums to zero throughout. The rival's conviction floor is lowered (60%) so it
+accepts the lead's stake instead of countering lower, and it asks its owner
+above 1.00 USDC (hence the approval). Simulated funds only: nothing here is a
+real or testnet asset, and the resolution is backend-administered.
+
 ## Co-captain suggestions
 
 `server::cocaptain` (`CoCaptain` trait, the six deterministic rules and their
