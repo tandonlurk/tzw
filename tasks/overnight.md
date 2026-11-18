@@ -40,7 +40,7 @@ Branch: `overnight-1118` (from `main` a2bcdcc, which now holds PRs #1–#3 via #
   - README demo + co-captain + collaboration over HTTP on fresh `aen_item6`: every number matches `docs/demo.md`. Chrome extension tools unavailable, so headless Chrome rendered all 14 routes (no clicks). Fixed Q-1 escrow tx card on the challenge page (verified on `aen_item5_arc`), Q-2 fake-market "Resolved by" label, Q-3 env label; no backend change, no new decision. Web 114 passed, build OK. Commit e515b4d.
 - [x] 7. Refresh `docs/submission/` with honest current status (what is live on Arc, what is simulated, what is unverified). (TODO M6)
   - All six files re-checked against TODO/demo/handoffs: three settled Arc testnet runs with tx tables (arc.md), approach + firms (simulated, awaiting review), fake catalog, bid/ask mid D-67 **not verified live** (Gemini PM API still HTTP 500 at 06:32 UTC), stale spot `last` finding, QuickNode no longer "blocked on custody" (escrow deployed; blockers are key + tunnel), no Grok/ElevenLabs/QuickNode keys. Docs only, no tests needed, no new decision.
-- [ ] 8. Stretch: web app sends `AEN_API_TOKEN` when configured (SEC-02 gap); then `docs/design/explainers-storyboard.md`, a storyboard only (what to animate: discovery, negotiation, escrow lock, resolution, firm payout). No animation code.
+- [~] 8. Stretch: web app sends `AEN_API_TOKEN` when configured (SEC-02 gap); then `docs/design/explainers-storyboard.md`, a storyboard only (what to animate: discovery, negotiation, escrow lock, resolution, firm payout). No animation code.
 
 ## Notes
 
