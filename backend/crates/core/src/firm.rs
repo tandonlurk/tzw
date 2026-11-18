@@ -154,13 +154,16 @@ impl FirmTerms {
         }
         for (i, r) in self.roles.iter().enumerate() {
             if !(1..=MAX_SLOTS).contains(&r.slots) {
+                push(&format!("roles.{i}.slots"), "slots must be between 1 and 5");
+            }
+            if r.weight_bps > MAX_BPS {
                 push(
-                    &format!("roles[{i}].slots"),
-                    "slots must be between 1 and 5",
+                    &format!("roles.{i}.weight_bps"),
+                    "weight_bps must be at most 10000",
                 );
             }
             if self.roles[..i].iter().any(|o| o.role == r.role) {
-                push(&format!("roles[{i}].role"), "each role may appear once");
+                push(&format!("roles.{i}.role"), "each role may appear once");
             }
         }
         let total: u64 = self.roles.iter().map(|r| u64::from(r.weight_bps)).sum();
@@ -367,17 +370,17 @@ mod tests {
         };
         assert_eq!(
             fields(&roles(vec![slot(Scout, 0, 10_000)])),
-            ["roles[0].slots"]
+            ["roles.0.slots"]
         );
         assert_eq!(
             fields(&roles(vec![slot(Scout, 6, 10_000)])),
-            ["roles[0].slots"]
+            ["roles.0.slots"]
         );
         assert!(fields(&roles(vec![slot(Scout, 5, 10_000)])).is_empty());
         assert_eq!(fields(&roles(vec![slot(Scout, 1, 9_999)])), ["roles"]);
         assert_eq!(
             fields(&roles(vec![slot(Scout, 1, 5000), slot(Scout, 1, 5000)])),
-            ["roles[1].role"]
+            ["roles.1.role"]
         );
         let bad_markets = FirmTerms {
             markets: Some(
@@ -387,6 +390,19 @@ mod tests {
             ..terms()
         };
         assert_eq!(fields(&bad_markets), ["markets.ranges.move_bps"]);
+    }
+
+    #[test]
+    fn weight_above_the_pool_is_named() {
+        let t = FirmTerms {
+            roles: vec![RoleSlot {
+                role: Scout,
+                slots: 1,
+                weight_bps: 10_001,
+            }],
+            ..terms()
+        };
+        assert_eq!(fields(&t), ["roles.0.weight_bps", "roles"]);
     }
 
     #[test]

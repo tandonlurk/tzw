@@ -89,9 +89,11 @@ impl AgentInput {
 }
 
 fn graph_detail(e: &graph::GraphError) -> Detail {
-    let path = match &e.node_id {
-        Some(id) => format!("graph.nodes.{id}"),
-        None => "graph".to_owned(),
+    let path = match (&e.node_id, &e.param_path) {
+        (Some(id), Some(p)) if !p.is_empty() => format!("graph.nodes.{id}.params.{p}"),
+        (Some(id), Some(_)) => format!("graph.nodes.{id}.params"),
+        (Some(id), None) => format!("graph.nodes.{id}"),
+        (None, _) => "graph".to_owned(),
     };
     // GraphErrorCode serializes as a plain snake_case string.
     let code = serde_json::to_value(e.code)

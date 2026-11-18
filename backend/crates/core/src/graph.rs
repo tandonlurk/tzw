@@ -454,6 +454,10 @@ pub struct GraphError {
     pub code: GraphErrorCode,
     pub message: String,
     pub node_id: Option<String>,
+    /// For `invalid_params` on an `approach.profile` node: the dotted path of
+    /// the offending field inside `params` (empty = the params object).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub param_path: Option<String>,
 }
 
 fn err(code: GraphErrorCode, node_id: Option<&str>, message: String) -> GraphError {
@@ -461,6 +465,7 @@ fn err(code: GraphErrorCode, node_id: Option<&str>, message: String) -> GraphErr
         code,
         message,
         node_id: node_id.map(str::to_owned),
+        param_path: None,
     }
 }
 
@@ -512,12 +517,16 @@ pub fn validate(graph: &Graph) -> Vec<GraphError> {
                 format!("unknown node type '{}'", node.node_type),
             )),
             Some(def) => {
-                for message in param_errors(def, &node.params) {
-                    errors.push(err(
-                        InvalidParams,
-                        Some(id),
-                        format!("invalid params for {}: {message}", def.block_type),
-                    ));
+                let approach = def.kind == BlockKind::Approach;
+                for (path, message) in param_errors_at(def, &node.params) {
+                    errors.push(GraphError {
+                        param_path: approach.then_some(path),
+                        ..err(
+                            InvalidParams,
+                            Some(id),
+                            format!("invalid params for {}: {message}", def.block_type),
+                        )
+                    });
                 }
                 // `maxLength` counts characters; the sandbox limit is bytes.
                 // Reported only when the schema did not already flag it.
@@ -540,12 +549,15 @@ pub fn validate(graph: &Graph) -> Vec<GraphError> {
                 if def.kind == BlockKind::Approach
                     && let Ok(approach) = crate::approach::Approach::from_params(&node.params)
                 {
-                    for (_, message) in approach.markets.validate() {
-                        errors.push(err(
-                            InvalidParams,
-                            Some(id),
-                            format!("invalid params for {APPROACH_PROFILE}: {message}"),
-                        ));
+                    for (path, message) in approach.markets.validate() {
+                        errors.push(GraphError {
+                            param_path: Some(path),
+                            ..err(
+                                InvalidParams,
+                                Some(id),
+                                format!("invalid params for {APPROACH_PROFILE}: {message}"),
+                            )
+                        });
                     }
                 }
             }
@@ -711,14 +723,22 @@ pub fn validate(graph: &Graph) -> Vec<GraphError> {
     errors
 }
 
-fn param_errors(def: &BlockDef, params: &Value) -> Vec<String> {
+/// Schema errors as (dotted path inside params, message).
+fn param_errors_at(def: &BlockDef, params: &Value) -> Vec<(String, String)> {
     match jsonschema::validator_for(&def.params_schema) {
         Ok(validator) => validator
             .iter_errors(params)
-            .map(|e| e.to_string())
+            .map(|e| {
+                let pointer = e.instance_path().to_string();
+                let path = pointer.trim_start_matches('/').replace('/', ".");
+                (path, e.to_string())
+            })
             .collect(),
         // A broken catalog schema must fail closed, never accept params.
-        Err(e) => vec![format!("internal: block schema does not compile: {e}")],
+        Err(e) => vec![(
+            String::new(),
+            format!("internal: block schema does not compile: {e}"),
+        )],
     }
 }
 
@@ -1254,6 +1274,45 @@ mod tests {
             let e = find(&g, InvalidParams);
             assert_eq!(e.node_id.as_deref(), Some("ap"), "{bad}");
         }
+    }
+
+    #[test]
+    fn approach_errors_name_the_field() {
+        let path = |params: Value| {
+            let mut g = valid();
+            g.nodes.push(node("ap", APPROACH_PROFILE, params));
+            find(&g, InvalidParams).param_path
+        };
+        assert_eq!(
+            path(json!({"stance": {"ambition_bps": 10001}})).as_deref(),
+            Some("stance.ambition_bps")
+        );
+        assert_eq!(
+            path(json!({"markets": {"ranges": {"move_bps": {"min": 5, "max": 1}}}})).as_deref(),
+            Some("markets.ranges.move_bps")
+        );
+        assert_eq!(
+            path(json!({"markets": {"keywords": ["ok", ""]}})).as_deref(),
+            Some("markets.keywords.1")
+        );
+        // Explicit nulls everywhere are fine (the builder sends them).
+        let mut g = valid();
+        g.nodes.push(node(
+            "ap",
+            APPROACH_PROFILE,
+            json!({"stance": {"collaboration_bps": 0, "ambition_bps": 0}, "firm_role": "none",
+                   "markets": {"scope": "any", "structures": [], "categories": [],
+                               "subcategories": [], "keywords": [], "symbols": [],
+                               "ranges": {"move_bps": {"min": null, "max": null},
+                                          "yes_price_bps": {"min": null, "max": null},
+                                          "expiry_secs": {"min": null, "max": null},
+                                          "volume_delta_24h_bps": {"min": null, "max": null}}}}),
+        ));
+        assert_eq!(validate(&g), vec![]);
+        // Other blocks keep the plain shape.
+        let mut g = valid();
+        g.nodes[2].params = json!({"min_bps": 10001});
+        assert_eq!(find(&g, InvalidParams).param_path, None);
     }
 
     #[test]

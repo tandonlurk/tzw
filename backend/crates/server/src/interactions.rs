@@ -79,6 +79,8 @@ pub struct Interaction {
     pub updated_at: DateTime<Utc>,
     /// Arc testnet transactions of this challenge (`null` for simulated).
     pub escrow: Option<EscrowTxs>,
+    /// The firm this challenge was proposed for (lead's firm challenges).
+    pub firm_id: Option<Uuid>,
 }
 
 /// Confirmed escrow transactions (lowercase hashes), each `null` until sent.
@@ -107,6 +109,7 @@ fn to_interaction(joined: JoinedRow, max_rounds: i32) -> Result<Interaction, Api
     });
     Ok(Interaction {
         escrow,
+        firm_id: row.firm_id,
         id: row.id,
         kind: row.kind,
         env: row.env,

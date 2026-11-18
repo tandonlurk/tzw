@@ -251,6 +251,12 @@ fn money(units: i64) -> Result<Money, ApiError> {
     Money::from_minor(units).ok_or_else(|| ApiError::internal("negative amount stored"))
 }
 
+/// Names the request field an error is about, for the form that sent it.
+fn at(mut e: ApiError, path: &str) -> ApiError {
+    e.details = vec![Detail::new(path, e.code, e.message.clone())];
+    e
+}
+
 fn usdc(m: Money) -> String {
     stake_text(m, Env::Simulated)
 }
@@ -517,23 +523,26 @@ async fn add_member(
         return Err(ApiError::conflict("invalid_state", "the firm is closed"));
     }
     if agent.id == firm.lead_agent_id {
-        return Err(ApiError::unprocessable(
-            "is_lead",
-            "the lead cannot join its own firm as a member",
+        return Err(at(
+            ApiError::unprocessable("is_lead", "the lead cannot join its own firm as a member"),
+            "agent_id",
         ));
     }
     if agent.env != Env::Simulated {
-        return Err(ApiError::unprocessable(
-            "unsupported_env",
-            "firms are available for simulated agents only",
+        return Err(at(
+            ApiError::unprocessable(
+                "unsupported_env",
+                "firms are available for simulated agents only",
+            ),
+            "agent_id",
         ));
     }
     // Serialize joins per agent so two firms cannot take it at once.
     advisory_lock(conn, &format!("aen:firm-member:{}", agent.id)).await?;
     if is_current_member(conn, agent.id).await? {
-        return Err(ApiError::conflict(
-            "already_member",
-            "the agent is already a member of a firm",
+        return Err(at(
+            ApiError::conflict("already_member", "the agent is already a member of a firm"),
+            "agent_id",
         ));
     }
     let slots = firm
@@ -542,9 +551,12 @@ async fn add_member(
         .find(|r| r.role == role)
         .map_or(0, |r| i64::from(r.slots));
     if current_role_count(conn, firm.id, role).await? >= slots {
-        return Err(ApiError::conflict(
-            "no_free_slot",
-            format!("the firm has no free {} slot", role.as_str()),
+        return Err(at(
+            ApiError::conflict(
+                "no_free_slot",
+                format!("the firm has no free {} slot", role.as_str()),
+            ),
+            "role",
         ));
     }
     sqlx::query(
@@ -630,28 +642,29 @@ pub async fn create(
     advisory_lock(&mut tx, &format!("aen:firm-lead:{}", body.lead_agent_id)).await?;
     let lead = load_agent(&mut tx, body.lead_agent_id)
         .await?
-        .ok_or_else(|| ApiError::not_found("agent"))?;
+        .ok_or_else(|| at(ApiError::not_found("agent"), "lead_agent_id"))?;
+    let refuse = |code, message: &str| at(ApiError::unprocessable(code, message), "lead_agent_id");
     if lead.env != Env::Simulated {
-        return Err(ApiError::unprocessable(
+        return Err(refuse(
             "unsupported_env",
             "firms are available for simulated agents only",
         ));
     }
     let approach = Approach::effective(&lead.graph);
     if !may_lead_firm(&approach) {
-        return Err(ApiError::unprocessable(
+        return Err(refuse(
             "not_a_lead",
             "the agent's approach must have firm_role \"lead\" and collaboration of at least 30%",
         ));
     }
     if led_firm(&mut tx, lead.id).await?.is_some() {
-        return Err(ApiError::unprocessable(
+        return Err(refuse(
             "already_leads_firm",
             "the agent already leads an open firm",
         ));
     }
     if is_current_member(&mut tx, lead.id).await? {
-        return Err(ApiError::unprocessable(
+        return Err(refuse(
             "already_member",
             "the agent is a member of another firm; it must leave first",
         ));
@@ -715,7 +728,7 @@ pub async fn join(
     let firm = lock_row(&mut tx, id).await?;
     let agent = load_agent(&mut tx, body.agent_id)
         .await?
-        .ok_or_else(|| ApiError::not_found("agent"))?;
+        .ok_or_else(|| at(ApiError::not_found("agent"), "agent_id"))?;
     add_member(
         &mut tx,
         &firm,
@@ -746,9 +759,12 @@ pub async fn leave(
     .execute(&mut *tx)
     .await?;
     if left.rows_affected() == 0 {
-        return Err(ApiError::conflict(
-            "not_a_member",
-            "the agent is not a current member of this firm",
+        return Err(at(
+            ApiError::conflict(
+                "not_a_member",
+                "the agent is not a current member of this firm",
+            ),
+            "agent_id",
         ));
     }
     let name: String = sqlx::query_scalar("SELECT name FROM agents WHERE id = $1")
@@ -1331,7 +1347,7 @@ pub async fn use_contributions(
                         usdc(fee)
                     ),
                     json!({ "firm_id": firm.id, "contribution_id": id, "fee": fee,
-                            "payer": lead.id, "env": Env::Simulated }),
+                            "amount": fee, "payer": lead.id, "env": Env::Simulated }),
                 )
                 .await?;
             }
@@ -1421,6 +1437,7 @@ pub async fn pay_profit_share(
     if payouts.iter().all(|(_, p)| p.is_zero()) {
         return Ok(false);
     }
+    let paid_total = money(profit.minor() - split.lead_keeps.minor())?;
     let set = ledger::firm_payout(Env::Simulated, firm.lead_agent_id, interaction, &payouts)?;
     ledger_db::post(conn, &set).await?;
     for ((id, member, name, role), amount) in used.iter().zip(&split.payouts) {
@@ -1445,7 +1462,8 @@ pub async fn pay_profit_share(
                 usdc(*amount)
             ),
             json!({ "firm_id": firm.id, "contribution_id": id, "payout": amount,
-                    "profit": profit, "pool": split.pool, "env": Env::Simulated }),
+                    "amount": amount, "profit": profit, "pool": split.pool,
+                    "env": Env::Simulated }),
         )
         .await?;
     }
@@ -1460,12 +1478,12 @@ pub async fn pay_profit_share(
              pool); it keeps {}.",
             firm.lead_name,
             usdc(profit),
-            usdc(money(profit.minor() - split.lead_keeps.minor())?),
+            usdc(paid_total),
             display_bps(i64::from(firm.member_pool_bps())),
             usdc(split.lead_keeps)
         ),
         json!({ "firm_id": firm.id, "profit": profit, "pool": split.pool,
-                "lead_keeps": split.lead_keeps, "env": Env::Simulated }),
+                "amount": paid_total, "lead_keeps": split.lead_keeps, "env": Env::Simulated }),
     )
     .await?;
     Ok(true)

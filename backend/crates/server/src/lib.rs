@@ -18,6 +18,7 @@ pub mod ledger_db;
 pub mod lifecycle;
 pub mod lifecycle_arc;
 pub mod market;
+pub mod markets;
 pub mod misc;
 pub mod models;
 pub mod quicknode;
@@ -81,6 +82,8 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
             post(collaborations::complete),
         )
         .route("/collaborations/{id}/cancel", post(collaborations::cancel))
+        .route("/markets/categories", get(markets::categories))
+        .route("/markets/preview", post(markets::preview))
         .route("/firms", get(firms::list).post(firms::create))
         .route("/firms/{id}", get(firms::get))
         .route("/firms/{id}/join", post(firms::join))

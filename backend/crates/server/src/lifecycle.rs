@@ -85,6 +85,9 @@ pub struct InteractionRow {
     pub escrow_settle_tx: Option<String>,
     pub pending_outcome: Option<Value>,
     pub vaults_released_at: Option<DateTime<Utc>>,
+    /// Set on a firm lead's firm challenges.
+    #[sqlx(default)]
+    pub firm_id: Option<Uuid>,
 }
 
 impl InteractionRow {
