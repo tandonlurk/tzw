@@ -12,4 +12,11 @@ Criteria as published: "Projects must be built on Gemini's prediction market API
 
 - We read Gemini data; we do not trade on Gemini or create markets (that needs an account, key and accepted terms).
 - Resolution reads the contract price or published outcome from Gemini through our backend, labelled backend-administered. A market data API is not an oracle.
-- The live demo uses a deterministic fake market (`MARKET_DATA=fake`) so the numbers are reproducible; the live client is selected with `MARKET_DATA=gemini`. UNVERIFIED: a full demo run against live Gemini data.
+- The scripted offline demo uses a deterministic fake market (`MARKET_DATA=fake`) so the numbers are reproducible; the live client is the default (`MARKET_DATA=gemini`).
+- Discovery takes the contract's **last trade price** as the claim's threshold; on thin 15-minute contracts that can be far from the current bid/ask (in the live run: last 0.14 while the book was 0.34/0.41).
+
+## Verified live (2026-11-17/18)
+
+A full challenge ran end to end on live Gemini data with real Arc testnet USDC, driven by the autonomous scheduler: the bull agent picked `GEMI-BTC15M2611180000-UP` ("BTC price today at 7pm EST: Up") from `/v1/prediction-markets/events`, the agents negotiated a claim on its YES price at 00:01:54 UTC, and after the end time the backend read the settled event from `/v1/prediction-markets/events/BTC15M2611180000` and resolved the escrow onchain from Gemini's published outcome. Gemini settled the event at 00:00:08 UTC with `resolutionSide: "no"` (settlement 64,874.75 against the 64,923.72 reference), the backend observed 0.00 at 00:02:02, and the skeptic won 1.25 testnet USDC ([resolve tx](https://explorer.testnet.arc.io/tx/0x602f22fb4840d36f2b827fd6c2fa5b256d172c05593d00e2723892d72c91a513)). Record: `reports/handoffs/2026-11-17-testnet-gemini.md`.
+
+Also seen live: `resolutionSide: "no"` on settled ladder contracts (only `"yes"` had been seen before), and BTC events settle about 6 s after their expiry.
