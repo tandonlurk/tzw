@@ -426,9 +426,10 @@ A test fails if the checked-in files are out of date.
   (`localhost`, `127.0.0.1`, `[::1]`, plus `ALLOWED_HOSTS`) against DNS
   rebinding, and any `Origin` other than `CORS_ORIGIN` is refused (CSRF). A
   bearer token is required whenever `AEN_API_TOKEN` is set, and the server
-  refuses to start on a non-loopback `BIND_ADDR` without one. The web app does
-  not send a token yet, so token mode is for scripted / remote use; the local
-  default needs none.
+  refuses to start on a non-loopback `BIND_ADDR` without one. The local
+  default needs none; with a token, run the web app with
+  `NEXT_PUBLIC_API_URL=/backend` and a server-only `AEN_API_TOKEN` so its
+  same-origin proxy adds the header (`web/README.md`, D-70).
 - **Database guards (SEC-08).** `TRUNCATE` is refused on the append-only tables
   (`ledger_entries`, `agent_versions`, `negotiation_rounds`, `suggestions`)
   unless the transaction runs `SET LOCAL aen.allow_truncate = 'on'`, which only

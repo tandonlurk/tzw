@@ -88,7 +88,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [x] Threat model → `docs/security/threat-model.md` (webhook, sandbox, custody are design-level only: features not built) (qa, P0)
 - [x] Fixed SEC-01 (415 unless JSON), SEC-03 (double settle rejected), SEC-05 (413); repro tests now pass (backend, P0)
 - [x] SEC-04 escrow deadline caps (7 d fund, 30 d resolve) and SEC-07 resolver cannot be a party: 84 Foundry tests, local only, D-32 (contracts, P1)
-- [x] SEC-02 Host + Origin guard always on, bearer token when `AEN_API_TOKEN` set; SEC-08 TRUNCATE guard + balanced-set trigger; SEC-09 scoped idempotency keys; 266 backend tests (backend, P1). Web app sends no token yet
+- [x] SEC-02 Host + Origin guard always on, bearer token when `AEN_API_TOKEN` set; SEC-08 TRUNCATE guard + balanced-set trigger; SEC-09 scoped idempotency keys; 266 backend tests (backend, P1). Web app: opt-in same-origin proxy adds the token server-side (D-70, 2026-11-18)
 - [x] Overnight E2E regression 2026-11-18: README demo + co-captain + collaboration over HTTP on a fresh db, all numbers match; 14 web routes rendered in headless Chrome; fixed escrow tx hashes on the challenge page and the fake-market "Resolved by" label; 114 web tests (`reports/qa-overnight.md`) (qa, P1)
 
 ## M5 — Custom-code agents (Tue eve – Wed Nov 18) — committed, not optional

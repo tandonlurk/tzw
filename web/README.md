@@ -9,6 +9,7 @@ npm run dev                  # http://localhost:3000
 npm run build && npm run lint && npm test
 ```
 
+- Backend with `AEN_API_TOKEN` (SEC-02): set `NEXT_PUBLIC_API_URL=/backend` and, server-only, `AEN_API_TOKEN` (+ `AEN_API_URL` if the backend is not on `localhost:8080`), then rebuild. The browser calls `/backend/...` on this server (`app/backend/[...path]/route.ts`, helpers in `lib/proxy.ts`), which adds the bearer token and forwards; it applies its own Host allowlist (loopback + `WEB_ALLOWED_HOSTS`) and same-origin Origin check (D-70). The token never reaches the browser bundle.
 - `lib/api`: typed client + contract types, uniform `ApiError` (including `unreachable`).
 - `lib/money.ts`: BigInt-only formatting/parsing of minor-unit money strings.
 - `lib/graph.ts`: contract `Graph` <-> canvas conversion; node positions are UI-only (localStorage `agent-graph-ui:<agentId>`).
