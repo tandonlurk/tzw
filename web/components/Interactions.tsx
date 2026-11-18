@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import type { Interaction, InteractionState } from "@/lib/api";
-import { outcomeText, stateLabel, stateTone, termsRows } from "@/lib/interactions";
+import { escrowRows, outcomeText, stateLabel, stateTone, termsRows } from "@/lib/interactions";
+import { explorerTxUrl } from "@/lib/chain";
+import { useChainConfig } from "@/lib/useChainConfig";
 import { formatMoney } from "@/lib/money";
 import { EnvBadge } from "./ui";
-import type { ChallengeTerms } from "@/lib/api";
+import type { ChallengeTerms, EscrowTxs } from "@/lib/api";
 
 export function StateBadge({ state }: { state: InteractionState }) {
   return <span className={`badge ${stateTone(state)}`}>{stateLabel(state)}</span>;
@@ -31,10 +33,27 @@ export function InteractionCard({ i }: { i: Interaction }) {
   );
 }
 
-export function TermsTable({ terms, env }: { terms: ChallengeTerms; env: string }) {
+export function TermsTable({ terms, env, marketSource }: { terms: ChallengeTerms; env: string; marketSource?: Interaction["market_source"] }) {
   return (
     <table className="kv"><tbody>
-      {termsRows(terms, env).map(([k, v]) => <tr key={k}><td>{k}</td><td>{v}</td></tr>)}
+      {termsRows(terms, env, marketSource).map(([k, v]) => <tr key={k}><td>{k}</td><td>{v}</td></tr>)}
+    </tbody></table>
+  );
+}
+
+/** Arc testnet escrow transactions with explorer links; steps not reached yet read "not yet". */
+export function EscrowTxTable({ escrow, proposer, counterparty }: { escrow: EscrowTxs; proposer: string; counterparty: string }) {
+  const chain = useChainConfig();
+  const explorer = chain.data?.enabled ? chain.data.explorer_url : null;
+  return (
+    <table className="kv"><tbody>
+      {escrowRows(escrow, proposer, counterparty).map(([k, hash]) => (
+        <tr key={k}><td>{k}</td><td className="mono">
+          {hash && explorer ? <a href={explorerTxUrl(explorer, hash)} target="_blank" rel="noreferrer" title={hash}>{hash.slice(0, 10)}...{hash.slice(-6)}</a>
+            : hash ? <span title={hash}>{hash.slice(0, 10)}...{hash.slice(-6)}</span>
+            : <span className="dim">not yet</span>}
+        </td></tr>
+      ))}
     </tbody></table>
   );
 }

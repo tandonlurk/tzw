@@ -6,7 +6,7 @@ import { api, type InteractionDetail, type Run } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 import { outcomeText } from "@/lib/interactions";
 import { Async, Empty, EnvBadge, Money, Tile, formatTs } from "@/components/ui";
-import { StateBadge, TermsTable } from "@/components/Interactions";
+import { EscrowTxTable, StateBadge, TermsTable } from "@/components/Interactions";
 import { LedgerTable } from "@/components/LedgerTable";
 
 export default function InteractionPage({ params }: { params: Promise<{ id: string }> }) {
@@ -43,7 +43,15 @@ function Detail({ i }: { i: InteractionDetail }) {
         <Tile label="Ends">{formatTs(i.end_at)}</Tile>
       </div>
 
-      <div className="card"><h3 style={{ marginTop: 0 }}>Terms</h3><TermsTable terms={i.terms} env={i.env} /></div>
+      <div className="card"><h3 style={{ marginTop: 0 }}>Terms</h3><TermsTable terms={i.terms} env={i.env} marketSource={i.market_source} /></div>
+
+      {i.escrow && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Onchain escrow (Arc testnet)</h3>
+          <div className="dim" style={{ marginBottom: ".4rem" }}>Testnet USDC, not real funds. The resolve transaction is sent by the backend&apos;s resolver key (backend-administered).</div>
+          <EscrowTxTable escrow={i.escrow} proposer={i.proposer_name} counterparty={i.counterparty_name} />
+        </div>
+      )}
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Negotiation</h3>

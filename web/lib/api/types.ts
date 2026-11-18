@@ -216,11 +216,23 @@ export interface Interaction {
   status_reason: string | null;
   /** Set when a firm's lead proposed the challenge (docs/design/approach-and-firms.md 3). Absent on older backends. */
   firm_id?: string | null;
+  /** Arc testnet only: the escrow transactions so far (docs/api.md). Null on simulated challenges. */
+  escrow?: EscrowTxs | null;
   resolution: "backend_administered";
   start_at: string;
   end_at: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface EscrowTxs {
+  create_tx: string | null;
+  proposer_stake_tx: string | null;
+  counterparty_stake_tx: string | null;
+  settle_tx: string | null;
+  /** Stays null when that vault had nothing staked. */
+  proposer_release_tx: string | null;
+  counterparty_release_tx: string | null;
 }
 
 export interface NegotiationRound {
