@@ -40,6 +40,7 @@ struct AgentRow {
     realized_pnl: i64,
     settled: i64,
     wins: i64,
+    firm_income: i64,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
@@ -71,6 +72,7 @@ impl TryFrom<AgentRow> for Agent {
                 realized_pnl: SignedMoney::from_minor(r.realized_pnl),
                 settled: r.settled,
                 wins: r.wins,
+                firm_income: money(r.firm_income, "firm income")?,
             },
             name: r.name,
             description: r.description,
@@ -89,16 +91,19 @@ impl TryFrom<AgentRow> for Agent {
 
 /// Agents with balances and stats computed from the ledger (never stored).
 /// Realized P&L is the agent's net over `settle` posting sets, so allocations
-/// and refunds are excluded; a win is a settle set with a positive net.
+/// and refunds are excluded; a win is a settle set with a positive net. A
+/// firm lead's realized P&L is net of what it paid members (task fees and
+/// profit shares); what a member receives is `firm_income`, never P&L.
 const AGENTS_SQL: &str = "
 SELECT a.id, a.name, a.description, a.status, a.env, a.wallet_address, a.vault_address,
        a.vault_owner, a.current_version,
        v.config, v.policy, v.graph, a.created_at, a.updated_at,
        COALESCE(b.available, 0)::BIGINT AS available,
        COALESCE(b.committed, 0)::BIGINT AS committed,
-       COALESCE(s.realized_pnl, 0)::BIGINT AS realized_pnl,
+       (COALESCE(s.realized_pnl, 0) + COALESCE(f.paid, 0))::BIGINT AS realized_pnl,
        COALESCE(s.settled, 0)::BIGINT AS settled,
-       COALESCE(s.wins, 0)::BIGINT AS wins
+       COALESCE(s.wins, 0)::BIGINT AS wins,
+       COALESCE(f.income, 0)::BIGINT AS firm_income
 FROM agents a
 JOIN agent_versions v ON v.agent_id = a.id AND v.version = a.current_version
 LEFT JOIN LATERAL (
@@ -116,6 +121,12 @@ LEFT JOIN LATERAL (
         GROUP BY e.idempotency_key
     ) x
 ) s ON TRUE
+LEFT JOIN LATERAL (
+    SELECT SUM(e.delta) FILTER (WHERE e.delta > 0) AS income,
+           SUM(e.delta) FILTER (WHERE e.delta < 0) AS paid
+    FROM ledger_entries e
+    WHERE e.agent_id = a.id AND e.env = a.env AND e.reason IN ('firm_task_fee', 'firm_payout')
+) f ON TRUE
 WHERE ($1::uuid IS NULL OR a.id = $1)
 ORDER BY a.created_at, a.id";
 

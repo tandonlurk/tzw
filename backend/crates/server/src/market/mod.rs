@@ -14,6 +14,7 @@ pub mod gemini;
 use std::future::Future;
 use std::pin::Pin;
 
+use aen_core::approach::{MarketFacts, MarketStructure};
 use aen_core::challenge::{FormulaId, MarketRef};
 use serde::{Deserialize, Serialize};
 
@@ -89,6 +90,109 @@ pub struct PmEvent {
     /// Unix seconds.
     pub expiry_ts: Option<i64>,
     pub contracts: Vec<PmContract>,
+    /// Optional listing fields the approach market filter reads.
+    pub meta: MarketMeta,
+}
+
+/// What the approach market filter needs beyond the basics. Every field is
+/// optional: Gemini fields were observed live but are not all documented,
+/// so an unreadable one is left empty rather than failing the listing.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MarketMeta {
+    /// Subcategory slug and name, e.g. `["energy", "Energy"]`.
+    pub subcategories: Vec<String>,
+    /// `tags` and `eventTags` names.
+    pub tags: Vec<String>,
+    pub structure: Option<MarketStructure>,
+    /// Unix seconds.
+    pub expiry_ts: Option<i64>,
+    /// `volumeDelta24hPct` in basis points (12.5 % -> 1250).
+    pub volume_delta_24h_bps: Option<i64>,
+}
+
+/// `crypto-up-down` -> binary up/down, `prices-ladder` -> price ladder,
+/// `type: categorical` -> categorical; anything else is unknown.
+pub fn structure_of(event_type: Option<&str>, template: Option<&str>) -> Option<MarketStructure> {
+    let template = template.unwrap_or_default().to_ascii_lowercase();
+    if template.contains("up-down") {
+        Some(MarketStructure::BinaryUpDown)
+    } else if template.contains("ladder") {
+        Some(MarketStructure::PriceLadder)
+    } else if event_type.is_some_and(|t| t.eq_ignore_ascii_case("categorical")) {
+        Some(MarketStructure::Categorical)
+    } else {
+        None
+    }
+}
+
+/// The base asset an event is about: the leading letters of its ticker
+/// (`BTC1H2511...` -> `BTC`, `OIL-...` -> `OIL`). A heuristic; `None` when the
+/// ticker does not start with a letter.
+pub fn ticker_symbol(ticker: &str) -> Option<String> {
+    let base: String = ticker
+        .chars()
+        .take_while(char::is_ascii_alphabetic)
+        .collect();
+    (!base.is_empty()).then(|| base.to_ascii_uppercase())
+}
+
+/// One prediction-market contract as the approach filter sees it.
+pub fn contract_facts(
+    event: &PmEvent,
+    contract: &PmContract,
+    move_bps: Option<i64>,
+    now: i64,
+) -> MarketFacts {
+    let expiry = contract
+        .expiry_ts
+        .or(event.expiry_ts)
+        .or(event.meta.expiry_ts);
+    MarketFacts {
+        category: event.category.clone(),
+        subcategories: event.meta.subcategories.clone(),
+        structure: event.meta.structure,
+        title: format!("{}: {}", event.title, contract.label),
+        tickers: vec![event.ticker.clone(), contract.instrument_symbol.clone()],
+        tags: event.meta.tags.clone(),
+        symbol: ticker_symbol(&event.ticker),
+        move_bps,
+        yes_price_bps: contract.last_trade_price_bps,
+        expiry_secs: expiry.map(|t| t - now),
+        volume_delta_24h_bps: event.meta.volume_delta_24h_bps,
+    }
+}
+
+impl MarketView {
+    /// The view as the approach filter sees it (discovery gate).
+    pub fn facts(&self, now: i64) -> MarketFacts {
+        let mut tickers = Vec::new();
+        let mut yes_price_bps = None;
+        match &self.market {
+            MarketRef::GeminiPredictionContract {
+                event_ticker,
+                instrument_symbol,
+            } => {
+                tickers.push(event_ticker.clone());
+                tickers.push(instrument_symbol.clone());
+                yes_price_bps = Some(self.value);
+            }
+            MarketRef::GeminiSpot { symbol } => tickers.push(symbol.clone()),
+        }
+        MarketFacts {
+            category: self.category.clone(),
+            subcategories: self.meta.subcategories.clone(),
+            structure: self.meta.structure,
+            title: self.title.clone(),
+            tickers,
+            tags: self.meta.tags.clone(),
+            symbol: Some(base_asset(&self.spot_symbol)),
+            move_bps: Some(self.move_bps),
+            yes_price_bps,
+            expiry_secs: self.meta.expiry_ts.map(|t| t - now),
+            volume_delta_24h_bps: self.meta.volume_delta_24h_bps,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -150,6 +254,10 @@ pub struct MarketView {
     /// Set when no prediction-market contract was usable and the view fell
     /// back to the spot price.
     pub fallback_reason: Option<String>,
+    /// Listing details for the approach filter (empty for spot views and
+    /// views stored before they existed).
+    #[serde(default)]
+    pub meta: MarketMeta,
 }
 
 /// The value a challenge resolves on, with what it was read from.
@@ -254,6 +362,10 @@ pub async fn discover(
                         spot_symbol: symbol.to_lowercase(),
                         source: market.name().to_owned(),
                         fallback_reason: None,
+                        meta: MarketMeta {
+                            expiry_ts: contract.expiry_ts.or(event.expiry_ts),
+                            ..event.meta.clone()
+                        },
                     });
                 }
                 None => format!("no contested open prediction-market contract for {base}"),
@@ -275,6 +387,7 @@ pub async fn discover(
         spot_symbol: symbol.to_lowercase(),
         source: market.name().to_owned(),
         fallback_reason: Some(fallback_reason),
+        meta: MarketMeta::default(),
     })
 }
 

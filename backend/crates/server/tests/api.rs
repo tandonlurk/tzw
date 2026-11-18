@@ -186,7 +186,7 @@ async fn block_catalog_and_graph_validation() {
     let (status, blocks) = get(&ctx.app, "/api/graph/blocks").await;
     assert_eq!(status, StatusCode::OK);
     let blocks = blocks.as_array().unwrap();
-    assert_eq!(blocks.len(), 16);
+    assert_eq!(blocks.len(), 17);
     for key in [
         "type",
         "kind",
@@ -229,7 +229,7 @@ async fn create_get_and_list_agent() {
     );
     assert_eq!(
         agent["stats"],
-        json!({"realized_pnl": "0", "settled": 0, "wins": 0})
+        json!({"realized_pnl": "0", "settled": 0, "wins": 0, "firm_income": "0"})
     );
     assert!(agent["created_at"].as_str().unwrap().contains('T'));
 
@@ -504,7 +504,7 @@ async fn deposit_allocate_deallocate_balances() {
     // Moving funds is not profit.
     assert_eq!(
         a["stats"],
-        json!({"realized_pnl": "0", "settled": 0, "wins": 0})
+        json!({"realized_pnl": "0", "settled": 0, "wins": 0, "firm_income": "0"})
     );
 
     let (_, wallet) = get(&ctx.app, "/api/wallet").await;

@@ -399,7 +399,7 @@ async fn challenge_settles_onchain_and_the_ledger_matches_the_vaults() {
 
     // Tick 2: accepted, reserved in the ledger, staked onchain, active.
     let r = tick(&c).await;
-    assert_eq!((r.accepted, r.funded), (1, 1), "{r:?}");
+    assert_eq!((r.accepted, r.funded, r.activated), (1, 1, 1), "{r:?}");
     assert!(r.errors.is_empty(), "{:?}", r.errors);
     let i = get(&c.app, &format!("/api/interactions/{id}")).await;
     assert_eq!(i["state"], "active");
@@ -513,7 +513,7 @@ async fn funding_deadline_after_an_rpc_outage_voids_and_refunds() {
     // Accepted and reserved, but the chain is unreachable: stays funded.
     c.rpc_up.store(false, Ordering::SeqCst);
     let r = tick(&c).await;
-    assert_eq!((r.accepted, r.funded), (1, 1), "{r:?}");
+    assert_eq!((r.accepted, r.funded, r.activated), (1, 1, 0), "{r:?}");
     assert!(
         r.errors.iter().any(|e| e.starts_with("chain_unavailable")),
         "{:?}",

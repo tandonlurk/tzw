@@ -11,6 +11,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+pub use crate::approach::APPROACH_PROFILE;
+
 pub const SCHEMA_VERSION: u32 = 1;
 
 /// User JavaScript `decide(ctx)`, run in the sandbox (D-11). An action: its
@@ -67,6 +69,9 @@ pub enum BlockKind {
     Reasoning,
     Condition,
     Action,
+    /// Settings that shape the whole agent (`approach.profile`): no ports,
+    /// at most one per graph, exempt from the connectivity rules.
+    Approach,
 }
 
 /// What flows along an edge.
@@ -343,7 +348,85 @@ fn build_catalog() -> Vec<BlockDef> {
                 &["source"],
             ),
         ),
+        block(
+            APPROACH_PROFILE,
+            Approach,
+            "Approach",
+            "How this agent goes at the market: competitive or collaborative, cautious or \
+             ambitious, and which markets it looks at. Settings only: it has no ports and \
+             is not part of the flow. Every field is optional (defaults: collaboration 30%, \
+             ambition 50%, no firm role, any market). It narrows what the agent does; the \
+             agent's policy is always enforced separately.",
+            &[],
+            &[],
+            approach_params_schema(),
+        ),
     ]
+}
+
+/// Strict schema of `approach.profile` params (docs/design/approach-and-firms.md).
+pub fn approach_params_schema() -> Value {
+    let bps = json!({ "type": "integer", "minimum": 0, "maximum": 10000 });
+    let bound = json!({ "type": ["integer", "null"] });
+    let range = params(json!({ "min": bound, "max": bound }), &[]);
+    let names = json!({
+        "type": "array",
+        "maxItems": 20,
+        "items": { "type": "string", "minLength": 1, "maxLength": 64 },
+    });
+    params(
+        json!({
+            "stance": params(
+                json!({ "collaboration_bps": bps, "ambition_bps": bps }),
+                &[],
+            ),
+            "firm_role": { "type": "string", "enum": ["none", "member", "lead"] },
+            "markets": market_filter_schema_with(names, range),
+        }),
+        &[],
+    )
+}
+
+/// Strict schema of an approach `markets` object (also used by firms).
+pub fn market_filter_schema() -> Value {
+    let bound = json!({ "type": ["integer", "null"] });
+    let range = params(json!({ "min": bound, "max": bound }), &[]);
+    let names = json!({
+        "type": "array",
+        "maxItems": 20,
+        "items": { "type": "string", "minLength": 1, "maxLength": 64 },
+    });
+    market_filter_schema_with(names, range)
+}
+
+fn market_filter_schema_with(names: Value, range: Value) -> Value {
+    params(
+        json!({
+            "scope": { "type": "string", "enum": ["any", "structure", "specific"] },
+            "structures": {
+                "type": "array",
+                "maxItems": 3,
+                "items": {
+                    "type": "string",
+                    "enum": ["binary_up_down", "price_ladder", "categorical"],
+                },
+            },
+            "categories": names,
+            "subcategories": names,
+            "keywords": names,
+            "symbols": names,
+            "ranges": params(
+                json!({
+                    "move_bps": range,
+                    "yes_price_bps": range,
+                    "expiry_secs": range,
+                    "volume_delta_24h_bps": range,
+                }),
+                &[],
+            ),
+        }),
+        &[],
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -362,6 +445,8 @@ pub enum GraphErrorCode {
     Cycle,
     UnreachableNode,
     DeadEnd,
+    /// More than one `approach.profile` node.
+    MultipleApproaches,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -369,6 +454,10 @@ pub struct GraphError {
     pub code: GraphErrorCode,
     pub message: String,
     pub node_id: Option<String>,
+    /// For `invalid_params` on an `approach.profile` node: the dotted path of
+    /// the offending field inside `params` (empty = the params object).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub param_path: Option<String>,
 }
 
 fn err(code: GraphErrorCode, node_id: Option<&str>, message: String) -> GraphError {
@@ -376,6 +465,7 @@ fn err(code: GraphErrorCode, node_id: Option<&str>, message: String) -> GraphErr
         code,
         message,
         node_id: node_id.map(str::to_owned),
+        param_path: None,
     }
 }
 
@@ -385,7 +475,8 @@ fn err(code: GraphErrorCode, node_id: Option<&str>, message: String) -> GraphErr
 /// against the block's schema, exactly one trigger, edges reference existing
 /// nodes and ports with compatible data types, no cycles, every node reachable
 /// from the trigger, and every path ends in an action (a node without outgoing
-/// edges must be an action).
+/// edges must be an action). `approach.profile` nodes are settings, not
+/// flow: at most one, exempt from reachability and dead-end checks.
 pub fn validate(graph: &Graph) -> Vec<GraphError> {
     use GraphErrorCode::*;
     let mut errors = Vec::new();
@@ -426,12 +517,16 @@ pub fn validate(graph: &Graph) -> Vec<GraphError> {
                 format!("unknown node type '{}'", node.node_type),
             )),
             Some(def) => {
-                for message in param_errors(def, &node.params) {
-                    errors.push(err(
-                        InvalidParams,
-                        Some(id),
-                        format!("invalid params for {}: {message}", def.block_type),
-                    ));
+                let approach = def.kind == BlockKind::Approach;
+                for (path, message) in param_errors_at(def, &node.params) {
+                    errors.push(GraphError {
+                        param_path: approach.then_some(path),
+                        ..err(
+                            InvalidParams,
+                            Some(id),
+                            format!("invalid params for {}: {message}", def.block_type),
+                        )
+                    });
                 }
                 // `maxLength` counts characters; the sandbox limit is bytes.
                 // Reported only when the schema did not already flag it.
@@ -450,6 +545,20 @@ pub fn validate(graph: &Graph) -> Vec<GraphError> {
                              {MAX_CUSTOM_CODE_BYTES} bytes"
                         ),
                     ));
+                }
+                if def.kind == BlockKind::Approach
+                    && let Ok(approach) = crate::approach::Approach::from_params(&node.params)
+                {
+                    for (path, message) in approach.markets.validate() {
+                        errors.push(GraphError {
+                            param_path: Some(path),
+                            ..err(
+                                InvalidParams,
+                                Some(id),
+                                format!("invalid params for {APPROACH_PROFILE}: {message}"),
+                            )
+                        });
+                    }
                 }
             }
         }
@@ -478,6 +587,15 @@ pub fn validate(graph: &Graph) -> Vec<GraphError> {
                 ));
             }
         }
+    }
+
+    let is_approach = |id: &str| matches!(defs[id], Some(d) if d.kind == BlockKind::Approach);
+    for id in order.iter().copied().filter(|id| is_approach(id)).skip(1) {
+        errors.push(err(
+            MultipleApproaches,
+            Some(id),
+            "a graph has at most one approach block; remove this one".into(),
+        ));
     }
 
     // Edges. Every edge between two existing nodes counts for the topology
@@ -574,7 +692,10 @@ pub fn validate(graph: &Graph) -> Vec<GraphError> {
                 }
             }
         }
-        for id in order.iter().filter(|id| !seen.contains(*id)) {
+        for id in order
+            .iter()
+            .filter(|id| !seen.contains(*id) && !is_approach(id))
+        {
             errors.push(err(
                 UnreachableNode,
                 Some(id),
@@ -589,6 +710,7 @@ pub fn validate(graph: &Graph) -> Vec<GraphError> {
         if let Some(def) = defs[id]
             && is_leaf
             && def.kind != BlockKind::Action
+            && def.kind != BlockKind::Approach
         {
             errors.push(err(
                 DeadEnd,
@@ -601,14 +723,22 @@ pub fn validate(graph: &Graph) -> Vec<GraphError> {
     errors
 }
 
-fn param_errors(def: &BlockDef, params: &Value) -> Vec<String> {
+/// Schema errors as (dotted path inside params, message).
+fn param_errors_at(def: &BlockDef, params: &Value) -> Vec<(String, String)> {
     match jsonschema::validator_for(&def.params_schema) {
         Ok(validator) => validator
             .iter_errors(params)
-            .map(|e| e.to_string())
+            .map(|e| {
+                let pointer = e.instance_path().to_string();
+                let path = pointer.trim_start_matches('/').replace('/', ".");
+                (path, e.to_string())
+            })
             .collect(),
         // A broken catalog schema must fail closed, never accept params.
-        Err(e) => vec![format!("internal: block schema does not compile: {e}")],
+        Err(e) => vec![(
+            String::new(),
+            format!("internal: block schema does not compile: {e}"),
+        )],
     }
 }
 
@@ -706,6 +836,7 @@ mod tests {
                 "action.reject",
                 "action.request_approval",
                 "custom.code",
+                "approach.profile",
             ]
         );
     }
@@ -724,11 +855,13 @@ mod tests {
                 BlockKind::Condition => "cond.",
                 BlockKind::Action if t == CUSTOM_CODE => "custom.",
                 BlockKind::Action => "action.",
+                BlockKind::Approach => "approach.",
             };
             assert!(t.starts_with(prefix), "{t}");
             match def.kind {
                 BlockKind::Trigger => assert!(def.inputs.is_empty() && !def.outputs.is_empty()),
                 BlockKind::Action => assert!(!def.inputs.is_empty() && def.outputs.is_empty()),
+                BlockKind::Approach => assert!(def.inputs.is_empty() && def.outputs.is_empty()),
                 _ => assert!(!def.inputs.is_empty() && !def.outputs.is_empty()),
             }
             // `Any` is only meaningful on inputs.
@@ -1095,5 +1228,98 @@ mod tests {
         let schema = graph_json_schema();
         assert!(schema["properties"]["nodes"].is_object());
         assert!(schema["properties"]["schema_version"].is_object());
+    }
+
+    #[test]
+    fn approach_block_is_exempt_from_connectivity() {
+        let mut g = valid();
+        g.nodes.push(node("ap", APPROACH_PROFILE, json!({})));
+        assert_eq!(validate(&g), vec![]);
+        g.nodes[7].params = json!({
+            "stance": {"collaboration_bps": 6000, "ambition_bps": 10000},
+            "firm_role": "lead",
+            "markets": {"scope": "specific", "categories": ["Commodities"],
+                        "keywords": ["energy"], "ranges": {"move_bps": {"min": 300}}}
+        });
+        assert_eq!(validate(&g), vec![]);
+    }
+
+    #[test]
+    fn at_most_one_approach_block() {
+        let mut g = valid();
+        g.nodes.push(node("ap1", APPROACH_PROFILE, json!({})));
+        g.nodes.push(node("ap2", APPROACH_PROFILE, json!({})));
+        let e = find(&g, MultipleApproaches);
+        assert_eq!(e.node_id.as_deref(), Some("ap2"));
+        assert_eq!(codes(&g), vec![MultipleApproaches]);
+    }
+
+    #[test]
+    fn approach_params_are_checked() {
+        for bad in [
+            json!({"stance": {"ambition_bps": 10001}}),
+            json!({"stance": {"collaboration_bps": -1}}),
+            json!({"firm_role": "boss"}),
+            json!({"markets": {"scope": "most"}}),
+            json!({"markets": {"structures": ["binary"]}}),
+            json!({"markets": {"keywords": [""]}}),
+            json!({"markets": {"keywords": ["  "]}}),
+            json!({"markets": {"ranges": {"move_bps": {"min": 5, "max": 1}}}}),
+            json!({"markets": {"ranges": {"move_bps": {"min": 1.5}}}}),
+            json!({"markets": {"ranges": {"delta": {}}}}),
+            json!({"extra": 1}),
+        ] {
+            let mut g = valid();
+            g.nodes.push(node("ap", APPROACH_PROFILE, bad.clone()));
+            let e = find(&g, InvalidParams);
+            assert_eq!(e.node_id.as_deref(), Some("ap"), "{bad}");
+        }
+    }
+
+    #[test]
+    fn approach_errors_name_the_field() {
+        let path = |params: Value| {
+            let mut g = valid();
+            g.nodes.push(node("ap", APPROACH_PROFILE, params));
+            find(&g, InvalidParams).param_path
+        };
+        assert_eq!(
+            path(json!({"stance": {"ambition_bps": 10001}})).as_deref(),
+            Some("stance.ambition_bps")
+        );
+        assert_eq!(
+            path(json!({"markets": {"ranges": {"move_bps": {"min": 5, "max": 1}}}})).as_deref(),
+            Some("markets.ranges.move_bps")
+        );
+        assert_eq!(
+            path(json!({"markets": {"keywords": ["ok", ""]}})).as_deref(),
+            Some("markets.keywords.1")
+        );
+        // Explicit nulls everywhere are fine (the builder sends them).
+        let mut g = valid();
+        g.nodes.push(node(
+            "ap",
+            APPROACH_PROFILE,
+            json!({"stance": {"collaboration_bps": 0, "ambition_bps": 0}, "firm_role": "none",
+                   "markets": {"scope": "any", "structures": [], "categories": [],
+                               "subcategories": [], "keywords": [], "symbols": [],
+                               "ranges": {"move_bps": {"min": null, "max": null},
+                                          "yes_price_bps": {"min": null, "max": null},
+                                          "expiry_secs": {"min": null, "max": null},
+                                          "volume_delta_24h_bps": {"min": null, "max": null}}}}),
+        ));
+        assert_eq!(validate(&g), vec![]);
+        // Other blocks keep the plain shape.
+        let mut g = valid();
+        g.nodes[2].params = json!({"min_bps": 10001});
+        assert_eq!(find(&g, InvalidParams).param_path, None);
+    }
+
+    #[test]
+    fn approach_block_has_no_ports() {
+        let mut g = valid();
+        g.nodes.push(node("ap", APPROACH_PROFILE, json!({})));
+        g.edges.push(edge("ap", "out", "eval"));
+        assert!(codes(&g).contains(&UnknownPort));
     }
 }

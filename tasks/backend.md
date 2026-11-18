@@ -356,3 +356,11 @@ Status: done. Tests (own dbs): `aen_sh_test` -> core 100 + 14 + 6 + 4, sandbox 3
 - Tests: `cargo test --workspace` 341 passed, 0 failed, 1 ignored (6 new anvil tests in `tests/chain.rs`, 1 new core test). Clippy clean. Manual E2E: real server binary + local anvil + `setup-demo-vaults` + demo ticks, settled onchain, drift 0 (README "Autonomous demo").
 - Decisions proposed: `reports/handoffs/2026-11-17-chain-wiring.md`.
 - Not done: live Arc run (lead), QuickNode as event source, browser-wallet withdraw sync is manual (UI posts the tx).
+
+## approach-firms-backend: approach block and firms (branch `approach-firms-backend`, 2026-11-17)
+
+- Objective: backend for `docs/design/approach-and-firms.md` plus `TickReport.activated`. Assigned: backend specialist. Status: done, awaiting lead review.
+- Files: `core/src/approach.rs` (filter, stance/ambition functions), `core/src/firm.rs` (terms, `split_profit`, analyst gate, `choose_firm`), `core/src/graph.rs` (`approach.profile`, `BlockKind::Approach`, `multiple_approaches`, `param_path`), `core/src/authorize.rs` (`Intent::PayTaskFee`), `core/src/ledger.rs` (`firm_task_fee`, `firm_payout`); migration `0010_firms.sql`; `server/src/firms.rs` (API + runtime), `server/src/markets.rs` (`/markets/categories`, `/markets/preview`), `lifecycle.rs` (gates, scout/lead/analyst flow, auto-join phase, profit share on settle, `activated`), `lifecycle_arc.rs`, `market/*` (listing metadata), `agents.rs` (`firm_income`, P&L net of firm payments), `interactions.rs` (`firm_id`), `misc.rs` (`?firm_id=`); `tests/firms.rs`.
+- Tests: `cargo test --workspace` all passed (incl. anvil `tests/chain.rs` with the new `activated` asserts); 10 new integration tests, new core unit tests. Clippy clean. Manual E2E: server binary on the fake market, auto-join + scout + analyst + firm proposal + task fees over HTTP.
+- Decisions: D-64. Docs: `docs/api.md` "Approach and firms".
+- Not done: starter templates have no approach node (would change demo numbers); firms on Arc testnet; `/markets/preview` reads one 100-event page and computes spot moves for ≤ 5 assets.

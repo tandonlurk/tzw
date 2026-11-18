@@ -18,8 +18,10 @@
 //! - `arc_testnet` interactions run on the wall clock: the dev tick's
 //!   simulated `now` applies to simulated interactions only.
 
+use aen_core::approach::{Approach, MissReason, market_matches, may_initiate_challenges};
 use aen_core::authorize::{AgentStatus, Decision, DenyReason, Intent, Snapshot, authorize};
 use aen_core::challenge::{ChallengeTerms, Direction, FormulaId, Outcome, Party, resolve};
+use aen_core::firm::MemberRole;
 use aen_core::graph::Graph;
 use aen_core::interaction::InteractionState;
 use aen_core::ledger::{self, Account, Env};
@@ -83,6 +85,9 @@ pub struct InteractionRow {
     pub escrow_settle_tx: Option<String>,
     pub pending_outcome: Option<Value>,
     pub vaults_released_at: Option<DateTime<Utc>>,
+    /// Set on a firm lead's firm challenges.
+    #[sqlx(default)]
+    pub firm_id: Option<Uuid>,
 }
 
 impl InteractionRow {
@@ -151,13 +156,23 @@ pub struct TickReport {
     pub accepted: u32,
     pub rejected: u32,
     pub approvals_requested: u32,
+    /// Ledger reservations made this tick (`accepted -> funded`). An owner
+    /// approval through the REST API reserves outside a tick and is not
+    /// counted here.
     pub funded: u32,
+    /// Arc testnet challenges whose escrow went live this tick
+    /// (`funded -> active`, both stakes deposited onchain).
+    pub activated: u32,
     pub resolving: u32,
     pub settled: u32,
     pub voided: u32,
     pub cancelled: u32,
     /// New co-captain suggestions (rule-based; advisory only).
     pub suggestions: u32,
+    /// Agents that joined a firm on their own this tick.
+    pub firm_joined: u32,
+    /// Scout candidates and analyst signals recorded this tick.
+    pub firm_contributions: u32,
     /// Problems that did not stop the tick (market data, reasoner).
     pub errors: Vec<String>,
 }
@@ -192,7 +207,9 @@ impl AgentRec {
 
 /// Exposure = stakes of the agent's interactions in Funded / Active /
 /// Resolving, plus its contributions to funded collaborations. Realized
-/// P&L = the agent's net over `settle` ledger entries (challenges only).
+/// P&L = the agent's net over `settle` ledger entries (challenges only),
+/// less what it paid firm members (task fees, profit shares). Firm income
+/// received is not challenge P&L (see `firm_income` on the agent).
 const AGENT_SQL: &str = "
 SELECT a.id, a.name, a.status, a.env, a.current_version, v.config, v.policy, v.graph,
   (SELECT COALESCE(SUM(e.delta), 0)::BIGINT FROM ledger_entries e
@@ -205,7 +222,9 @@ SELECT a.id, a.name, a.status, a.env, a.current_version, v.config, v.policy, v.g
      FROM collaborations c
      WHERE c.state = 'funded' AND (c.proposer_id = a.id OR c.partner_id = a.id)) AS exposure,
   (SELECT COALESCE(SUM(e.delta), 0)::BIGINT FROM ledger_entries e
-    WHERE e.agent_id = a.id AND e.env = a.env AND e.reason = 'settle') AS realized_pnl
+    WHERE e.agent_id = a.id AND e.env = a.env
+      AND (e.reason = 'settle'
+           OR (e.reason IN ('firm_payout', 'firm_task_fee') AND e.delta < 0))) AS realized_pnl
 FROM agents a
 JOIN agent_versions v ON v.agent_id = a.id AND v.version = a.current_version
 WHERE a.id = $1";
@@ -334,7 +353,7 @@ pub(crate) async fn record(
 
 /// Like `record`, but skipped when the agent's latest activity already says
 /// exactly this, so a condition that persists across ticks is logged once.
-async fn record_once(
+pub(crate) async fn record_once(
     conn: &mut PgConnection,
     agent_id: Uuid,
     kind: &str,
@@ -403,7 +422,7 @@ fn deny_phrase(reason: DenyReason) -> &'static str {
     }
 }
 
-fn deny_text(reasons: &[DenyReason]) -> String {
+pub(crate) fn deny_text(reasons: &[DenyReason]) -> String {
     reasons
         .iter()
         .map(|r| deny_phrase(*r))
@@ -502,6 +521,83 @@ async fn cancel(
 }
 
 // ---------------------------------------------------------------------------
+// Approach
+// ---------------------------------------------------------------------------
+
+fn miss_text(misses: &[MissReason]) -> String {
+    misses
+        .iter()
+        .map(|m| match m {
+            MissReason::Category => "category",
+            MissReason::Subcategory => "subcategory",
+            MissReason::Structure => "market structure",
+            MissReason::Keyword => "keywords",
+            MissReason::Symbol => "asset",
+            MissReason::MoveBps => "price move",
+            MissReason::YesPriceBps => "YES price",
+            MissReason::ExpirySecs => "time to expiry",
+            MissReason::VolumeDelta24hBps => "24h volume change",
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Interactions the agent is in that are not finished.
+async fn open_interactions(conn: &mut PgConnection, agent: Uuid) -> Result<i64, ApiError> {
+    Ok(sqlx::query_scalar(
+        "SELECT COUNT(*) FROM interactions WHERE (proposer_id = $1 OR counterparty_id = $1) \
+         AND state IN ('proposed', 'negotiating', 'accepted', 'awaiting_approval', 'funded', \
+                       'active', 'resolving')",
+    )
+    .bind(agent)
+    .fetch_one(conn)
+    .await?)
+}
+
+/// With an approach node: a proposal below the approach's minimum conviction
+/// is dropped (returns the activity to record), and a stake above the
+/// approach's stake target is lowered to it. Explicit `cond.*` blocks have
+/// already applied; `authorize` still applies afterwards.
+fn apply_approach_sizing(
+    agent: &AgentRec,
+    approach: Option<&Approach>,
+    result: &mut RunResult,
+) -> Option<(String, Value)> {
+    let approach = approach?;
+    if result.error.is_some() {
+        return None;
+    }
+    let conviction = result.conviction_bps;
+    let min = approach.min_conviction_bps();
+    let index = result
+        .intents
+        .iter()
+        .position(|p| matches!(p.intent, Intent::ProposeChallenge { .. }))?;
+    if conviction.is_some_and(|c| c < min) {
+        result.intents.remove(index);
+        return Some((
+            format!(
+                "\"{}\" passed on an opportunity: its conviction is below the {} its approach \
+                 asks for.",
+                agent.name,
+                crate::models::display_bps(i64::from(min))
+            ),
+            json!({ "reason": "min_conviction", "conviction_bps": conviction, "min_bps": min }),
+        ));
+    }
+    let target = approach.stake_target(agent.policy.max_per_interaction);
+    let planned = &mut result.intents[index];
+    if let Some(terms) = planned.terms.as_mut()
+        && terms.stake > target
+        && !target.is_zero()
+    {
+        terms.stake = target;
+        planned.intent = Intent::ProposeChallenge { stake: target };
+    }
+    None
+}
+
+// ---------------------------------------------------------------------------
 // Tick
 // ---------------------------------------------------------------------------
 
@@ -529,6 +625,11 @@ pub async fn tick(state: &AppState, now: DateTime<Utc>) -> Result<TickReport, Ap
     {
         step(&mut report, expire_one(state, id, now).await);
     }
+
+    // Firms: agents open to membership join before anyone discovers, so a
+    // new scout can work in the same tick.
+    let joined = crate::firms::auto_join_phase(state, now, &mut report).await;
+    step(&mut report, joined);
 
     for id in ids(
         pool,
@@ -774,12 +875,23 @@ async fn discover_one(
         return Ok(());
     };
     let now = clock_for(agent.env.as_str(), now);
-    // Nothing to stake, or not allowed to act: do not even reason. A vault
-    // agent does not propose while this server has no chain access.
+    // Not allowed to act: do not even reason. A vault agent does not propose
+    // while this server has no chain access.
     if agent.snapshot.status != AgentStatus::Active
-        || agent.snapshot.available.is_zero()
         || (agent.env == Env::ArcTestnet && state.chain.is_none())
     {
+        return Ok(());
+    }
+    // A firm scout works without funds of its own; anyone else with nothing
+    // to stake does not reason.
+    let scouting = match agent.env {
+        Env::Simulated => match crate::firms::membership(&mut conn, agent.id).await? {
+            Some((firm, MemberRole::Scout)) => Some(firm),
+            _ => None,
+        },
+        Env::ArcTestnet => None,
+    };
+    if agent.snapshot.available.is_zero() && scouting.is_none() {
         return Ok(());
     }
 
@@ -816,8 +928,30 @@ async fn discover_one(
         return Ok(());
     }
 
+    // The approach (docs/design/approach-and-firms.md): market filter and
+    // stance gates always apply (defaults are no-ops); the ambition-derived
+    // sizing (stake target, minimum conviction, open-deal cap) applies only
+    // when the graph has an `approach.profile` node (D-64).
+    let approach = Approach::from_graph(&agent.graph);
+    let effective = approach.clone().unwrap_or_default();
+    // A firm lead first consumes its scouts' best fresh candidate.
+    let led = if agent.env == Env::Simulated {
+        crate::firms::led_firm(&mut conn, agent.id).await?
+    } else {
+        None
+    };
+    let candidate = match &led {
+        Some(firm) => crate::firms::best_candidate(&mut conn, firm, now).await?,
+        None => None,
+    };
+    let candidate_id = candidate.as_ref().map(|(id, _)| *id);
+
     let min_expiry = now.timestamp() + settings.funding_window_secs + MIN_OPEN_AFTER_FUNDING_SECS;
-    let view = match market::discover(state.market.as_ref(), &symbol, window, min_expiry).await {
+    let discovered = match candidate {
+        Some((_, view)) => Ok(view),
+        None => market::discover(state.market.as_ref(), &symbol, window, min_expiry).await,
+    };
+    let view = match discovered {
         Ok(view) => view,
         Err(e) => {
             // Surfaced, never defaulted: without data the agent does nothing.
@@ -836,7 +970,38 @@ async fn discover_one(
             return Ok(());
         }
     };
-    if trigger == TRIGGER_MARKET_MOVE && view.move_bps.abs() < threshold_bps {
+    if candidate_id.is_none()
+        && trigger == TRIGGER_MARKET_MOVE
+        && view.move_bps.abs() < threshold_bps
+    {
+        return Ok(());
+    }
+    // Scout task: independent of the agent's own proposals.
+    if let Some(firm) = &scouting {
+        let outcome = crate::firms::scout(state, &agent, firm, &view, now, report).await;
+        step(report, outcome);
+    }
+    if agent.snapshot.available.is_zero() || !may_initiate_challenges(&effective.stance) {
+        return Ok(());
+    }
+    if let Err(misses) = market_matches(&effective.markets, &view.facts(now.timestamp())) {
+        record_once(
+            &mut conn,
+            agent.id,
+            "approach_filtered",
+            format!(
+                "\"{}\" skipped markets outside its approach ({}).",
+                agent.name,
+                miss_text(&misses)
+            ),
+            json!({ "market": view.market.key(), "title": view.title, "misses": misses }),
+        )
+        .await?;
+        return Ok(());
+    }
+    if let Some(a) = &approach
+        && open_interactions(&mut conn, agent.id).await? >= i64::from(a.max_open_interactions())
+    {
         return Ok(());
     }
     let market_key = view.market.key();
@@ -865,6 +1030,20 @@ async fn discover_one(
         },
     )
     .await;
+    let mut result = result;
+    let filtered = apply_approach_sizing(&agent, approach.as_ref(), &mut result);
+    // Analyst task: the firm's analysts review the lead's draft.
+    let draft = result
+        .intents
+        .iter()
+        .find(|p| matches!(p.intent, Intent::ProposeChallenge { .. }))
+        .and_then(|p| p.terms.clone());
+    let signals = match (&led, &draft) {
+        (Some(firm), Some(terms)) if result.error.is_none() => {
+            crate::firms::analyst_signals(state, firm, &view, terms, now, report).await?
+        }
+        _ => Vec::new(),
+    };
 
     let mut tx = state.pool.begin().await?;
     // One proposal is applied at a time, so two ticks cannot both create the
@@ -887,6 +1066,9 @@ async fn discover_one(
         now,
     )
     .await?;
+    if let Some((summary, detail)) = filtered {
+        record_once(&mut tx, agent.id, "approach_filtered", summary, detail).await?;
+    }
     if let Some(error) = &result.error {
         let (kind, summary) = match &result.code {
             Some(_) => (
@@ -935,6 +1117,33 @@ async fn discover_one(
             .push("proposal terms failed validation".into());
         tx.commit().await?;
         return Ok(());
+    }
+
+    // The analyst gate (firm drafts only). Signals are recorded either way.
+    let mut used_contributions: Vec<Uuid> = candidate_id.into_iter().collect();
+    if let Some(firm) = &led
+        && !signals.is_empty()
+    {
+        let min = approach.as_ref().map_or(
+            agent.policy.min_conviction_bps,
+            Approach::min_conviction_bps,
+        );
+        let (ids, approved) = crate::firms::record_signals(
+            &mut tx,
+            firm,
+            &market_key,
+            &terms,
+            &signals,
+            min,
+            now,
+            report,
+        )
+        .await?;
+        if !approved {
+            tx.commit().await?;
+            return Ok(());
+        }
+        used_contributions.extend(ids);
     }
 
     // The gate: a fresh snapshot, read in the transaction that applies it.
@@ -1021,6 +1230,11 @@ async fn discover_one(
         .bind(id)
         .execute(&mut *tx)
         .await?;
+    // A firm challenge: the contributions that fed it are used (and earn
+    // their task fee).
+    if let Some(firm) = &led {
+        crate::firms::use_contributions(&mut tx, firm, id, &used_contributions).await?;
+    }
     let approval_note = if decision == Decision::RequireApproval || planned.ask_owner {
         " Its owner will be asked to approve the stake before funds are committed."
     } else {
@@ -1042,6 +1256,7 @@ async fn discover_one(
         json!({
             "terms": terms, "market_source": view.source, "fallback_reason": view.fallback_reason,
             "run_id": run_id, "resolution": "backend_administered",
+            "firm_id": led.as_ref().map(|f| f.id),
         }),
     )
     .await?;
@@ -1151,7 +1366,25 @@ async fn respond_one(
     let view: MarketView = serde_json::from_value(seen.market_view.clone())
         .map_err(|e| ApiError::internal(format!("stored market view is unreadable: {e}")))?;
 
-    let result = if responder.snapshot.status == AgentStatus::Paused {
+    let outside_approach = market_matches(
+        &Approach::effective(&responder.graph).markets,
+        &view.facts(now.timestamp()),
+    )
+    .is_err();
+    let result = if outside_approach {
+        RunResult {
+            intents: vec![PlannedIntent {
+                intent: Intent::Reject,
+                terms: None,
+                ask_owner: false,
+                summary: "This market is outside my approach.".into(),
+            }],
+            trace: Vec::new(),
+            error: None,
+            code: None,
+            conviction_bps: None,
+        }
+    } else if responder.snapshot.status == AgentStatus::Paused {
         // A paused agent does not reason; the permission engine turns this
         // into a denial below.
         RunResult {
@@ -1164,6 +1397,7 @@ async fn respond_one(
             trace: Vec::new(),
             error: None,
             code: None,
+            conviction_bps: None,
         }
     } else {
         let own_flow = graph_exec::find_trigger(&responder.graph, TRIGGER_CHALLENGE_RECEIVED);
@@ -1447,7 +1681,10 @@ async fn respond_one(
                     "\"{me}\" rejected the challenge from \"{other_name}\": {} No funds moved.",
                     planned.summary
                 ),
-                json!({ "run_id": run_id }),
+                json!({
+                    "run_id": run_id,
+                    "reason": outside_approach.then_some("outside_approach"),
+                }),
             )
             .await?;
             report.rejected += 1;
@@ -2129,5 +2366,7 @@ pub(crate) async fn apply_outcome(
         )
         .await?;
     }
+    // A firm challenge: the lead shares a profit with its members.
+    crate::firms::pay_profit_share(conn, id).await?;
     Ok(Some(decided.outcome))
 }

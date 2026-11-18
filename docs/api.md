@@ -27,15 +27,23 @@ Agent        { id, name, description, status: "active"|"paused", env, wallet_add
                version: int,
                config: AgentConfig, policy: AgentPolicy, graph: Graph,
                balances: { available: money, committed: money },
-               stats: { realized_pnl: money (signed), settled: int, wins: int }, created_at, updated_at }
+               stats: { realized_pnl: money (signed), settled: int, wins: int, firm_income: money },
+               created_at, updated_at }
+               // realized_pnl: settled challenge P&L, net of what the agent paid firm members (task fees and
+               //   profit shares). firm_income: what it received as a firm member; never part of realized_pnl.
 AgentInput   { name, description, config, policy, graph }        // create and update body
 Template     { id, name, description, config, policy, graph }
-BlockDef     { type, kind: "trigger"|"reasoning"|"condition"|"action", label, description,
+BlockDef     { type, kind: "trigger"|"reasoning"|"condition"|"action"|"approach", label, description,
                inputs: [{port, data_type}], outputs: [{port, data_type}], params_schema: JSON Schema }
-GraphError   { code, message, node_id: string|null }
+GraphError   { code, message, node_id: string|null, param_path?: string }
+             // param_path: only on invalid_params of an approach.profile node (dotted field inside params).
+             // In a 422 the detail path is then `graph.nodes.<id>.params.<param_path>`; every other graph
+             // error keeps `graph.nodes.<id>`. New code: `multiple_approaches`.
 LedgerEntry  { id, ts, env, account, delta: money (signed), reason, interaction_id: string|null, collaboration_id: string|null,
                tx_hash: string|null }   // tx_hash: the onchain transaction behind the entry (arc_testnet), else null
-ActivityItem { id, ts, agent_id: string|null, interaction_id: string|null, collaboration_id: string|null, kind, summary, detail: object|null }
+ActivityItem { id, ts, agent_id: string|null, interaction_id: string|null, collaboration_id: string|null,
+               firm_id: string|null, kind, summary, detail: object|null }
+               // GET /activity also takes ?firm_id=
 ```
 
 ## Endpoints
@@ -57,7 +65,7 @@ ActivityItem { id, ts, agent_id: string|null, interaction_id: string|null, colla
 | POST | `/graph/validate` | `Graph` → `{valid: bool, errors: GraphError[]}` | Always 200 |
 | GET | `/wallet` | → `{env, unallocated: money, allocated: money, committed: money, entries: LedgerEntry[]}` | User-level overview |
 | POST | `/wallet/simulated-deposit` | `{amount: money}` → wallet | Credits simulated funds, labelled as such |
-| GET | `/activity?agent_id=&interaction_id=&collaboration_id=&limit=` | → `ActivityItem[]` | newest first |
+| GET | `/activity?agent_id=&interaction_id=&collaboration_id=&firm_id=&limit=` | → `ActivityItem[]` | newest first |
 
 ## M2: challenges
 
@@ -87,7 +95,8 @@ Interaction    { id, kind: "challenge", env, state, proposer_id, proposer_name, 
                  status_reason: string|null,    // why it was cancelled / how it was resolved
                  resolution: "backend_administered",
                  start_at, end_at, created_at, updated_at,
-                 escrow: { create_tx, proposer_stake_tx, counterparty_stake_tx, settle_tx: string|null }|null }  // arc_testnet only
+                 escrow: { create_tx, proposer_stake_tx, counterparty_stake_tx, settle_tx: string|null }|null,  // arc_testnet only
+                 firm_id: string|null }  // set on a firm lead's firm challenges (see "Approach and firms")
 InteractionDetail = Interaction + {
                  negotiation: [{ seq, agent_id, action: "propose"|"counter"|"accept"|"reject", terms, summary, ts }],
                  runs: [Run], approvals: [Approval], ledger: [LedgerEntry], activity: [ActivityItem] (oldest first) }
@@ -99,8 +108,15 @@ Run            { id, ts, agent_id, agent_version, trigger, status: "ok"|"no_acti
 Approval       { id, interaction_id, agent_id, agent_name, stake: money,
                  status: "pending"|"approved"|"rejected"|"expired"|"superseded",
                  reason, requested_at, decided_at: ts|null, expires_at, market_title, env }
-TickReport     { now, proposed, denied, countered, accepted, rejected, approvals_requested, funded, resolving,
-                 settled, voided, cancelled, suggestions: int, errors: string[] }
+TickReport     { now, proposed, denied, countered, accepted, rejected, approvals_requested, funded, activated,
+                 resolving, settled, voided, cancelled, suggestions, firm_joined, firm_contributions: int,
+                 errors: string[] }
+                 // funded: ledger reservations made during this tick (accepted -> funded). An owner approval via
+                 //   POST /approvals/{id}/approve reserves outside a tick and is not counted, so `funded: 0` is
+                 //   normal after an approval.
+                 // activated: arc_testnet challenges whose escrow went live this tick (funded -> active, both
+                 //   stakes deposited onchain). Simulated challenges go straight to active and are not counted.
+                 // firm_joined / firm_contributions: see "Approach and firms".
 Portfolio      { env, as_of,
                  totals: { unallocated, available, committed, allocated, at_risk: money,
                            realized_pnl: money (signed), unrealized_pnl: null },
@@ -396,3 +412,101 @@ Same states, same `authorize` checks, same ledger posting sets as simulated; wha
 `arc_testnet` challenges use the wall clock everywhere; the simulated clock of `/dev/tick` applies to simulated challenges only. Tick reports may contain `chain_unavailable: …` errors (RPC down, or arc challenges waiting while the chain is not configured).
 
 Activity kinds added: `vault_linked`, `vault_deposit`, `vault_withdraw`, `stake_reserved`, `escrow_created`, `stake_deposited` (plus `stake_committed`, `challenge_settled`, `challenge_voided` with `detail.tx_hash` / `explorer_url` for arc). Amounts read `2.50 USDC (Arc testnet USDC)` in summaries.
+
+## Approach and firms (simulated funds)
+
+Design: `docs/design/approach-and-firms.md`. Decisions: D-64.
+
+### Approach block (`approach.profile`)
+
+A graph node with `kind: "approach"`, no inputs and no outputs, at most one per graph (`multiple_approaches`), exempt from the reachability and dead-end rules. Params (every field optional; the builder sends them complete, with explicit `null` bounds):
+
+```
+{ stance: { collaboration_bps: 0..10000 (default 3000), ambition_bps: 0..10000 (default 5000) },
+  firm_role: "none"|"member"|"lead" (default "none"),
+  markets: MarketFilter }
+MarketFilter { scope: "any"|"structure"|"specific" (default "any"),
+               structures: ("binary_up_down"|"price_ladder"|"categorical")[],
+               categories: string[], subcategories: string[], keywords: string[], symbols: string[],  // ≤ 20 each, 1-64 chars
+               ranges: { move_bps, yes_price_bps, expiry_secs, volume_delta_24h_bps: { min: int|null, max: int|null } } }
+```
+
+**Market filter semantics (binding).** `scope: "any"` ignores every filter. Otherwise:
+
+- The *where* group: a market matches if its category is in `categories` **or** its subcategory (slug or name) is in `subcategories`; both empty = any. Case-insensitive.
+- Every other non-empty group is ANDed with it and with each other: `structures` (one of), `keywords` (any keyword is a substring of the title, an event or instrument ticker, or a tag; case-insensitive), `symbols` (base asset; `btcusd` = `BTC`).
+- Each set range bound is ANDed; bounds are inclusive. `move_bps` compares the absolute move. A market whose value is unknown never passes a bounded range.
+- `min > max` and blank entries are 422.
+
+Structure: Gemini `template` `crypto-up-down` = `binary_up_down`, `prices-ladder` = `price_ladder`, `type: categorical` = `categorical`, else unknown. Symbol: the leading letters of the event ticker (heuristic). Subcategory, tags and `volumeDelta24hPct` are read leniently (an unexpected shape leaves the field empty).
+
+Effects (deterministic, never an LLM decision; `authorize` still applies to everything):
+
+| Setting | Effect | Applies |
+|---|---|---|
+| `markets` | Discovery skips markets that do not match (activity `approach_filtered`, logged once while it persists). An incoming challenge on a non-matching market is rejected (`challenge_rejected` with `detail.reason: "outside_approach"`) | always (defaults match everything) |
+| `collaboration_bps` = c | initiates challenges only if c ≤ 7000; joins firms on its own only if c ≥ 3000 and `firm_role = member`; may found a firm only if c ≥ 3000 and `firm_role = lead` | always |
+| `ambition_bps` = a | stake capped at `max_per_interaction × (2000 + 8a/10) / 10000`; a proposal whose run conviction is below `7500 − a/4` is dropped (`approach_filtered`, `detail.reason: "min_conviction"`); no new proposal while `1 + 4a/10000` interactions are open | only when the graph has an approach node |
+
+### Markets
+
+| Method | Path | Body → result |
+|---|---|---|
+| GET | `/markets/categories` | → `{ categories: string[], subcategories: { <category>: string[] }, structures: string[], source: "gemini"\|"fake"\|"fallback" }`. Categories and subcategory names seen on active events (cached 5 min). If the listing fails: Gemini's top-level category list with `source: "fallback"` |
+| POST | `/markets/preview` | `{ markets: MarketFilter, agent_id?: uuid }` → `{ count, sample: PreviewMarket[≤10], as_of, source, window_secs }`. Counts active, unresolved contracts matching now (one listing page of 100 events). The spot move is fetched only when `ranges.move_bps` is set, for up to 5 assets, over the agent's market-move window (`agent_id`) or the default. 422 `validation_failed` (paths `markets.ranges.<name>`, `markets.<list>`); 503 `market_data_unavailable` |
+
+```
+PreviewMarket { market_id, title, category, subcategory: string|null, structure: string|null, symbol: string|null,
+                yes_price_bps: int|null, move_bps: int|null, expiry_ts: int|null, volume_delta_24h_bps: int|null, source }
+```
+
+### Firms
+
+```
+Firm { id, env: "simulated", name, mandate, lead_agent_id, lead_name,
+       lead_share_bps: 5000..10000, member_pool_bps: 10000 - lead_share_bps,
+       task_fee: money, roles: [{ role: "scout"|"analyst", slots: 1..5, weight_bps, filled: int }],
+       markets: MarketFilter|null,          // null = the lead's approach markets
+       effective_markets: MarketFilter,
+       state: "open"|"closed",
+       members: [{ agent_id, name, role, joined_at, left_at: ts|null, contributions: int, used: int, earned: money }],
+       stats: { challenges: int, settled: int, lead_realized_pnl: money (signed), paid_to_members: money },
+       actions: ("join"|"leave"|"close")[], created_at, closed_at: ts|null }
+Contribution { id, firm_id, agent_id, agent_name, role, kind: "scout_candidate"|"analyst_signal",
+               market_id, side: "above"|"below"|null, conviction_bps, interaction_id: string|null,
+               used: bool, fee_paid: money, payout: money, summary, created_at }
+Interaction  { …, firm_id: string|null }   // set on the lead's firm challenges; /interactions?agent_id=<lead> lists them
+```
+
+`members` lists every agent that has been a member (latest membership; `left_at` set once it left or the firm closed). `earned` = task fees + profit shares. `lead_realized_pnl` = the lead's settled P&L on firm challenges − `paid_to_members`. `actions`: `join` while a slot is free, `leave` while there are current members, `close`; none once closed.
+
+| Method | Path | Body → result |
+|---|---|---|
+| GET | `/firms` | → `Firm[]`, newest first |
+| POST | `/firms` | `{ lead_agent_id, name (1-80), mandate (1-500), lead_share_bps? (8000), task_fee? ("0"), roles? (scout 2 slots 6000, analyst 2 slots 4000), markets? }` → **201** `Firm`. 422 `validation_failed` (paths `name`, `mandate`, `lead_share_bps`, `roles`, `roles.<i>.slots`, `roles.<i>.weight_bps`, `roles.<i>.role`, `markets.…`; weights must add up to 10000); 422 `not_a_lead` (approach is not `firm_role: lead` with collaboration ≥ 30 %), `already_leads_firm`, `already_member`, `unsupported_env` (all with detail path `lead_agent_id`); 404 unknown lead (path `lead_agent_id`). A malformed body (e.g. a non-string `task_fee`) is the generic JSON rejection, without a field path |
+| GET | `/firms/{id}` | → `Firm` |
+| POST | `/firms/{id}/join` | `{ agent_id, role }` → `Firm`. Owner-driven: allowed whatever the agent's approach (the stance gates only autonomous joins). 409 `no_free_slot` (path `role`), `already_member` (path `agent_id`; a member of any firm), `invalid_state` (closed); 422 `is_lead`, `unsupported_env` (path `agent_id`) |
+| POST | `/firms/{id}/leave` | `{ agent_id }` → `Firm`. 409 `not_a_member` (path `agent_id`) |
+| POST | `/firms/{id}/close` | `{}` → `Firm`. Ends every membership; no new contributions; payouts on open firm challenges still settle. 409 `invalid_state` if already closed |
+| GET | `/firms/{id}/contributions` | → `Contribution[]`, newest first |
+
+Rules: a lead runs at most one open firm; an agent is a current member of at most one firm. Simulated agents only.
+
+### Runtime (each tick)
+
+1. **Autonomous joins** (before discovery): an active simulated agent with `firm_role: member`, collaboration ≥ 30 %, no firm, joins the open firm with a free slot whose markets overlap its own (a shared category, keyword or symbol, or either side `any`) and the highest member pool; within it, the free role with the highest weight (scout on ties). `firm_joined`.
+2. **Scout**: when its own trigger fires on a market inside both the firm's and its own markets, it evaluates it and records one `scout_candidate` (at most one unused candidate per market per scout per hour). Scouts work without funds of their own.
+3. **Lead**: before its own discovery it takes its scouts' best fresh (≤ 1 h), unused candidate (highest conviction) on a market it has no open challenge on, and runs its graph on it.
+4. **Analysts**: when a lead's graph drafts a proposal, each current analyst evaluates the market with its own reasoner; the signal is its conviction for the lead's side. The lead proposes only if the mean signal ≥ its minimum conviction (the approach's, else `policy.min_conviction_bps`); otherwise `firm_draft_dropped` and nothing moves. Signals are recorded either way.
+5. A contribution is **used** when it fed a challenge the lead actually proposed (`interaction_id` set; `Interaction.firm_id` set).
+
+### Money (simulated ledger; balanced posting sets)
+
+- **Task fee** (`firm_task_fee`, lead available → member available) per used contribution, gated by `authorize` as `PayTaskFee` by the lead: within `max_per_interaction` and the available balance, not counted as exposure, any interaction state. A fee above the lead's `approval_threshold` is not paid (fees have no approval flow). Denied: the contribution stays used, `fee_paid: "0"`, `firm_fee_denied`.
+- **Profit share (binding)** (`firm_payout`, lead available → member available, one set per interaction) when a firm challenge settles with lead realized P&L `p > 0`: `pool = floor(p × member_pool_bps / 10000)`. The pool is divided **only among roles with at least one used contribution on that interaction**, in proportion to their `weight_bps` **renormalised over those contributing roles**, then **equally within a role**; every step floors (integer minor units) and the **remainder stays with the lead**. Example: p = 5 USDC, pool 1 USDC, one scout (6000) and one analyst (4000) used → 0.6 / 0.4 USDC; only scouts used → the scouts share the whole 1 USDC. Paid from the profit just credited. Not gated by `authorize` (contractual; paid even if the lead is paused).
+- **Losses and voids** pay nothing; the lead bears losses alone.
+- No double counting: the lead's `realized_pnl` is net of fees and shares paid; a member's receipts are `firm_income`, not P&L. Portfolio totals (same owner) are unchanged by these transfers.
+
+### Activity kinds
+
+All firm kinds carry `firm_id` (column and `detail.firm_id`); money-moving ones carry `detail.amount`: `firm_created`, `firm_joined`, `firm_left`, `firm_closed`, `firm_contribution` (`detail.kind`, `contribution_id`, `conviction_bps`), `firm_draft_dropped` (`detail.consensus_bps`, `min_conviction_bps`), `firm_task_fee` (`detail.amount`, `fee`, `contribution_id`), `firm_fee_denied` (`detail.fee`, `decision`), `firm_payout` (one per paid member with `detail.amount`, `payout`, `profit`, `pool`; one for the lead with `detail.amount` = total paid, `lead_keeps`). Without `firm_id`: `approach_filtered` (`detail.reason` or `detail.misses`).
