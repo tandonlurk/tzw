@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {Deploy} from "../script/Deploy.s.sol";
 import {ChallengeEscrow} from "../src/ChallengeEscrow.sol";
+import {VaultFactory} from "../src/AgentVault.sol";
 import {MockUSDC} from "./mocks/MockTokens.sol";
 
 contract DeployTest is Test {
@@ -20,9 +21,11 @@ contract DeployTest is Test {
 
         MockUSDC usdc = new MockUSDC();
         vm.setEnv("USDC_ADDRESS", vm.toString(address(usdc)));
-        ChallengeEscrow escrow = d.run();
+        (ChallengeEscrow escrow, VaultFactory factory) = d.run();
         assertEq(escrow.USDC(), address(usdc));
         assertEq(escrow.RESOLVER(), resolver);
+        assertEq(factory.ESCROW(), address(escrow));
+        assertEq(factory.USDC(), address(usdc));
     }
 
     function test_deploy_refusesOtherChains() public {

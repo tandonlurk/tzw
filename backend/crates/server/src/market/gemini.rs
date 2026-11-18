@@ -13,7 +13,8 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use super::{
-    BoxFut, Candle, EventQuery, MarketData, MarketError, PmContract, PmEvent, SpotTicker, TimeFrame,
+    BoxFut, Candle, EventQuery, MarketData, MarketError, MarketMeta, PmContract, PmEvent,
+    SpotTicker, TimeFrame, structure_of,
 };
 
 /// Spot prices are kept in micro-USD.
@@ -198,6 +199,90 @@ struct RawEvent {
     expiry_date: Option<String>,
     #[serde(default)]
     contracts: Vec<RawContract>,
+    // Optional listing fields for the approach filter. Read leniently: a
+    // missing or unexpected shape leaves the field empty.
+    #[serde(default, rename = "type")]
+    event_type: Option<serde_json::Value>,
+    #[serde(default)]
+    template: Option<serde_json::Value>,
+    #[serde(default)]
+    subcategory: Option<serde_json::Value>,
+    #[serde(default)]
+    tags: Option<serde_json::Value>,
+    #[serde(default)]
+    event_tags: Option<serde_json::Value>,
+    #[serde(default, rename = "volumeDelta24hPct")]
+    volume_delta_24h_pct: Option<serde_json::Value>,
+}
+
+/// `"12.5"` or `12.5` (percent) -> 1250 bps; anything else -> `None`.
+fn pct_to_bps(v: &serde_json::Value) -> Option<i64> {
+    let text = match v {
+        serde_json::Value::String(s) => s.trim().to_owned(),
+        serde_json::Value::Number(n) => n.to_string(),
+        _ => return None,
+    };
+    let (neg, digits) = match text.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, text.as_str()),
+    };
+    let bps = parse_decimal_scaled(digits, 2)?;
+    Some(if neg { -bps } else { bps })
+}
+
+/// Names from a list of strings or `{name, slug}` objects.
+fn names(v: Option<&serde_json::Value>) -> Vec<String> {
+    let Some(serde_json::Value::Array(items)) = v else {
+        return Vec::new();
+    };
+    items
+        .iter()
+        .filter_map(|i| match i {
+            serde_json::Value::String(s) => Some(s.clone()),
+            serde_json::Value::Object(o) => o
+                .get("name")
+                .or_else(|| o.get("slug"))
+                .and_then(|n| n.as_str())
+                .map(str::to_owned),
+            _ => None,
+        })
+        .filter(|s| !s.trim().is_empty())
+        .collect()
+}
+
+fn meta(raw: &RawEvent) -> MarketMeta {
+    let text =
+        |v: &Option<serde_json::Value>| v.as_ref().and_then(|v| v.as_str()).map(str::to_owned);
+    let mut subcategories = Vec::new();
+    match &raw.subcategory {
+        Some(serde_json::Value::Object(o)) => {
+            for key in ["slug", "name"] {
+                if let Some(s) = o.get(key).and_then(|v| v.as_str())
+                    && !s.trim().is_empty()
+                {
+                    subcategories.push(s.to_owned());
+                }
+            }
+        }
+        Some(serde_json::Value::String(s)) if !s.trim().is_empty() => subcategories.push(s.clone()),
+        _ => {}
+    }
+    let mut tags = names(raw.tags.as_ref());
+    for t in names(raw.event_tags.as_ref()) {
+        if !tags.iter().any(|x| x.eq_ignore_ascii_case(&t)) {
+            tags.push(t);
+        }
+    }
+    MarketMeta {
+        subcategories,
+        tags,
+        structure: structure_of(
+            text(&raw.event_type).as_deref(),
+            text(&raw.template).as_deref(),
+        ),
+        expiry_ts: None,
+        volume_delta_24h_bps: raw.volume_delta_24h_pct.as_ref().and_then(pct_to_bps),
+    }
 }
 
 #[derive(Deserialize)]
@@ -229,6 +314,7 @@ fn timestamp(text: Option<&str>) -> Result<Option<i64>, MarketError> {
 }
 
 fn event(raw: RawEvent) -> Result<PmEvent, MarketError> {
+    let meta = meta(&raw);
     let contracts = raw
         .contracts
         .into_iter()
@@ -263,6 +349,7 @@ fn event(raw: RawEvent) -> Result<PmEvent, MarketError> {
         status: raw.status,
         expiry_ts: timestamp(raw.expiry_date.as_deref())?,
         contracts,
+        meta,
     })
 }
 

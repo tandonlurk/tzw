@@ -858,6 +858,7 @@ Do not leave critical setup steps only in agent conversation history.
 
 Prerequisites: Rust (`~/.cargo/bin`), Foundry (`~/.foundry/bin`), PostgreSQL 17 (Homebrew service, `/opt/homebrew/opt/postgresql@17/bin`), Node 22. If not on PATH: `export PATH="$HOME/.cargo/bin:$HOME/.foundry/bin:/opt/homebrew/opt/postgresql@17/bin:$PATH"`.
 
+- **Session start:** read `TODO.md` → "Start here". If it has unchecked owner actions, remind the owner of them first (one short message), then continue. Resume detail: `tasks/project.md` "Resume procedure" and the latest `reports/handoffs/` file.
 - **Repo location:** keep it OUTSIDE iCloud-synced folders (`~/dev/hackathongs/tzw2`). See `reports/handoffs/2026-11-15-recovery.md`.
 - **Backend:** `cd backend && DATABASE_URL="postgres://$USER@localhost/aen_dev" cargo run -p aen-server` (port 8080, migrations run on startup). Tests: `cargo test --workspace` (databases `aen_test` and `aen_sec_test`, create both with `createdb`; set `TEST_DATABASE_URL` if needed). Regenerate schemas: `cargo run -p aen-core --example export_schemas`.
 - **Frontend:** `cd web && npm ci && npm run dev` (port 3000, backend at `http://localhost:8080/api`). Tests: `npm test`, `npm run build`.

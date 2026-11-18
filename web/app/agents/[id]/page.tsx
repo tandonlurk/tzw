@@ -14,6 +14,9 @@ import { InteractionCard } from "@/components/Interactions";
 import { isOpen } from "@/lib/interactions";
 import { usesCustomCode } from "@/lib/customCode";
 import { interactionCounts, versionHistory, winRateText } from "@/lib/agentView";
+import { VaultPanel } from "@/components/wallet/VaultPanel";
+import { TESTNET_LABEL } from "@/components/wallet/WalletStatus";
+import { ApproachCard } from "@/components/approach/ApproachCard";
 
 export default function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -45,6 +48,12 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
       <Async state={agent} what="agent">
         {(a) => <Detail agent={a} onChanged={refresh} active={interactions.data ? interactionCounts(interactions.data).active : null} />}
       </Async>
+      {/* Outside <Async> so a reload after a tx keeps the panel (and its tx log) mounted; agent.data stays while reloading. */}
+      {agent.data && (
+        <div style={{ marginTop: ".75rem" }}>
+          <VaultPanel agent={agent.data} onChanged={refresh} />
+        </div>
+      )}
       <h2>Challenges</h2>
       <Async state={interactions} what="challenges">
         {(list) => {
@@ -167,7 +176,7 @@ function Detail({ agent: a, onChanged, active }: { agent: Agent; onChanged: () =
             {localErr && <div className="field-error">{localErr}</div>}
           </>
         ) : (
-          <div className="dim">Allocation for arc_testnet agents is not available in this milestone.</div>
+          <div className="dim">This agent uses {TESTNET_LABEL} held in its vault. Allocate and withdraw in the vault section further down.</div>
         )}
       </div>
 
@@ -195,6 +204,8 @@ function Detail({ agent: a, onChanged, active }: { agent: Agent; onChanged: () =
           </tbody></table>
         </div>
       </div>
+
+      <ApproachCard agent={a} />
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Behavior graph</h3>

@@ -1,0 +1,25 @@
+[package]
+name = "aen-chain"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+# Arc testnet access: escrow + agent vault calls, receipt verification.
+# Keys come from a testnet-only mnemonic (D-58) and never leave this crate.
+[dependencies]
+alloy = { version = "2.6", features = ["signer-mnemonic"] }
+uuid.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+tracing = "0.1"
+tokio = { version = "1", features = ["process", "time", "net"], optional = true }
+serde_json = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "time"] }
+serde_json.workspace = true
+aen-chain = { path = ".", features = ["testkit"] }
+
+[features]
+# Local anvil + contract deployment helpers for tests (needs Foundry and `forge build` output).
+testkit = ["dep:tokio", "dep:serde_json"]

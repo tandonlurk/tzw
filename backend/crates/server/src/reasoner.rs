@@ -4,6 +4,7 @@
 //! its conviction is an opinion, not a probability.
 
 use aen_core::challenge::{ChallengeTerms, Direction, FormulaId, Party};
+use aen_core::ledger::Env;
 use aen_core::money::Money;
 use aen_core::policy::{AgentPolicy, MAX_BPS};
 use serde::{Deserialize, Serialize};
@@ -37,6 +38,8 @@ pub struct AgentCtx {
     pub id: Uuid,
     pub name: String,
     pub version: i32,
+    /// Where its funds live; labels amounts in summaries.
+    pub env: Env,
     pub config: AgentConfig,
     pub policy: AgentPolicy,
     pub available: Money,
@@ -293,7 +296,7 @@ impl RuleBasedReasoner {
                         "I claim the market ends {} {} and stake {} on it.",
                         side_word(stance),
                         format_value(formula, terms.threshold),
-                        stake_text(stake)
+                        stake_text(stake, agent.env)
                     ),
                     terms: Some(terms),
                 })
@@ -343,7 +346,7 @@ impl RuleBasedReasoner {
                     summary: format!(
                         "I am not convinced enough for the full stake; I offer {} per side \
                          instead.",
-                        stake_text(stake)
+                        stake_text(stake, agent.env)
                     ),
                     terms: Some(ChallengeTerms {
                         stake,
@@ -384,6 +387,7 @@ pub(crate) mod tests {
             id: Uuid::from_u128(1),
             name: "Tester".into(),
             version: 1,
+            env: Env::Simulated,
             config: AgentConfig {
                 goals: "grow".into(),
                 strategy: strategy.into(),
@@ -419,6 +423,7 @@ pub(crate) mod tests {
             spot_symbol: "btcusd".into(),
             source: "fake".into(),
             fallback_reason: None,
+            meta: Default::default(),
         }
     }
 

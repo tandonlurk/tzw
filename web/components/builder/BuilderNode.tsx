@@ -14,12 +14,14 @@ export interface BuilderCtx {
   remove: (id: string) => void;
   /** Saved agent id (enables code Test run); null while creating. */
   agentId: string | null;
+  /** Opens the approach editor panel (pinned approach block). */
+  openApproach?: () => void;
 }
 
 export const BuilderContext = createContext<BuilderCtx | null>(null);
 
 export type FlowNodeData = { blockType: string; params: Record<string, unknown> };
-export type FlowNode = Node<FlowNodeData, "block">;
+export type FlowNode = Node<FlowNodeData, "block" | "approach">;
 
 export function BuilderNode({ id, data }: NodeProps<FlowNode>) {
   const ctx = useContext(BuilderContext);

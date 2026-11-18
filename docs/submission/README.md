@@ -6,9 +6,9 @@ Every file states what is real, what is simulated, what is unverified and what i
 
 | File | Award | Status today |
 |---|---|---|
-| `main-track.md` | Agentic Payments & AI (D-17, owner to confirm) | Simulated lifecycle works end to end |
-| `arc.md` | Best use of Arc | Contract tested locally, not deployed (blocked on D-3 custody + faucet) |
-| `gemini.md` | Gemini Prediction Markets | Built on the public PM read API; live-probed once, tests use replayed fixtures |
+| `main-track.md` | Agentic Payments & AI (D-17, owner to confirm) | Simulated lifecycle works end to end; one full autonomous challenge on Arc testnet with live Gemini data (2026-11-17/18) |
+| `arc.md` | Best use of Arc | Escrow, vault factory and vaults deployed and verified on Arc testnet; full lifecycle run live through the server (tx links in the file); owner browser-wallet path not yet exercised |
+| `gemini.md` | Gemini Prediction Markets | Built on the public PM read API; one full challenge discovered and resolved on live Gemini data (Arc testnet run); tests use replayed fixtures |
 | `quicknode.md` | QuickNode Streams | Webhook ingestion built and tested locally; no stream configured, nothing exposed, payload shape unverified |
 | `grok.md` | Grok Bot | Wired, mock-tested only; not called against the live API (no key yet) |
 | `elevenlabs.md` | ElevenLabs | Not built |

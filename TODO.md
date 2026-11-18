@@ -6,10 +6,22 @@ Legend: `[ ]` not started · `[~]` in progress · `[!]` blocked · `[x]` done an
 
 Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, see D-18). Demo flow working by end of Wed Nov 18. Details and dates: `tasks/project.md`.
 
+## ⚠ Start here (owner action, open next session)
+
+- [x] Fund the Arc testnet addresses (done 2026-11-17: idx 0-2 have 20 USDC each; confirm MetaMask account too)
+- [ ] Confirm MetaMask is set up: Arc Testnet added (`docs/setup/arc-testnet-funding.md` section 3), and the account you funded is the one you will connect. Needed for the browser wallet UI
+- [ ] Then tell the agent "continue". Contracts are DEPLOYED (D-60). Next for the agent, in order:
+  1. [x] Smoke run on Arc passed (D-61); `resolver()` reverted because the getter is `RESOLVER()`
+  2. [x] Verified escrow, factory and AgentVault on Blockscout (D-61)
+  3. [x] Chain wired into the lifecycle (D-63) and browser wallet UI built (D-62); live Arc run settled with drift 0 (`reports/handoffs/2026-11-17-arc-live-run.md`)
+  4. [x] Committed the doc edits on `chain-vaults` (2f03581). Open PR: https://github.com/tandonlurk/tzw/pull/1
+  5. [ ] **You:** merge the stacked PRs in order #1 → #2 → #3; review the approach wheels and Firms pages (PR #3), and confirm D-65 (80/20 reading, task fee as the "guarantee")
+  6. [ ] **You:** try the wallet UI with MetaMask on Arc Testnet (create a vault for an agent, allocate, withdraw). Run instructions: `backend/README.md` "Run against Arc testnet"
+
 ## Needs you (review list)
 
 - [x] Approve the plan in `docs/architecture.md` (owner said "start running the plan", 2026-11-14)
-- [?] D-3 wallet custody: per-agent testnet keys from a backend seed (recommended) vs single operator wallet vs Circle wallets
+- [x] D-3 wallet custody: decided 2026-11-16 → per-agent `AgentVault` contracts owned by your browser wallet (D-57)
 - [?] D-8 use Grok for agent reasoning now (behind a fallback), or keep agents rule-based until later?
 - [x] Toolchain installed: Rust 1.100, Foundry 1.9, PostgreSQL 17 (dbs `aen_dev`, `aen_test`)
 - [?] Provide when ready (in `.env`, never in chat): xAI API key, QuickNode key, Arc testnet faucet funds, ElevenLabs key
@@ -20,7 +32,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [?] D-17 main track "Agentic Payments & AI" + Arc award + all bounties
 - [?] Ask at sponsor office hours (Nov 16-19): what "Grok Bot" means for the xAI bounty
 - [?] Streams: create a QuickNode stream and expose the webhook through a tunnel (needs `AEN_API_TOKEN` + `ALLOWED_HOSTS`); capture one real delivery to confirm the header names and payload (all UNVERIFIED today)
-- [x] Pushed to GitHub `tandonlurk/tzw`; `recovery` is the default branch. Repo is PUBLIC: make it private if you do not want the docs visible
+- [x] Pushed to GitHub `tandonlurk/tzw`; `main` = `recovery` as of 2026-11-16 (consider making `main` the default branch). Repo is PUBLIC: make it private if you do not want the docs visible
 
 ## M0 — Planning and research (Sat Nov 14)
 
@@ -45,14 +57,27 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [~] Reasoner trait: rule-based done; Grok wired behind `XAI_API_KEY` but only mock-tested, endpoint/model unverified (backend, P0/P1, needs D-8 + key)
 - [x] Challenge proposal, bounded negotiation, approvals, resolve, settle/void in the simulated ledger; 211 backend tests (backend, P0)
 - [x] Proposal cooldown (600 s per agent and market, D-33); `schemas/challenge_terms.schema.json`; demo seed `POST /api/dev/seed-demo` + seeded lifecycle test; 222 backend tests (backend, P1)
-- [ ] Deploy escrow to Arc testnet; signer + chain executor (contracts/backend, P0, needs D-3 + faucet funds)
+- [x] `AgentVault` + `VaultFactory` contracts: onchain caps, pause, operator revoke, owner withdraw; 100 Foundry tests (contracts, P0, D-57)
+- [x] `aen-chain` crate (alloy): escrow + vault calls, receipt verification, owner helpers, anvil test kit; full lifecycle test on anvil (backend, P0)
+- [x] Deploy escrow + factory to Arc testnet (D-60); Blockscout verified + live smoke run passed (D-61) (contracts, P0)
+- [x] Wire chain into lifecycle (D-63; 341 backend tests; live Arc run settled, drift 0): create → both vaults stake → active → resolve/void → release; ledger from verified receipts; vault link/sync endpoints; test-owner dev endpoint for autonomous runs (backend, P0)
+- [?] Browser wallet UI (built, merged 335d62b, D-62; not yet run with a real MetaMask signature or the real backend endpoints): connect, create vault per agent, allocate (amount or % of wallet), withdraw, live onchain balances + explorer links (frontend, P0)
 - [x] Visual logic builder: add/connect/delete blocks, incompatible connections rejected, validate, save with positions; browser-tested (frontend, P0)
 - [x] Agent detail + config/policy editing: version history with diffs, per-agent activity, "Saved as version N", 422 inline, config version on decision traces; browser-verified 2026-11-16 (frontend, P0)
+
+## M3b — Approach block and firms (Tue Nov 17, owner request)
+
+- [?] Approach block: stance wheel (competitive ↔ collaborative, cautious ↔ ambitious, firm role) + market wheel (any → category → subcategory, structure, keywords, symbols, ranges) with live preview; backend gates discovery and incoming challenges; ambition sizes stakes when an approach node exists (D-64). Design: `docs/design/approach-and-firms.md`
+- [?] Firms: lead keeps 80%, scouts/analysts share 20% by role weight, optional task fee, losses on the lead; simulated only (D-64, D-65). E2E over HTTP + browser-checked against the real backend (`reports/handoffs/2026-11-18-approach-firms.md`)
+- [ ] Fake market catalog with several markets (incl. a commodities/energy one) so the market wheel demos offline; today fake mode has one BTC market (backend, P1)
+- [ ] Testnet run gaps: record vault release tx + activity; `/stats/portfolio` for `arc_testnet`; discovery threshold from bid/ask mid, not a stale last trade (backend, P1)
+- [ ] Firm demo seed endpoint + README firm demo (script exists in the handoff) (backend, P2)
+- [ ] Starter templates with an approach node (changes demo numbers, so recompute `docs/demo.md`) (backend, P2)
 
 ## M3 — Observability (Tue Nov 17)
 
 - [x] QuickNode Streams webhook ingestion, local only: HMAC + skew check, idempotent on (tx hash, log index), reorg-aware, fixture tests (D-49..D-51). Header names and payload shape UNVERIFIED until one real delivery; not exposed (backend, P1)
-- [ ] Full lifecycle end to end on testnet: discover → negotiate → authorize → fund → resolve → settle (lead, P0)
+- [x] Full lifecycle end to end on testnet with real Gemini data: autonomous scheduler, Gemini settled `no`, drift 0 (`reports/handoffs/2026-11-17-testnet-gemini.md`) (lead, P0)
 - [x] Wallet overview, Activity view, approvals queue, interactions list/detail, Dashboard charts from `/stats/portfolio` only (per-agent P&L lines by default); 25 web tests. Browser-verified 2026-11-15 incl. reject, approve-then-cancelled notice, agent-detail challenges, template prefill (frontend, P0)
 - [x] Backend gaps from `reports/qa-m2-web.md`: summaries now readable ("5.00 USDC (simulated)"); approvals arise on the counterparty side by design; dev clock jumps past a funding deadline are refused with 409 (D-34) (backend, P1)
 - [x] Collaboration: agreement states, simulated payout split through ledger + `authorize` (D-46..D-48), list/detail/propose views, buttons from `actions`; browser-verified propose → accept → fund → complete and cancel 2026-11-16 (backend/frontend, P2)
@@ -79,6 +104,12 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [~] Demo script, seeded demo agents, README run instructions, AGENTS.md 9.4 filled in: simulated run done and hand-verified (`docs/demo.md`); testnet version waits on D-3 (lead, P0)
 - [~] Submission write-ups drafted in `docs/submission/` (one per award, honest status); finalize after D-3 / keys and record the video (lead, P0)
 
+## Vision (owner, 2026-11-16) — after the hackathon unless time allows
+
+- [ ] Optional TZW-held vault: users may choose to let TZW custody funds in exchange for a benefit (e.g. gas sponsorship, instant settlement, yield). Opt-in, never the default
+- [ ] Pluggable custody providers: an agent's vault can be ours, a browser wallet, or another provider the user trusts more; same escrow interface
+- [ ] Minimal platform control and privacy: TZW should have little say over how agents interact. Open items: user-run operators (vault already lets the owner replace the operator), decentralised resolution instead of our resolver key (today resolution is backend-administered, D-6), private negotiation
+
 ## Notes from owner
 
-(write here)
+- 2026-11-17 — not started, think about only: after the UI redesign (owner, Wed night), the app still needs animated explainers. Most of the product happens in the background (discovery, negotiation, escrow lock, resolution, firm payouts); the user mostly sees agent performance summaries and a transaction/position log, so the hard parts (escrow above all) need visual explaining. Owner will look for Claude visual tools/skills on GitHub.

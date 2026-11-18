@@ -77,6 +77,20 @@ pub struct Interaction {
     pub end_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// Arc testnet transactions of this challenge (`null` for simulated).
+    pub escrow: Option<EscrowTxs>,
+    /// The firm this challenge was proposed for (lead's firm challenges).
+    pub firm_id: Option<Uuid>,
+}
+
+/// Confirmed escrow transactions (lowercase hashes), each `null` until sent.
+#[derive(Debug, Serialize)]
+pub struct EscrowTxs {
+    pub create_tx: Option<String>,
+    pub proposer_stake_tx: Option<String>,
+    pub counterparty_stake_tx: Option<String>,
+    /// `resolve(winner)` or `resolveVoid`.
+    pub settle_tx: Option<String>,
 }
 
 fn to_interaction(joined: JoinedRow, max_rounds: i32) -> Result<Interaction, ApiError> {
@@ -87,7 +101,15 @@ fn to_interaction(joined: JoinedRow, max_rounds: i32) -> Result<Interaction, Api
         pending_approvals,
     } = joined;
     let terms = row.terms()?;
+    let escrow = (row.env == Env::ArcTestnet.as_str()).then(|| EscrowTxs {
+        create_tx: row.escrow_create_tx.clone(),
+        proposer_stake_tx: row.proposer_stake_tx.clone(),
+        counterparty_stake_tx: row.counterparty_stake_tx.clone(),
+        settle_tx: row.escrow_settle_tx.clone(),
+    });
     Ok(Interaction {
+        escrow,
+        firm_id: row.firm_id,
         id: row.id,
         kind: row.kind,
         env: row.env,

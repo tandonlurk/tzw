@@ -98,7 +98,7 @@ export interface AgentVersion {
   graph: Graph;
 }
 
-export type BlockKind = "trigger" | "reasoning" | "condition" | "action";
+export type BlockKind = "trigger" | "reasoning" | "condition" | "action" | "approach";
 
 export interface PortDef {
   port: string;
@@ -214,6 +214,8 @@ export interface Interaction {
   observed_display: string | null;
   observed_at: string | null;
   status_reason: string | null;
+  /** Set when a firm's lead proposed the challenge (docs/design/approach-and-firms.md 3). Absent on older backends. */
+  firm_id?: string | null;
   resolution: "backend_administered";
   start_at: string;
   end_at: string;
@@ -289,6 +291,8 @@ export interface TickReport {
   rejected: number;
   approvals_requested: number;
   funded: number;
+  /** Arc challenges that went active this tick. Absent on older backends. */
+  activated?: number;
   resolving: number;
   settled: number;
   voided: number;
@@ -444,4 +448,178 @@ export interface TestRun {
   ctx: Record<string, unknown>;
   module_sha256: string;
   simulated: true;
+}
+
+// ---- Arc testnet chain + agent vaults (D-57; contract in reports/handoffs/2026-11-17-wallet-ui.md) ----
+
+/** `GET /chain`. When `enabled` is false the other fields are absent and the wallet UI stays off. */
+export type ChainConfig =
+  | { enabled: false }
+  | {
+      enabled: true;
+      chain_id: number;
+      chain_name: string;
+      rpc_url: string;
+      explorer_url: string;
+      usdc_address: string;
+      usdc_decimals: number;
+      escrow_address: string;
+      vault_factory_address: string;
+      operator_address: string;
+    };
+
+export type EnabledChain = Extract<ChainConfig, { enabled: true }>;
+
+/** `GET /agents/{id}/vault`: onchain state read by the backend, next to the agent's ledger balances. */
+export interface VaultView {
+  address: string;
+  owner: string;
+  operator: string;
+  paused: boolean;
+  max_per_challenge: Money;
+  max_exposure: Money;
+  onchain_balance: Money;
+  onchain_exposure: Money;
+  ledger_available: Money;
+  ledger_committed: Money;
+  /** Signed. Onchain minus ledger as computed by the backend; zero when they agree. */
+  drift: Money;
+  explorer_url: string;
+}
+
+export interface VaultSyncResult {
+  credited: LedgerEntry[];
+  vault: VaultView;
+}
+
+// ---- Approach block + firms (docs/design/approach-and-firms.md sections 1 to 3) ----
+
+export type FirmRole = "none" | "member" | "lead";
+export type MarketScope = "any" | "structure" | "specific";
+
+/** Inclusive integer bounds; null = unbounded. */
+export interface Bound {
+  min: number | null;
+  max: number | null;
+}
+
+export interface ApproachRanges {
+  move_bps: Bound;
+  yes_price_bps: Bound;
+  expiry_secs: Bound;
+  volume_delta_24h_bps: Bound;
+}
+
+/** The `markets` object of an `approach.profile` node; also a firm's `markets`. */
+export interface ApproachMarkets {
+  scope: MarketScope;
+  structures: string[];
+  categories: string[];
+  subcategories: string[];
+  keywords: string[];
+  symbols: string[];
+  ranges: ApproachRanges;
+}
+
+/** Params of the `approach.profile` graph node. */
+export interface ApproachParams {
+  stance: { collaboration_bps: number; ambition_bps: number };
+  firm_role: FirmRole;
+  markets: ApproachMarkets;
+}
+
+export interface MarketCategories {
+  categories: string[];
+  subcategories: Record<string, string[]>;
+  structures: string[];
+  source: "gemini" | "fallback";
+}
+
+/** A market as discovery sees it (`MarketView`). Only `title` is relied on; other fields are shown when present. */
+export interface MarketSample {
+  title: string;
+  category?: string;
+  subcategory?: string | null;
+  structure?: string | null;
+  move_bps?: number | null;
+  yes_price_bps?: number | null;
+  expiry_secs?: number | null;
+  spot_symbol?: string | null;
+  source?: string;
+  [key: string]: unknown;
+}
+
+export interface MarketPreview {
+  count: number;
+  sample: MarketSample[];
+  as_of: string;
+  source: string;
+}
+
+export type FirmRoleName = "scout" | "analyst";
+export type FirmState = "open" | "closed";
+
+export interface FirmRoleSlot {
+  role: FirmRoleName;
+  slots: number;
+  weight_bps: number;
+}
+
+export interface FirmMember {
+  agent_id: string;
+  name: string;
+  role: FirmRoleName;
+  joined_at: string;
+  contributions: number;
+  used: number;
+  earned: Money;
+}
+
+export interface Firm {
+  id: string;
+  env: Env;
+  name: string;
+  mandate: string;
+  lead_agent_id: string;
+  lead_name: string;
+  lead_share_bps: number;
+  member_pool_bps: number;
+  task_fee: Money;
+  roles: FirmRoleSlot[];
+  /** null = the lead's own approach markets. */
+  markets: ApproachMarkets | null;
+  state: FirmState;
+  members: FirmMember[];
+  stats: { challenges: number; settled: number; lead_realized_pnl: Money; paid_to_members: Money };
+  /** Server-decided ("join", "leave", "close"); buttons are driven by this list only. */
+  actions: string[];
+  created_at: string;
+}
+
+export interface FirmInput {
+  lead_agent_id: string;
+  name: string;
+  mandate: string;
+  lead_share_bps?: number;
+  task_fee?: Money;
+  roles?: FirmRoleSlot[];
+  markets?: ApproachMarkets | null;
+}
+
+export interface Contribution {
+  id: string;
+  firm_id: string;
+  agent_id: string;
+  agent_name: string;
+  role: FirmRoleName;
+  kind: "scout_candidate" | "analyst_signal";
+  market_id: string;
+  side: "above" | "below" | null;
+  conviction_bps: number;
+  interaction_id: string | null;
+  used: boolean;
+  fee_paid: Money;
+  payout: Money;
+  summary: string;
+  created_at: string;
 }

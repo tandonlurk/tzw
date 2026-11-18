@@ -242,7 +242,14 @@ export function AgentForm({ blocks, initial, storageId, submitLabel, onSubmit, s
         <div className="dim" style={{ marginBottom: ".5rem" }}>
           Blocks express your preferences. They are not security: the policy above is enforced regardless of this graph.
         </div>
-        <GraphBuilder blocks={blocks} initialGraph={initial.graph} storageId={storageId} onChange={setGraph} serverErrors={serverGraphErrors(serverError)} />
+        <GraphBuilder
+          blocks={blocks}
+          initialGraph={initial.graph}
+          storageId={storageId}
+          onChange={setGraph}
+          serverErrors={serverGraphErrors(serverError)}
+          maxPerInteraction={parseMoney(s.max_per_interaction)}
+        />
       </fieldset>
 
       <div className="row">

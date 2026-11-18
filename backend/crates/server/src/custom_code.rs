@@ -196,6 +196,7 @@ fn sample_market() -> MarketView {
         spot_symbol: "btcusd".into(),
         source: "sample".into(),
         fallback_reason: None,
+        meta: Default::default(),
     }
 }
 
@@ -223,6 +224,7 @@ pub async fn check_on_save(
         id: agent_id,
         name: input.name.trim().to_owned(),
         version: 0,
+        env: aen_core::ledger::Env::Simulated,
         config: input.config.clone(),
         policy: input.policy.clone(),
         available: Money::from_minor(100_000_000).unwrap_or(Money::ZERO),
@@ -287,7 +289,9 @@ pub struct TestRunBody {
 /// used, so the test-run verdict matches the live one.
 fn judged_in(intent: &Intent) -> Option<InteractionState> {
     match intent {
-        Intent::ProposeChallenge { .. } | Intent::ProposeCollaboration { .. } => None,
+        Intent::ProposeChallenge { .. }
+        | Intent::ProposeCollaboration { .. }
+        | Intent::PayTaskFee { .. } => None,
         Intent::AcceptChallenge { .. } | Intent::CounterOffer { .. } | Intent::Reject => {
             Some(InteractionState::Proposed)
         }

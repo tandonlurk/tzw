@@ -342,3 +342,25 @@ Status: done. Tests (own dbs): `aen_sh_test` -> core 100 + 14 + 6 + 4, sandbox 3
 - The concurrency semaphore (4) is shared by ticks, test-runs and save checks; a burst of saves can make a tick wait up to ~0.5 s per queued run.
 - A graph with more than one `custom.code` node on one path runs each one; nothing caps that beyond the 64-step graph limit.
 - Javy builds are not byte-reproducible, so the recorded module SHA-256 identifies the built file, not the source (stage 1 note).
+
+## Log: aen-chain crate (branch chain-vaults, 2026-11-16, D-57..D-59)
+- `crates/chain`: alloy 2.6 client. Resolver (idx 0) create/resolve/resolveVoid; operator (idx 1) vault stake/release; receipt verification (`vaults_created`, `usdc_transfers`); `OwnerWallet` for the test owner (idx 2); `testkit` feature (anvil + deploy from `contracts/out`).
+- Refuses chains other than 5042002/31337; checks escrow `RESOLVER()` is our key and the factory is bound to our escrow. Simple nonce manager (D-59).
+- Tests: `cargo test -p aen-chain` 2 passed (anvil lifecycle, foreign resolver refused). Skips if anvil missing; needs `forge build`.
+- Not done: server integration. Plan: `reports/handoffs/2026-11-17-chain-vaults.md` steps 2–5.
+
+## chain-wiring: Arc testnet in the lifecycle (branch `chain-wiring`, 2026-11-17)
+
+- Objective: chain-vaults handoff steps 2-5 (lifecycle wiring, endpoints, dev autonomous runs, anvil E2E). Assigned: backend specialist. Status: done, awaiting lead review.
+- Files: `core/src/ledger.rs` (`VaultDeposit`/`VaultWithdraw`, `chain:{tx}:{log}` keys, `PostingSet::with_tx_hash`); migration `0009_chain_wiring.sql`; `server/src/chain.rs` (config from env, `GET /chain`, vault link/view/sync, dev setup-demo-vaults); `server/src/lifecycle_arc.rs` (fund / resolve / release phases); `lifecycle.rs` (arc commit stops at `funded`, wall clock for arc, settle split into `decide_outcome` + `apply_outcome`, env-labelled amounts); `ledger_db.rs` (writes `tx_hash`); `agents.rs`/`models.rs` (`vault_address`, `vault_owner`); `interactions.rs` (`escrow` tx hashes); `main.rs`, `state.rs` (`AppState.chain`); `tests/chain.rs`.
+- Tests: `cargo test --workspace` 341 passed, 0 failed, 1 ignored (6 new anvil tests in `tests/chain.rs`, 1 new core test). Clippy clean. Manual E2E: real server binary + local anvil + `setup-demo-vaults` + demo ticks, settled onchain, drift 0 (README "Autonomous demo").
+- Decisions proposed: `reports/handoffs/2026-11-17-chain-wiring.md`.
+- Not done: live Arc run (lead), QuickNode as event source, browser-wallet withdraw sync is manual (UI posts the tx).
+
+## approach-firms-backend: approach block and firms (branch `approach-firms-backend`, 2026-11-17)
+
+- Objective: backend for `docs/design/approach-and-firms.md` plus `TickReport.activated`. Assigned: backend specialist. Status: done, awaiting lead review.
+- Files: `core/src/approach.rs` (filter, stance/ambition functions), `core/src/firm.rs` (terms, `split_profit`, analyst gate, `choose_firm`), `core/src/graph.rs` (`approach.profile`, `BlockKind::Approach`, `multiple_approaches`, `param_path`), `core/src/authorize.rs` (`Intent::PayTaskFee`), `core/src/ledger.rs` (`firm_task_fee`, `firm_payout`); migration `0010_firms.sql`; `server/src/firms.rs` (API + runtime), `server/src/markets.rs` (`/markets/categories`, `/markets/preview`), `lifecycle.rs` (gates, scout/lead/analyst flow, auto-join phase, profit share on settle, `activated`), `lifecycle_arc.rs`, `market/*` (listing metadata), `agents.rs` (`firm_income`, P&L net of firm payments), `interactions.rs` (`firm_id`), `misc.rs` (`?firm_id=`); `tests/firms.rs`.
+- Tests: `cargo test --workspace` all passed (incl. anvil `tests/chain.rs` with the new `activated` asserts); 10 new integration tests, new core unit tests. Clippy clean. Manual E2E: server binary on the fake market, auto-join + scout + analyst + firm proposal + task fees over HTTP.
+- Decisions: D-64. Docs: `docs/api.md` "Approach and firms".
+- Not done: starter templates have no approach node (would change demo numbers); firms on Arc testnet; `/markets/preview` reads one 100-event page and computes spot moves for ≤ 5 assets.

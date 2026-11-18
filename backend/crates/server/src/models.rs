@@ -89,9 +89,11 @@ impl AgentInput {
 }
 
 fn graph_detail(e: &graph::GraphError) -> Detail {
-    let path = match &e.node_id {
-        Some(id) => format!("graph.nodes.{id}"),
-        None => "graph".to_owned(),
+    let path = match (&e.node_id, &e.param_path) {
+        (Some(id), Some(p)) if !p.is_empty() => format!("graph.nodes.{id}.params.{p}"),
+        (Some(id), Some(_)) => format!("graph.nodes.{id}.params"),
+        (Some(id), None) => format!("graph.nodes.{id}"),
+        (None, _) => "graph".to_owned(),
     };
     // GraphErrorCode serializes as a plain snake_case string.
     let code = serde_json::to_value(e.code)
@@ -109,9 +111,13 @@ pub struct Balances {
 
 #[derive(Debug, Serialize)]
 pub struct Stats {
+    /// Settled challenge P&L, net of payments to firm members.
     pub realized_pnl: SignedMoney,
     pub settled: i64,
     pub wins: i64,
+    /// Task fees and profit shares received as a firm member (simulated).
+    /// Not part of `realized_pnl`.
+    pub firm_income: Money,
 }
 
 #[derive(Debug, Serialize)]
@@ -122,6 +128,10 @@ pub struct Agent {
     pub status: AgentStatus,
     pub env: Env,
     pub wallet_address: Option<String>,
+    /// The agent's Arc testnet `AgentVault` (lowercase hex), once linked.
+    pub vault_address: Option<String>,
+    /// The vault's owner wallet (lowercase hex), once linked.
+    pub vault_owner: Option<String>,
     pub version: i32,
     pub config: Value,
     pub policy: Value,
@@ -171,6 +181,9 @@ pub struct ActivityItem {
     pub agent_id: Option<Uuid>,
     pub interaction_id: Option<Uuid>,
     pub collaboration_id: Option<Uuid>,
+    /// Set on firm activity. Queries that do not select it read `null`.
+    #[sqlx(default)]
+    pub firm_id: Option<Uuid>,
     pub kind: String,
     pub summary: String,
     pub detail: Option<Value>,

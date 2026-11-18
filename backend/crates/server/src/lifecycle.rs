@@ -11,11 +11,17 @@
 //!   may run concurrently.
 //! - Stakes move only through `ledger_db::post`, with idempotency keys
 //!   derived from the interaction.
-//! - Only the `simulated` environment is handled. Nothing here signs or
-//!   sends a transaction.
+//! - Simulated interactions never touch a chain. `arc_testnet` ones (both
+//!   agents linked to an onchain vault) reserve their stakes in the ledger
+//!   here, exactly like simulated ones, and are then staked, resolved and
+//!   released onchain by `lifecycle_arc`; the ledger follows the escrow.
+//! - `arc_testnet` interactions run on the wall clock: the dev tick's
+//!   simulated `now` applies to simulated interactions only.
 
+use aen_core::approach::{Approach, MissReason, market_matches, may_initiate_challenges};
 use aen_core::authorize::{AgentStatus, Decision, DenyReason, Intent, Snapshot, authorize};
 use aen_core::challenge::{ChallengeTerms, Direction, FormulaId, Outcome, Party, resolve};
+use aen_core::firm::MemberRole;
 use aen_core::graph::Graph;
 use aen_core::interaction::InteractionState;
 use aen_core::ledger::{self, Account, Env};
@@ -73,6 +79,15 @@ pub struct InteractionRow {
     pub status_reason: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub escrow_create_tx: Option<String>,
+    pub proposer_stake_tx: Option<String>,
+    pub counterparty_stake_tx: Option<String>,
+    pub escrow_settle_tx: Option<String>,
+    pub pending_outcome: Option<Value>,
+    pub vaults_released_at: Option<DateTime<Utc>>,
+    /// Set on a firm lead's firm challenges.
+    #[sqlx(default)]
+    pub firm_id: Option<Uuid>,
 }
 
 impl InteractionRow {
@@ -86,8 +101,14 @@ impl InteractionRow {
             .map_err(|e| ApiError::internal(format!("stored terms are unreadable: {e}")))
     }
 
-    fn stake(&self) -> Result<Money, ApiError> {
+    pub(crate) fn stake(&self) -> Result<Money, ApiError> {
         Money::from_minor(self.stake).ok_or_else(|| ApiError::internal("negative stake"))
+    }
+
+    pub(crate) fn env(&self) -> Result<Env, ApiError> {
+        self.env
+            .parse()
+            .map_err(|()| ApiError::internal("unknown env"))
     }
 
     fn party_of(&self, agent: Uuid) -> Party {
@@ -104,6 +125,17 @@ impl InteractionRow {
         } else {
             self.proposer_id
         }
+    }
+}
+
+/// The clock an interaction in `env` runs on: `arc_testnet` interactions
+/// always use the wall clock (escrow deadlines are real time), simulated ones
+/// the tick's clock, which the dev tick may set.
+pub(crate) fn clock_for(env: &str, tick_now: DateTime<Utc>) -> DateTime<Utc> {
+    if env == Env::ArcTestnet.as_str() {
+        Utc::now()
+    } else {
+        tick_now
     }
 }
 
@@ -124,13 +156,23 @@ pub struct TickReport {
     pub accepted: u32,
     pub rejected: u32,
     pub approvals_requested: u32,
+    /// Ledger reservations made this tick (`accepted -> funded`). An owner
+    /// approval through the REST API reserves outside a tick and is not
+    /// counted here.
     pub funded: u32,
+    /// Arc testnet challenges whose escrow went live this tick
+    /// (`funded -> active`, both stakes deposited onchain).
+    pub activated: u32,
     pub resolving: u32,
     pub settled: u32,
     pub voided: u32,
     pub cancelled: u32,
     /// New co-captain suggestions (rule-based; advisory only).
     pub suggestions: u32,
+    /// Agents that joined a firm on their own this tick.
+    pub firm_joined: u32,
+    /// Scout candidates and analyst signals recorded this tick.
+    pub firm_contributions: u32,
     /// Problems that did not stop the tick (market data, reasoner).
     pub errors: Vec<String>,
 }
@@ -154,6 +196,7 @@ impl AgentRec {
             id: self.id,
             name: self.name.clone(),
             version: self.version,
+            env: self.env,
             config: self.config.clone(),
             policy: self.policy.clone(),
             available: self.snapshot.available,
@@ -164,7 +207,9 @@ impl AgentRec {
 
 /// Exposure = stakes of the agent's interactions in Funded / Active /
 /// Resolving, plus its contributions to funded collaborations. Realized
-/// P&L = the agent's net over `settle` ledger entries (challenges only).
+/// P&L = the agent's net over `settle` ledger entries (challenges only),
+/// less what it paid firm members (task fees, profit shares). Firm income
+/// received is not challenge P&L (see `firm_income` on the agent).
 const AGENT_SQL: &str = "
 SELECT a.id, a.name, a.status, a.env, a.current_version, v.config, v.policy, v.graph,
   (SELECT COALESCE(SUM(e.delta), 0)::BIGINT FROM ledger_entries e
@@ -177,7 +222,9 @@ SELECT a.id, a.name, a.status, a.env, a.current_version, v.config, v.policy, v.g
      FROM collaborations c
      WHERE c.state = 'funded' AND (c.proposer_id = a.id OR c.partner_id = a.id)) AS exposure,
   (SELECT COALESCE(SUM(e.delta), 0)::BIGINT FROM ledger_entries e
-    WHERE e.agent_id = a.id AND e.env = a.env AND e.reason = 'settle') AS realized_pnl
+    WHERE e.agent_id = a.id AND e.env = a.env
+      AND (e.reason = 'settle'
+           OR (e.reason IN ('firm_payout', 'firm_task_fee') AND e.delta < 0))) AS realized_pnl
 FROM agents a
 JOIN agent_versions v ON v.agent_id = a.id AND v.version = a.current_version
 WHERE a.id = $1";
@@ -229,13 +276,13 @@ pub async fn load_agent(conn: &mut PgConnection, id: Uuid) -> Result<Option<Agen
     }))
 }
 
-async fn require_agent(conn: &mut PgConnection, id: Uuid) -> Result<AgentRec, ApiError> {
+pub(crate) async fn require_agent(conn: &mut PgConnection, id: Uuid) -> Result<AgentRec, ApiError> {
     load_agent(conn, id)
         .await?
         .ok_or_else(|| ApiError::internal(format!("agent {id} is missing")))
 }
 
-async fn advisory_lock(conn: &mut PgConnection, name: &str) -> Result<(), sqlx::Error> {
+pub(crate) async fn advisory_lock(conn: &mut PgConnection, name: &str) -> Result<(), sqlx::Error> {
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
         .bind(name)
         .execute(conn)
@@ -243,7 +290,7 @@ async fn advisory_lock(conn: &mut PgConnection, name: &str) -> Result<(), sqlx::
     Ok(())
 }
 
-async fn lock_interaction(
+pub(crate) async fn lock_interaction(
     conn: &mut PgConnection,
     id: Uuid,
 ) -> Result<Option<InteractionRow>, ApiError> {
@@ -256,7 +303,7 @@ async fn lock_interaction(
 }
 
 /// Moves a locked interaction along the transition table.
-async fn set_state(
+pub(crate) async fn set_state(
     conn: &mut PgConnection,
     row: &mut InteractionRow,
     to: InteractionState,
@@ -282,7 +329,7 @@ async fn set_state(
     Ok(())
 }
 
-async fn record(
+pub(crate) async fn record(
     conn: &mut PgConnection,
     agent_id: Option<Uuid>,
     interaction_id: Option<Uuid>,
@@ -306,7 +353,7 @@ async fn record(
 
 /// Like `record`, but skipped when the agent's latest activity already says
 /// exactly this, so a condition that persists across ticks is logged once.
-async fn record_once(
+pub(crate) async fn record_once(
     conn: &mut PgConnection,
     agent_id: Uuid,
     kind: &str,
@@ -375,7 +422,7 @@ fn deny_phrase(reason: DenyReason) -> &'static str {
     }
 }
 
-fn deny_text(reasons: &[DenyReason]) -> String {
+pub(crate) fn deny_text(reasons: &[DenyReason]) -> String {
     reasons
         .iter()
         .map(|r| deny_phrase(*r))
@@ -417,16 +464,19 @@ pub fn claim_text(terms: &ChallengeTerms, title: &str) -> String {
     )
 }
 
-/// Every stake this module handles is simulated, and is always labelled so.
-pub(crate) fn stake_text(stake: Money) -> String {
-    format!("{} (simulated)", display_usdc(stake))
+/// Every stake is labelled with where its funds live.
+pub(crate) fn stake_text(stake: Money, env: Env) -> String {
+    match env {
+        Env::Simulated => format!("{} (simulated)", display_usdc(stake)),
+        Env::ArcTestnet => format!("{} (Arc testnet USDC)", display_usdc(stake)),
+    }
 }
 
-fn ts(secs: i64) -> Result<DateTime<Utc>, ApiError> {
+pub(crate) fn ts(secs: i64) -> Result<DateTime<Utc>, ApiError> {
     DateTime::from_timestamp(secs, 0).ok_or_else(|| ApiError::internal("timestamp out of range"))
 }
 
-async fn names(
+pub(crate) async fn names(
     conn: &mut PgConnection,
     row: &InteractionRow,
 ) -> Result<(String, String), ApiError> {
@@ -471,6 +521,83 @@ async fn cancel(
 }
 
 // ---------------------------------------------------------------------------
+// Approach
+// ---------------------------------------------------------------------------
+
+fn miss_text(misses: &[MissReason]) -> String {
+    misses
+        .iter()
+        .map(|m| match m {
+            MissReason::Category => "category",
+            MissReason::Subcategory => "subcategory",
+            MissReason::Structure => "market structure",
+            MissReason::Keyword => "keywords",
+            MissReason::Symbol => "asset",
+            MissReason::MoveBps => "price move",
+            MissReason::YesPriceBps => "YES price",
+            MissReason::ExpirySecs => "time to expiry",
+            MissReason::VolumeDelta24hBps => "24h volume change",
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Interactions the agent is in that are not finished.
+async fn open_interactions(conn: &mut PgConnection, agent: Uuid) -> Result<i64, ApiError> {
+    Ok(sqlx::query_scalar(
+        "SELECT COUNT(*) FROM interactions WHERE (proposer_id = $1 OR counterparty_id = $1) \
+         AND state IN ('proposed', 'negotiating', 'accepted', 'awaiting_approval', 'funded', \
+                       'active', 'resolving')",
+    )
+    .bind(agent)
+    .fetch_one(conn)
+    .await?)
+}
+
+/// With an approach node: a proposal below the approach's minimum conviction
+/// is dropped (returns the activity to record), and a stake above the
+/// approach's stake target is lowered to it. Explicit `cond.*` blocks have
+/// already applied; `authorize` still applies afterwards.
+fn apply_approach_sizing(
+    agent: &AgentRec,
+    approach: Option<&Approach>,
+    result: &mut RunResult,
+) -> Option<(String, Value)> {
+    let approach = approach?;
+    if result.error.is_some() {
+        return None;
+    }
+    let conviction = result.conviction_bps;
+    let min = approach.min_conviction_bps();
+    let index = result
+        .intents
+        .iter()
+        .position(|p| matches!(p.intent, Intent::ProposeChallenge { .. }))?;
+    if conviction.is_some_and(|c| c < min) {
+        result.intents.remove(index);
+        return Some((
+            format!(
+                "\"{}\" passed on an opportunity: its conviction is below the {} its approach \
+                 asks for.",
+                agent.name,
+                crate::models::display_bps(i64::from(min))
+            ),
+            json!({ "reason": "min_conviction", "conviction_bps": conviction, "min_bps": min }),
+        ));
+    }
+    let target = approach.stake_target(agent.policy.max_per_interaction);
+    let planned = &mut result.intents[index];
+    if let Some(terms) = planned.terms.as_mut()
+        && terms.stake > target
+        && !target.is_zero()
+    {
+        terms.stake = target;
+        planned.intent = Intent::ProposeChallenge { stake: target };
+    }
+    None
+}
+
+// ---------------------------------------------------------------------------
 // Tick
 // ---------------------------------------------------------------------------
 
@@ -483,17 +610,26 @@ pub async fn tick(state: &AppState, now: DateTime<Utc>) -> Result<TickReport, Ap
         ..TickReport::default()
     };
     let pool = &state.pool;
+    // Rows are selected with the later of the two clocks and each step
+    // re-checks with its interaction's own clock (`clock_for`), so arc_testnet
+    // interactions follow the wall clock whatever the dev tick says.
+    let select_now = now.max(Utc::now());
 
     for id in ids(
         pool,
         "SELECT id FROM interactions WHERE state IN ('proposed', 'negotiating', 'accepted', \
          'awaiting_approval') AND start_ts <= $1 ORDER BY created_at, id",
-        Some(now),
+        Some(select_now),
     )
     .await?
     {
         step(&mut report, expire_one(state, id, now).await);
     }
+
+    // Firms: agents open to membership join before anyone discovers, so a
+    // new scout can work in the same tick.
+    let joined = crate::firms::auto_join_phase(state, now, &mut report).await;
+    step(&mut report, joined);
 
     for id in ids(
         pool,
@@ -530,11 +666,14 @@ pub async fn tick(state: &AppState, now: DateTime<Utc>) -> Result<TickReport, Ap
         step(&mut report, outcome);
     }
 
+    // Arc testnet: stake funded challenges into the escrow.
+    crate::lifecycle_arc::fund_phase(state, &mut report).await?;
+
     for id in ids(
         pool,
         "SELECT id FROM interactions WHERE state = 'active' AND end_ts <= $1 \
          ORDER BY created_at, id",
-        Some(now),
+        Some(select_now),
     )
     .await?
     {
@@ -544,7 +683,8 @@ pub async fn tick(state: &AppState, now: DateTime<Utc>) -> Result<TickReport, Ap
 
     for id in ids(
         pool,
-        "SELECT id FROM interactions WHERE state = 'resolving' ORDER BY created_at, id",
+        "SELECT id FROM interactions WHERE state = 'resolving' AND env = 'simulated' \
+         ORDER BY created_at, id",
         None,
     )
     .await?
@@ -552,6 +692,9 @@ pub async fn tick(state: &AppState, now: DateTime<Utc>) -> Result<TickReport, Ap
         let outcome = resolve_one(state, id, now, &mut report).await;
         step(&mut report, outcome);
     }
+
+    // Arc testnet: resolve onchain, settle the ledger, release the vaults.
+    crate::lifecycle_arc::resolve_phase(state, &mut report).await?;
 
     // Last, and read-only as far as funds and interactions go: the rule-based
     // co-captain looks at what the tick left behind. No model call here.
@@ -563,13 +706,17 @@ pub async fn tick(state: &AppState, now: DateTime<Utc>) -> Result<TickReport, Ap
     Ok(report)
 }
 
-fn step(report: &mut TickReport, outcome: Result<(), ApiError>) {
+pub(crate) fn step(report: &mut TickReport, outcome: Result<(), ApiError>) {
     if let Err(e) = outcome {
         report.errors.push(format!("{}: {}", e.code, e.message));
     }
 }
 
-async fn ids(pool: &PgPool, sql: &str, now: Option<DateTime<Utc>>) -> Result<Vec<Uuid>, ApiError> {
+pub(crate) async fn ids(
+    pool: &PgPool,
+    sql: &str,
+    now: Option<DateTime<Utc>>,
+) -> Result<Vec<Uuid>, ApiError> {
     let query = sqlx::query_scalar(sqlx::AssertSqlSafe(sql.to_owned()));
     let query = match now {
         Some(now) => query.bind(now),
@@ -587,6 +734,7 @@ async fn expire_one(state: &AppState, id: Uuid, now: DateTime<Utc>) -> Result<()
     let Some(mut row) = lock_interaction(&mut tx, id).await? else {
         return Ok(());
     };
+    let now = clock_for(&row.env, now);
     let current = row.state()?;
     let unfunded = matches!(
         current,
@@ -726,8 +874,24 @@ async fn discover_one(
     let Some(agent) = load_agent(&mut conn, agent_id).await? else {
         return Ok(());
     };
-    // Nothing to stake, or not allowed to act: do not even reason.
-    if agent.snapshot.status != AgentStatus::Active || agent.snapshot.available.is_zero() {
+    let now = clock_for(agent.env.as_str(), now);
+    // Not allowed to act: do not even reason. A vault agent does not propose
+    // while this server has no chain access.
+    if agent.snapshot.status != AgentStatus::Active
+        || (agent.env == Env::ArcTestnet && state.chain.is_none())
+    {
+        return Ok(());
+    }
+    // A firm scout works without funds of its own; anyone else with nothing
+    // to stake does not reason.
+    let scouting = match agent.env {
+        Env::Simulated => match crate::firms::membership(&mut conn, agent.id).await? {
+            Some((firm, MemberRole::Scout)) => Some(firm),
+            _ => None,
+        },
+        Env::ArcTestnet => None,
+    };
+    if agent.snapshot.available.is_zero() && scouting.is_none() {
         return Ok(());
     }
 
@@ -764,8 +928,30 @@ async fn discover_one(
         return Ok(());
     }
 
+    // The approach (docs/design/approach-and-firms.md): market filter and
+    // stance gates always apply (defaults are no-ops); the ambition-derived
+    // sizing (stake target, minimum conviction, open-deal cap) applies only
+    // when the graph has an `approach.profile` node (D-64).
+    let approach = Approach::from_graph(&agent.graph);
+    let effective = approach.clone().unwrap_or_default();
+    // A firm lead first consumes its scouts' best fresh candidate.
+    let led = if agent.env == Env::Simulated {
+        crate::firms::led_firm(&mut conn, agent.id).await?
+    } else {
+        None
+    };
+    let candidate = match &led {
+        Some(firm) => crate::firms::best_candidate(&mut conn, firm, now).await?,
+        None => None,
+    };
+    let candidate_id = candidate.as_ref().map(|(id, _)| *id);
+
     let min_expiry = now.timestamp() + settings.funding_window_secs + MIN_OPEN_AFTER_FUNDING_SECS;
-    let view = match market::discover(state.market.as_ref(), &symbol, window, min_expiry).await {
+    let discovered = match candidate {
+        Some((_, view)) => Ok(view),
+        None => market::discover(state.market.as_ref(), &symbol, window, min_expiry).await,
+    };
+    let view = match discovered {
         Ok(view) => view,
         Err(e) => {
             // Surfaced, never defaulted: without data the agent does nothing.
@@ -784,7 +970,38 @@ async fn discover_one(
             return Ok(());
         }
     };
-    if trigger == TRIGGER_MARKET_MOVE && view.move_bps.abs() < threshold_bps {
+    if candidate_id.is_none()
+        && trigger == TRIGGER_MARKET_MOVE
+        && view.move_bps.abs() < threshold_bps
+    {
+        return Ok(());
+    }
+    // Scout task: independent of the agent's own proposals.
+    if let Some(firm) = &scouting {
+        let outcome = crate::firms::scout(state, &agent, firm, &view, now, report).await;
+        step(report, outcome);
+    }
+    if agent.snapshot.available.is_zero() || !may_initiate_challenges(&effective.stance) {
+        return Ok(());
+    }
+    if let Err(misses) = market_matches(&effective.markets, &view.facts(now.timestamp())) {
+        record_once(
+            &mut conn,
+            agent.id,
+            "approach_filtered",
+            format!(
+                "\"{}\" skipped markets outside its approach ({}).",
+                agent.name,
+                miss_text(&misses)
+            ),
+            json!({ "market": view.market.key(), "title": view.title, "misses": misses }),
+        )
+        .await?;
+        return Ok(());
+    }
+    if let Some(a) = &approach
+        && open_interactions(&mut conn, agent.id).await? >= i64::from(a.max_open_interactions())
+    {
         return Ok(());
     }
     let market_key = view.market.key();
@@ -813,6 +1030,20 @@ async fn discover_one(
         },
     )
     .await;
+    let mut result = result;
+    let filtered = apply_approach_sizing(&agent, approach.as_ref(), &mut result);
+    // Analyst task: the firm's analysts review the lead's draft.
+    let draft = result
+        .intents
+        .iter()
+        .find(|p| matches!(p.intent, Intent::ProposeChallenge { .. }))
+        .and_then(|p| p.terms.clone());
+    let signals = match (&led, &draft) {
+        (Some(firm), Some(terms)) if result.error.is_none() => {
+            crate::firms::analyst_signals(state, firm, &view, terms, now, report).await?
+        }
+        _ => Vec::new(),
+    };
 
     let mut tx = state.pool.begin().await?;
     // One proposal is applied at a time, so two ticks cannot both create the
@@ -835,6 +1066,9 @@ async fn discover_one(
         now,
     )
     .await?;
+    if let Some((summary, detail)) = filtered {
+        record_once(&mut tx, agent.id, "approach_filtered", summary, detail).await?;
+    }
     if let Some(error) = &result.error {
         let (kind, summary) = match &result.code {
             Some(_) => (
@@ -885,6 +1119,33 @@ async fn discover_one(
         return Ok(());
     }
 
+    // The analyst gate (firm drafts only). Signals are recorded either way.
+    let mut used_contributions: Vec<Uuid> = candidate_id.into_iter().collect();
+    if let Some(firm) = &led
+        && !signals.is_empty()
+    {
+        let min = approach.as_ref().map_or(
+            agent.policy.min_conviction_bps,
+            Approach::min_conviction_bps,
+        );
+        let (ids, approved) = crate::firms::record_signals(
+            &mut tx,
+            firm,
+            &market_key,
+            &terms,
+            &signals,
+            min,
+            now,
+            report,
+        )
+        .await?;
+        if !approved {
+            tx.commit().await?;
+            return Ok(());
+        }
+        used_contributions.extend(ids);
+    }
+
     // The gate: a fresh snapshot, read in the transaction that applies it.
     let fresh = require_agent(&mut tx, agent.id).await?;
     let decision = authorize(&planned.intent, &fresh.policy, &fresh.snapshot, None);
@@ -896,7 +1157,7 @@ async fn discover_one(
             format!(
                 "\"{}\" wanted to stake {} on a challenge, but it was blocked: {}.",
                 agent.name,
-                stake_text(terms.stake),
+                stake_text(terms.stake, agent.env),
                 deny_text(reasons)
             ),
             json!({ "reasons": reasons, "run_id": run_id, "terms": terms }),
@@ -969,6 +1230,11 @@ async fn discover_one(
         .bind(id)
         .execute(&mut *tx)
         .await?;
+    // A firm challenge: the contributions that fed it are used (and earn
+    // their task fee).
+    if let Some(firm) = &led {
+        crate::firms::use_contributions(&mut tx, firm, id, &used_contributions).await?;
+    }
     let approval_note = if decision == Decision::RequireApproval || planned.ask_owner {
         " Its owner will be asked to approve the stake before funds are committed."
     } else {
@@ -985,11 +1251,12 @@ async fn discover_one(
             counterparty.name,
             claim_text(&terms, &view.title),
             ts(terms.end_ts)?.format("%Y-%m-%d %H:%M UTC"),
-            stake_text(terms.stake),
+            stake_text(terms.stake, fresh.env),
         ),
         json!({
             "terms": terms, "market_source": view.source, "fallback_reason": view.fallback_reason,
             "run_id": run_id, "resolution": "backend_administered",
+            "firm_id": led.as_ref().map(|f| f.id),
         }),
     )
     .await?;
@@ -1078,6 +1345,7 @@ async fn respond_one(
         .fetch_optional(&mut *conn)
         .await?;
     let Some(seen) = seen else { return Ok(()) };
+    let now = clock_for(&seen.env, now);
     let negotiating = |s: InteractionState| {
         matches!(
             s,
@@ -1098,7 +1366,25 @@ async fn respond_one(
     let view: MarketView = serde_json::from_value(seen.market_view.clone())
         .map_err(|e| ApiError::internal(format!("stored market view is unreadable: {e}")))?;
 
-    let result = if responder.snapshot.status == AgentStatus::Paused {
+    let outside_approach = market_matches(
+        &Approach::effective(&responder.graph).markets,
+        &view.facts(now.timestamp()),
+    )
+    .is_err();
+    let result = if outside_approach {
+        RunResult {
+            intents: vec![PlannedIntent {
+                intent: Intent::Reject,
+                terms: None,
+                ask_owner: false,
+                summary: "This market is outside my approach.".into(),
+            }],
+            trace: Vec::new(),
+            error: None,
+            code: None,
+            conviction_bps: None,
+        }
+    } else if responder.snapshot.status == AgentStatus::Paused {
         // A paused agent does not reason; the permission engine turns this
         // into a denial below.
         RunResult {
@@ -1111,6 +1397,7 @@ async fn respond_one(
             trace: Vec::new(),
             error: None,
             code: None,
+            conviction_bps: None,
         }
     } else {
         let own_flow = graph_exec::find_trigger(&responder.graph, TRIGGER_CHALLENGE_RECEIVED);
@@ -1277,7 +1564,7 @@ async fn respond_one(
                 format!(
                     "\"{me}\" accepted the challenge from \"{other_name}\": {}. Stake {} each.",
                     claim_text(&terms, &row.market_title),
-                    stake_text(terms.stake)
+                    stake_text(terms.stake, responder.env)
                 ),
                 json!({ "terms": terms, "run_id": run_id }),
             )
@@ -1355,7 +1642,7 @@ async fn respond_one(
                         "\"{me}\" made a counter-offer to \"{other_name}\": {}. Stake {} each \
                          (offer {} of {}).",
                         claim_text(&new_terms, &row.market_title),
-                        stake_text(new_terms.stake),
+                        stake_text(new_terms.stake, responder.env),
                         row.rounds + 1,
                         state.settings.max_negotiation_rounds
                     ),
@@ -1394,7 +1681,10 @@ async fn respond_one(
                     "\"{me}\" rejected the challenge from \"{other_name}\": {} No funds moved.",
                     planned.summary
                 ),
-                json!({ "run_id": run_id }),
+                json!({
+                    "run_id": run_id,
+                    "reason": outside_approach.then_some("outside_approach"),
+                }),
             )
             .await?;
             report.rejected += 1;
@@ -1472,17 +1762,33 @@ pub async fn try_commit(
     ) {
         return Ok(CommitOutcome::Skipped);
     }
+    let now = clock_for(&row.env, now);
     if row.start_ts <= now {
         expire_locked(conn, &mut row, now).await?;
         return Ok(CommitOutcome::Expired);
     }
-    let env: Env = row
-        .env
-        .parse()
-        .map_err(|()| ApiError::internal("unknown env"))?;
-    if env != Env::Simulated {
-        // On-chain funding needs the custody decision (D-3); refuse.
-        return Err(ApiError::internal("only simulated funds can be committed"));
+    let env = row.env()?;
+    if env == Env::ArcTestnet {
+        // Both sides must still be vault agents; the onchain stake itself
+        // happens in `lifecycle_arc` after this ledger reservation.
+        let vaults: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM agents WHERE id = ANY($1) AND env = 'arc_testnet' \
+             AND vault_address IS NOT NULL",
+        )
+        .bind(vec![row.proposer_id, row.counterparty_id])
+        .fetch_one(&mut *conn)
+        .await?;
+        if vaults != 2 {
+            cancel(
+                conn,
+                &mut row,
+                "Stakes could not be committed: both agents need a linked Arc testnet vault.",
+                "superseded",
+                now,
+            )
+            .await?;
+            return Ok(CommitOutcome::Denied);
+        }
     }
     let stake = row.stake()?;
     let (a_name, b_name) = names(conn, &row).await?;
@@ -1541,7 +1847,7 @@ pub async fn try_commit(
                     "\"{}\" was not allowed to commit {} to its challenge: {}. The challenge \
                      between \"{a_name}\" and \"{b_name}\" was cancelled; no funds moved.",
                     rec.name,
-                    stake_text(stake),
+                    stake_text(stake, env),
                     deny_text(reasons)
                 ),
                 json!({ "reasons": reasons, "stake": stake }),
@@ -1595,7 +1901,7 @@ pub async fn try_commit(
                     format!(
                         "\"{}\" needs your approval to commit {} to a challenge. {reason}",
                         rec.name,
-                        stake_text(stake)
+                        stake_text(stake, env)
                     ),
                     json!({ "stake": stake }),
                 )
@@ -1627,6 +1933,25 @@ pub async fn try_commit(
         ledger_db::post(conn, &set).await?;
     }
     set_state(conn, &mut row, InteractionState::Funded, None, now).await?;
+    if env == Env::ArcTestnet {
+        // Reserved in the ledger; `lifecycle_arc` stakes both vaults into the
+        // escrow and moves the challenge to Active once the escrow says so.
+        record(
+            conn,
+            Some(row.proposer_id),
+            Some(id),
+            "stake_reserved",
+            format!(
+                "\"{a_name}\" and \"{b_name}\" each reserved {} for their challenge. Both \
+                 vaults will now stake it into the Arc testnet escrow before {}.",
+                stake_text(stake, env),
+                row.start_ts.format("%Y-%m-%d %H:%M:%S UTC")
+            ),
+            json!({ "stake": stake, "env": env }),
+        )
+        .await?;
+        return Ok(CommitOutcome::Funded);
+    }
     set_state(conn, &mut row, InteractionState::Active, None, now).await?;
     let terms = row.terms()?;
     for (agent, name, side) in [
@@ -1641,7 +1966,7 @@ pub async fn try_commit(
             format!(
                 "\"{name}\" committed {} to its challenge and holds \"{} {}\". The challenge is \
                  active until {}.",
-                stake_text(stake),
+                stake_text(stake, env),
                 side_phrase(side),
                 format_value(terms.formula, terms.threshold),
                 row.end_ts.format("%Y-%m-%d %H:%M UTC")
@@ -1707,7 +2032,7 @@ pub async fn decide_approval(
         .bind(agent_id)
         .fetch_one(&mut *tx)
         .await?;
-    let stake = stake_text(row.stake()?);
+    let stake = stake_text(row.stake()?, row.env()?);
     sqlx::query("UPDATE approvals SET status = $2, decided_at = $3 WHERE id = $1")
         .bind(approval_id)
         .bind(if approve { "approved" } else { "rejected" })
@@ -1766,6 +2091,7 @@ async fn start_resolving(
     let Some(mut row) = lock_interaction(&mut tx, id).await? else {
         return Ok(());
     };
+    let now = clock_for(&row.env, now);
     if row.state()? != InteractionState::Active || row.end_ts > now {
         return Ok(());
     }
@@ -1825,22 +2151,39 @@ pub async fn settle_locked(
     if row.state()? != InteractionState::Resolving {
         return Ok(None);
     }
-    let terms = row.terms()?;
-    let stake = row.stake()?;
-    let env: Env = row
-        .env
-        .parse()
-        .map_err(|()| ApiError::internal("unknown env"))?;
-    let (a_name, b_name) = names(conn, &row).await?;
-    // Same agent locks, in the same order, as `try_commit`: everything that
-    // moves an agent's stake is serialized per agent.
-    let mut parties = [row.proposer_id, row.counterparty_id];
-    parties.sort();
-    for agent in parties {
-        advisory_lock(conn, &format!("aen:agent:{agent}")).await?;
-    }
+    let names = names(conn, &row).await?;
+    let Some(decided) = decide_outcome(conn, settings, &row, &observation, &names, now).await?
+    else {
+        return Ok(None);
+    };
+    apply_outcome(conn, &mut row, &decided, &names, None, now).await
+}
 
-    let (outcome, void_reason) = match &observation {
+/// What the market data says about a `Resolving` challenge. Kept as JSON in
+/// `interactions.pending_outcome` while an onchain call is retried.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+pub(crate) struct Decided {
+    pub outcome: Outcome,
+    /// Why the challenge is void (empty unless `outcome` is `Void`).
+    pub void_reason: String,
+    pub observed: i64,
+    pub source: String,
+    pub detail: String,
+}
+
+/// Decides the outcome from one observation. `None` means wait: market data
+/// is missing and the grace period has not ended (the delay is recorded once).
+/// The caller holds the row lock.
+pub(crate) async fn decide_outcome(
+    conn: &mut PgConnection,
+    settings: &Settings,
+    row: &InteractionRow,
+    observation: &Result<market::Observation, market::MarketError>,
+    (a_name, b_name): &(String, String),
+    now: DateTime<Utc>,
+) -> Result<Option<Decided>, ApiError> {
+    let terms = row.terms()?;
+    let (outcome, void_reason) = match observation {
         Ok(obs) => match resolve(&terms, Some(obs.value)) {
             Outcome::Void => (
                 Outcome::Void,
@@ -1856,7 +2199,7 @@ pub async fn settle_locked(
                     "UPDATE interactions SET resolve_attempts = resolve_attempts + 1, \
                      status_reason = $2, updated_at = $3 WHERE id = $1",
                 )
-                .bind(id)
+                .bind(row.id)
                 .bind(format!("Waiting for market data: {e}"))
                 .bind(now)
                 .execute(&mut *conn)
@@ -1865,7 +2208,7 @@ pub async fn settle_locked(
                     record(
                         conn,
                         Some(row.proposer_id),
-                        Some(id),
+                        Some(row.id),
                         "resolution_delayed",
                         format!(
                             "The challenge between \"{a_name}\" and \"{b_name}\" could not be \
@@ -1885,28 +2228,63 @@ pub async fn settle_locked(
             )
         }
     };
+    let obs = observation.as_ref().ok();
+    Ok(Some(Decided {
+        outcome,
+        void_reason,
+        observed: obs.map(|o| o.value).unwrap_or_default(),
+        source: obs.map(|o| o.source.to_owned()).unwrap_or_default(),
+        detail: obs.map(|o| o.detail.clone()).unwrap_or_default(),
+    }))
+}
 
-    let (winner, loser) = match outcome {
+/// Posts the decided outcome to the ledger and closes the interaction. The
+/// caller holds the row lock and has checked it is `Resolving`. `tx_hash` is
+/// the escrow transaction that already moved the funds onchain, if any.
+pub(crate) async fn apply_outcome(
+    conn: &mut PgConnection,
+    row: &mut InteractionRow,
+    decided: &Decided,
+    (a_name, b_name): &(String, String),
+    tx_hash: Option<&str>,
+    now: DateTime<Utc>,
+) -> Result<Option<Outcome>, ApiError> {
+    let id = row.id;
+    let terms = row.terms()?;
+    let stake = row.stake()?;
+    let env = row.env()?;
+    // Same agent locks, in the same order, as `try_commit`: everything that
+    // moves an agent's stake is serialized per agent.
+    let mut parties = [row.proposer_id, row.counterparty_id];
+    parties.sort();
+    for agent in parties {
+        advisory_lock(conn, &format!("aen:agent:{agent}")).await?;
+    }
+    let with_tx = |set: ledger::PostingSet| match tx_hash {
+        Some(tx) => set.with_tx_hash(tx),
+        None => set,
+    };
+    let onchain = if env == Env::ArcTestnet {
+        " Funds moved onchain through the Arc testnet escrow."
+    } else {
+        ""
+    };
+
+    let (winner, loser) = match decided.outcome {
         Outcome::A => (row.proposer_id, row.counterparty_id),
         Outcome::B => (row.counterparty_id, row.proposer_id),
         Outcome::Void => {
             for agent in [row.proposer_id, row.counterparty_id] {
-                ledger_db::post(conn, &ledger::refund(env, agent, id, stake)?).await?;
+                ledger_db::post(conn, &with_tx(ledger::refund(env, agent, id, stake)?)).await?;
             }
             sqlx::query("UPDATE interactions SET outcome = 'void' WHERE id = $1")
                 .bind(id)
                 .execute(&mut *conn)
                 .await?;
+            let void_reason = &decided.void_reason;
             let reason = format!("Voided: {void_reason}. Both stakes were refunded.");
-            set_state(
-                conn,
-                &mut row,
-                InteractionState::Cancelled,
-                Some(&reason),
-                now,
-            )
-            .await?;
-            for (agent, name) in [(row.proposer_id, &a_name), (row.counterparty_id, &b_name)] {
+            set_state(conn, row, InteractionState::Cancelled, Some(&reason), now).await?;
+            for (agent, name) in [(row.proposer_id, a_name), (row.counterparty_id, b_name)] {
                 record(
                     conn,
                     Some(agent),
@@ -1914,10 +2292,10 @@ pub async fn settle_locked(
                     "challenge_voided",
                     format!(
                         "The challenge between \"{a_name}\" and \"{b_name}\" was voided: \
-                         {void_reason}. {} was refunded to \"{name}\".",
-                        stake_text(stake)
+                         {void_reason}. {} was refunded to \"{name}\".{onchain}",
+                        stake_text(stake, env)
                     ),
-                    json!({ "refund": stake, "env": env }),
+                    json!({ "refund": stake, "env": env, "tx_hash": tx_hash }),
                 )
                 .await?;
             }
@@ -1925,19 +2303,27 @@ pub async fn settle_locked(
         }
     };
 
-    let observed = observation.as_ref().map(|o| o.value).unwrap_or_default();
-    let source = observation.as_ref().map(|o| o.source).unwrap_or_default();
-    let detail = observation
-        .as_ref()
-        .map(|o| o.detail.clone())
-        .unwrap_or_default();
-    ledger_db::post(conn, &ledger::settle(env, id, winner, loser, stake)?).await?;
+    let Decided {
+        observed,
+        source,
+        detail,
+        ..
+    } = decided;
+    ledger_db::post(
+        conn,
+        &with_tx(ledger::settle(env, id, winner, loser, stake)?),
+    )
+    .await?;
     sqlx::query(
         "UPDATE interactions SET outcome = $2, winner_id = $3, observed = $4, observed_at = $5, \
          settled_at = $5 WHERE id = $1",
     )
     .bind(id)
-    .bind(if outcome == Outcome::A { "a" } else { "b" })
+    .bind(if decided.outcome == Outcome::A {
+        "a"
+    } else {
+        "b"
+    })
     .bind(winner)
     .bind(observed)
     .bind(now)
@@ -1945,21 +2331,14 @@ pub async fn settle_locked(
     .await?;
     let reason = format!(
         "Observed {} from {source} ({detail}); resolution is backend-administered.",
-        format_value(terms.formula, observed)
+        format_value(terms.formula, *observed)
     );
-    set_state(
-        conn,
-        &mut row,
-        InteractionState::Settled,
-        Some(&reason),
-        now,
-    )
-    .await?;
+    set_state(conn, row, InteractionState::Settled, Some(&reason), now).await?;
     let name_of = |agent: Uuid| {
         if agent == row.proposer_id {
-            &a_name
+            a_name
         } else {
-            &b_name
+            b_name
         }
     };
     for (agent, won) in [(winner, true), (loser, false)] {
@@ -1971,20 +2350,23 @@ pub async fn settle_locked(
             "challenge_settled",
             format!(
                 "\"{}\" {verb} its challenge against \"{}\": {} was observed at {} (threshold \
-                 {}). Realized P&L {sign}{}.",
+                 {}). Realized P&L {sign}{}.{onchain}",
                 name_of(agent),
                 name_of(if won { loser } else { winner }),
                 row.market_title,
-                format_value(terms.formula, observed),
+                format_value(terms.formula, *observed),
                 format_value(terms.formula, terms.threshold),
-                stake_text(stake)
+                stake_text(stake, env)
             ),
             json!({
-                "outcome": outcome, "winner_id": winner, "observed": observed, "source": source,
-                "stake": stake, "env": env, "resolution": "backend_administered",
+                "outcome": decided.outcome, "winner_id": winner, "observed": observed,
+                "source": source, "stake": stake, "env": env,
+                "resolution": "backend_administered", "tx_hash": tx_hash,
             }),
         )
         .await?;
     }
-    Ok(Some(outcome))
+    // A firm challenge: the lead shares a profit with its members.
+    crate::firms::pay_profit_share(conn, id).await?;
+    Ok(Some(decided.outcome))
 }

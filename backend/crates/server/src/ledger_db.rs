@@ -142,8 +142,8 @@ pub async fn post(conn: &mut PgConnection, set: &PostingSet) -> Result<PostOutco
         sqlx::query(
             "INSERT INTO ledger_entries \
              (env, idempotency_key, line, account, agent_id, delta, reason, interaction_id, \
-              collaboration_id) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+              collaboration_id, tx_hash) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
         )
         .bind(env)
         .bind(key)
@@ -154,6 +154,7 @@ pub async fn post(conn: &mut PgConnection, set: &PostingSet) -> Result<PostOutco
         .bind(set.reason().as_str())
         .bind(set.interaction_id())
         .bind(set.collaboration_id())
+        .bind(set.tx_hash())
         .execute(&mut *conn)
         .await?;
     }
@@ -220,6 +221,27 @@ pub async fn account_entries<'e>(
     .bind(env.as_str())
     .bind(account.to_string())
     .bind(ENTRY_LIMIT)
+    .fetch_all(ex)
+    .await?;
+    Ok(rows.into_iter().map(Into::into).collect())
+}
+
+/// One agent's lines of the sets written under the given idempotency keys in
+/// one env (so the counter-entry on `external` is left out), oldest first.
+pub async fn agent_entries_by_keys<'e>(
+    ex: impl PgExecutor<'e>,
+    env: Env,
+    agent_id: Uuid,
+    keys: &[String],
+) -> Result<Vec<LedgerEntry>, sqlx::Error> {
+    let rows: Vec<LedgerRow> = sqlx::query_as(
+        "SELECT id, ts, env, account, delta, reason, interaction_id, collaboration_id, tx_hash \
+         FROM ledger_entries WHERE env = $1 AND agent_id = $2 AND idempotency_key = ANY($3) \
+         ORDER BY seq",
+    )
+    .bind(env.as_str())
+    .bind(agent_id)
+    .bind(keys)
     .fetch_all(ex)
     .await?;
     Ok(rows.into_iter().map(Into::into).collect())
