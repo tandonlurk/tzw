@@ -26,7 +26,9 @@ Branch: `overnight-1118` (from `main` a2bcdcc, which now holds PRs #1–#3 via #
   - Baseline on 83f2658: `cargo test --workspace` 388 passed, 1 ignored; `npm test` 112 passed (16 files), `npm run build` OK; `forge test` 100 passed. Nothing to fix.
 - [x] 1. Fake market catalog: several fake markets (incl. a commodities/energy one, a non-crypto prediction market) so the market wheel demos offline with `MARKET_DATA=fake`. Tests. (TODO M3b, P1)
   - BTC + 6 fixed events / 14 contracts (ETH, WTI + natural gas = Commodities/Energy, gold, Fed, sports), D-66. +2 unit tests, preview/categories integration test rewritten; `cargo test --workspace` 390 passed, 1 ignored. HTTP check on a fresh db: categories/preview serve the catalog, simulated demo still +2.50/−2.50. Commit 87a974a.
-- [~] 2. Testnet gaps: record the vault release tx and its activity row; `/stats/portfolio` for `arc_testnet`; discovery threshold from bid/ask mid instead of a stale last trade. Tests on anvil first, then one live Arc run (≤5 USDC) per `backend/README.md` "Run against Arc testnet"; record tx hashes and drift. (TODO M3b, P1)
+- [x] 2. Testnet gaps: record the vault release tx and its activity row; `/stats/portfolio` for `arc_testnet`; discovery threshold from bid/ask mid instead of a stale last trade. Tests on anvil first, then one live Arc run (≤5 USDC) per `backend/README.md` "Run against Arc testnet"; record tx hashes and drift. (TODO M3b, P1)
+  - Code 4dd6a8f (D-67): release txs + `vault_released` rows, `/stats/portfolio?env=`, dashboard testnet panel, bid/ask mid. `cargo test --workspace` 391 passed, 1 ignored (anvil chain tests ran); web 112 passed, build OK.
+  - Live Arc run (1.25/side, ~0.088 USDC gas, funds withdrawn): settled, both release txs recorded, drift 0, testnet portfolio correct. Gemini PM API returned 500 all run, so discovery fell back to spot and the mid is NOT verified live; spot `last` was stale 17 min (tie → skeptic). Details + tx hashes: `reports/handoffs/2026-11-18-testnet-gaps.md`.
 - [ ] 3. Firm demo seed endpoint (`/api/dev/...`, dev-only like `seed-demo`) + README "Firm demo" section, using the script in `reports/handoffs/2026-11-18-approach-firms.md`. Integration test. (TODO M3b, P2)
 - [ ] 4. Starter templates with an approach node; rerun the simulated demo on a fresh db and update `docs/demo.md` numbers from the actual run. (TODO M3b, P2)
 - [ ] 5. Testnet demo script for recording the video: exact steps, expected screens, fallbacks if the RPC is slow. In `docs/demo.md` (testnet section). (TODO M6)
@@ -35,5 +37,7 @@ Branch: `overnight-1118` (from `main` a2bcdcc, which now holds PRs #1–#3 via #
 - [ ] 8. Stretch: web app sends `AEN_API_TOKEN` when configured (SEC-02 gap); then `docs/design/explainers-storyboard.md`, a storyboard only (what to animate: discovery, negotiation, escrow lock, resolution, firm payout). No animation code.
 
 ## Notes
+
+- Item 2: re-check the bid/ask mid live (read-only `/markets/preview`) if Gemini prediction markets answer again; item 6 or 7 can do it.
 
 ## Morning summary
