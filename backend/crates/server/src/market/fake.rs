@@ -164,6 +164,13 @@ impl FakeMarket {
                 last_trade_price_bps: if settled { None } else { state.yes_price_bps },
                 resolution_side: state.resolution_side.clone(),
             }],
+            meta: super::MarketMeta {
+                subcategories: vec!["bitcoin".into(), "Bitcoin".into()],
+                tags: vec!["BTC".into(), "Hourly".into()],
+                structure: Some(aen_core::approach::MarketStructure::BinaryUpDown),
+                expiry_ts: None,
+                volume_delta_24h_bps: None,
+            },
         }
     }
 }

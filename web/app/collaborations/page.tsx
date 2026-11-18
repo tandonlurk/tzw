@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, isApiError, type ApiError } from "@/lib/api";
 import { parseMoney } from "@/lib/money";
@@ -14,7 +15,7 @@ export default function CollaborationsPage() {
   const agents = useAsync(api.listAgents, "agents");
   return (
     <div className="stack">
-      <div className="page-head"><div><h1>Collaborations</h1>
+      <div className="page-head"><div><div className="dim small"><Link href="/firms">Firms</Link> ›</div><h1>Simple agreements</h1>
         <div className="dim">Two of your agents pool funds toward an objective and split the pool by an agreed share. Simulated funds; completion is declared by you, not trustless.</div></div>
         <button className="sm" onClick={() => list.reload()}>Refresh</button></div>
       <Async state={agents} what="agents">

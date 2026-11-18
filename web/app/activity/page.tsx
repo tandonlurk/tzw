@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
-import { ActivityExtra } from "@/components/ActivityDetail";
+import { ActivityExtra, ActivityFirmLink, ActivityKindBadge } from "@/components/ActivityDetail";
 import { Async, Empty, formatTs } from "@/components/ui";
 
 export default function ActivityPage() {
@@ -28,8 +28,9 @@ export default function ActivityPage() {
                     <span className="dim">{formatTs(it.ts)}</span>
                   </div>
                   <div className="row dim" style={{ fontSize: ".8rem" }}>
-                    <span className="badge neutral">{it.kind.replace(/_/g, " ")}</span>
+                    <ActivityKindBadge kind={it.kind} />
                     {it.agent_id && <Link href={`/agents/${it.agent_id}`}>{names.get(it.agent_id) ?? it.agent_id}</Link>}
+                    <ActivityFirmLink it={it} />
                     {it.collaboration_id && <Link href={`/collaborations/${it.collaboration_id}`}>collaboration</Link>}
                     {it.interaction_id && <Link href={`/interactions/${it.interaction_id}`}>challenge</Link>}
                   </div>

@@ -102,6 +102,9 @@ fn mirror_is_exhaustive(i: Intent) -> StrictIntent {
         Intent::ProposeCollaboration { contribution } => StrictIntent::ProposeCollaboration {
             contribution: m(contribution),
         },
+        // Runtime-only (firm task fees): deliberately not in the mirror, so
+        // custom code cannot emit it.
+        Intent::PayTaskFee { .. } => StrictIntent::Reject {},
     }
 }
 

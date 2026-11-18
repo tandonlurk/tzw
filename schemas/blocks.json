@@ -439,5 +439,191 @@
       "type": "object"
     },
     "type": "custom.code"
+  },
+  {
+    "description": "How this agent goes at the market: competitive or collaborative, cautious or ambitious, and which markets it looks at. Settings only: it has no ports and is not part of the flow. Every field is optional (defaults: collaboration 30%, ambition 50%, no firm role, any market). It narrows what the agent does; the agent's policy is always enforced separately.",
+    "inputs": [],
+    "kind": "approach",
+    "label": "Approach",
+    "outputs": [],
+    "params_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "firm_role": {
+          "enum": [
+            "none",
+            "member",
+            "lead"
+          ],
+          "type": "string"
+        },
+        "markets": {
+          "additionalProperties": false,
+          "properties": {
+            "categories": {
+              "items": {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 20,
+              "type": "array"
+            },
+            "keywords": {
+              "items": {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 20,
+              "type": "array"
+            },
+            "ranges": {
+              "additionalProperties": false,
+              "properties": {
+                "expiry_secs": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "max": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "min": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [],
+                  "type": "object"
+                },
+                "move_bps": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "max": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "min": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [],
+                  "type": "object"
+                },
+                "volume_delta_24h_bps": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "max": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "min": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [],
+                  "type": "object"
+                },
+                "yes_price_bps": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "max": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "min": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "required": [],
+              "type": "object"
+            },
+            "scope": {
+              "enum": [
+                "any",
+                "structure",
+                "specific"
+              ],
+              "type": "string"
+            },
+            "structures": {
+              "items": {
+                "enum": [
+                  "binary_up_down",
+                  "price_ladder",
+                  "categorical"
+                ],
+                "type": "string"
+              },
+              "maxItems": 3,
+              "type": "array"
+            },
+            "subcategories": {
+              "items": {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 20,
+              "type": "array"
+            },
+            "symbols": {
+              "items": {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 20,
+              "type": "array"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "stance": {
+          "additionalProperties": false,
+          "properties": {
+            "ambition_bps": {
+              "maximum": 10000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "collaboration_bps": {
+              "maximum": 10000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [],
+          "type": "object"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "type": "approach.profile"
   }
 ]

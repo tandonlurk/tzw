@@ -31,6 +31,13 @@ pub enum Intent {
     ProposeCollaboration {
         contribution: Money,
     },
+    /// A firm lead pays a member's task fee (a transfer, not a stake): not
+    /// tied to an interaction type or state and adds no exposure, but must
+    /// fit `max_per_interaction` and the available balance. Fees above the
+    /// approval threshold are not paid automatically.
+    PayTaskFee {
+        fee: Money,
+    },
 }
 
 impl Intent {
@@ -42,11 +49,18 @@ impl Intent {
             | Intent::CounterOffer { stake }
             | Intent::CommitFunds { stake, .. } => Some(stake),
             Intent::ProposeCollaboration { contribution } => Some(contribution),
+            Intent::PayTaskFee { fee } => Some(fee),
             Intent::Reject => None,
         }
     }
 
-    /// `None` for `Reject`, which applies to any interaction type.
+    /// Whether the amount is put at risk (counts against aggregate exposure).
+    pub const fn adds_exposure(&self) -> bool {
+        !matches!(self, Intent::PayTaskFee { .. } | Intent::Reject)
+    }
+
+    /// `None` for `Reject` and `PayTaskFee`, which apply to any interaction
+    /// type.
     pub const fn interaction_type(&self) -> Option<InteractionType> {
         match *self {
             Intent::ProposeChallenge { .. }
@@ -56,7 +70,7 @@ impl Intent {
             Intent::CommitFunds {
                 interaction_type, ..
             } => Some(interaction_type),
-            Intent::Reject => None,
+            Intent::Reject | Intent::PayTaskFee { .. } => None,
         }
     }
 
@@ -72,6 +86,7 @@ impl Intent {
                 matches!(state, Some(Proposed | Negotiating))
             }
             Intent::CommitFunds { .. } => matches!(state, Some(Accepted | AwaitingApproval)),
+            Intent::PayTaskFee { .. } => true,
         }
     }
 }
@@ -161,12 +176,14 @@ pub fn authorize(
         if stake > policy.max_per_interaction {
             reasons.push(DenyReason::ExceedsMaxPerInteraction);
         }
-        match snapshot.exposure.checked_add(stake) {
-            None => reasons.push(DenyReason::AmountOverflow),
-            Some(total) if total > policy.max_aggregate_exposure => {
-                reasons.push(DenyReason::ExceedsAggregateExposure);
+        if intent.adds_exposure() {
+            match snapshot.exposure.checked_add(stake) {
+                None => reasons.push(DenyReason::AmountOverflow),
+                Some(total) if total > policy.max_aggregate_exposure => {
+                    reasons.push(DenyReason::ExceedsAggregateExposure);
+                }
+                Some(_) => {}
             }
-            Some(_) => {}
         }
         if stake > snapshot.available {
             reasons.push(DenyReason::InsufficientAvailableBalance);
@@ -559,5 +576,50 @@ mod tests {
         // A numeric stake (e.g. from an LLM) is not accepted.
         let bad = serde_json::json!({"type": "propose_challenge", "stake": 10});
         assert!(serde_json::from_value::<Intent>(bad).is_err());
+    }
+
+    #[test]
+    fn task_fee_is_a_payment_not_a_stake() {
+        let fee = |n| Intent::PayTaskFee { fee: m(n) };
+        let full = Snapshot {
+            exposure: m(300),
+            ..snapshot()
+        };
+        // Full exposure does not block a fee; any state is fine.
+        assert_eq!(authorize(&fee(10), &policy(), &full, None), Decision::Allow);
+        assert_eq!(
+            authorize(&fee(10), &policy(), &full, Some(Settled)),
+            Decision::Allow
+        );
+        assert_eq!(
+            authorize(&fee(51), &policy(), &snapshot(), None),
+            Decision::RequireApproval
+        );
+        assert_eq!(
+            authorize(&fee(101), &policy(), &snapshot(), None),
+            deny(&[ExceedsMaxPerInteraction])
+        );
+        let poor = Snapshot {
+            available: m(5),
+            ..snapshot()
+        };
+        assert_eq!(
+            authorize(&fee(6), &policy(), &poor, None),
+            deny(&[InsufficientAvailableBalance])
+        );
+        assert_eq!(
+            authorize(&fee(0), &policy(), &snapshot(), None),
+            deny(&[ZeroAmount])
+        );
+        let paused = Snapshot {
+            status: AgentStatus::Paused,
+            ..snapshot()
+        };
+        assert_eq!(
+            authorize(&fee(1), &policy(), &paused, None),
+            deny(&[AgentPaused])
+        );
+        assert!(!fee(1).adds_exposure());
+        assert!(propose(1).adds_exposure());
     }
 }

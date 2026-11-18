@@ -12,7 +12,12 @@ Lead-owned. `TODO.md` is the user-facing list; this file holds status detail, ri
 
 Token discipline: read sections, not whole files; delegate web research and bulk implementation to subagents (cheaper model for routine work) with reports capped at ~200 words; keep facts in `docs/`, not in conversation.
 
-## Status (2026-11-17, Tue)
+## Status (2026-11-17, Tue evening) — current
+
+- Phase: **Arc testnet live + approach block + firms done; owner reviewing.** Stacked PRs, merge in order: #1 `chain-vaults`→`main`, #2 `arc-lifecycle`, #3 `approach-firms`. After the owner merges, sync with `git fetch && git checkout main && git pull` before starting work. Done: contracts deployed and verified on Arc (D-60/61), chain wired into the lifecycle (D-63), wallet UI (D-62, not yet tried with MetaMask), live Arc run on real Gemini data settled with drift 0, approach block + firms (D-64/65). Tests: backend 388 (1 ignored), web 112. Live state and next actions: `reports/handoffs/2026-11-18-approach-firms.md`; open items: `TODO.md` "M3b" and "Notes from owner".
+- Review database `aen_review` (copy of the firm demo) exists for re-running the review server; no server is running.
+
+## Status (2026-11-17, Tue morning) — historical
 
 - Phase: **onchain custody started (PR #1, branch `chain-vaults`).** D-57 owner decision: per-agent `AgentVault`s owned by the owner's browser wallet. Done: vault + factory contracts (contracts 100 tests), `aen-chain` crate with anvil lifecycle test. Not done: Arc deploy (blocked on faucet funds, owner action in `TODO.md` "Start here"), lifecycle wiring, vault endpoints, autonomous-run tooling, wallet UI. Plan + diagram: `reports/handoffs/2026-11-17-chain-vaults.md`.
 

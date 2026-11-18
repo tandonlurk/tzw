@@ -14,8 +14,9 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
   1. [x] Smoke run on Arc passed (D-61); `resolver()` reverted because the getter is `RESOLVER()`
   2. [x] Verified escrow, factory and AgentVault on Blockscout (D-61)
   3. [x] Chain wired into the lifecycle (D-63) and browser wallet UI built (D-62); live Arc run settled with drift 0 (`reports/handoffs/2026-11-17-arc-live-run.md`)
-  5. [ ] **You:** try the wallet UI with MetaMask on Arc Testnet (create a vault for an agent, allocate, withdraw). Run instructions: `backend/README.md` "Run against Arc testnet"
   4. [x] Committed the doc edits on `chain-vaults` (2f03581). Open PR: https://github.com/tandonlurk/tzw/pull/1
+  5. [ ] **You:** merge the stacked PRs in order #1 → #2 → #3; review the approach wheels and Firms pages (PR #3), and confirm D-65 (80/20 reading, task fee as the "guarantee")
+  6. [ ] **You:** try the wallet UI with MetaMask on Arc Testnet (create a vault for an agent, allocate, withdraw). Run instructions: `backend/README.md` "Run against Arc testnet"
 
 ## Needs you (review list)
 
@@ -64,10 +65,19 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [x] Visual logic builder: add/connect/delete blocks, incompatible connections rejected, validate, save with positions; browser-tested (frontend, P0)
 - [x] Agent detail + config/policy editing: version history with diffs, per-agent activity, "Saved as version N", 422 inline, config version on decision traces; browser-verified 2026-11-16 (frontend, P0)
 
+## M3b — Approach block and firms (Tue Nov 17, owner request)
+
+- [?] Approach block: stance wheel (competitive ↔ collaborative, cautious ↔ ambitious, firm role) + market wheel (any → category → subcategory, structure, keywords, symbols, ranges) with live preview; backend gates discovery and incoming challenges; ambition sizes stakes when an approach node exists (D-64). Design: `docs/design/approach-and-firms.md`
+- [?] Firms: lead keeps 80%, scouts/analysts share 20% by role weight, optional task fee, losses on the lead; simulated only (D-64, D-65). E2E over HTTP + browser-checked against the real backend (`reports/handoffs/2026-11-18-approach-firms.md`)
+- [ ] Fake market catalog with several markets (incl. a commodities/energy one) so the market wheel demos offline; today fake mode has one BTC market (backend, P1)
+- [ ] Testnet run gaps: record vault release tx + activity; `/stats/portfolio` for `arc_testnet`; discovery threshold from bid/ask mid, not a stale last trade (backend, P1)
+- [ ] Firm demo seed endpoint + README firm demo (script exists in the handoff) (backend, P2)
+- [ ] Starter templates with an approach node (changes demo numbers, so recompute `docs/demo.md`) (backend, P2)
+
 ## M3 — Observability (Tue Nov 17)
 
 - [x] QuickNode Streams webhook ingestion, local only: HMAC + skew check, idempotent on (tx hash, log index), reorg-aware, fixture tests (D-49..D-51). Header names and payload shape UNVERIFIED until one real delivery; not exposed (backend, P1)
-- [~] Full lifecycle end to end on testnet: done on Arc with the fake market feed (`reports/handoffs/2026-11-17-arc-live-run.md`); repeat with real Gemini data (lead, P0)
+- [x] Full lifecycle end to end on testnet with real Gemini data: autonomous scheduler, Gemini settled `no`, drift 0 (`reports/handoffs/2026-11-17-testnet-gemini.md`) (lead, P0)
 - [x] Wallet overview, Activity view, approvals queue, interactions list/detail, Dashboard charts from `/stats/portfolio` only (per-agent P&L lines by default); 25 web tests. Browser-verified 2026-11-15 incl. reject, approve-then-cancelled notice, agent-detail challenges, template prefill (frontend, P0)
 - [x] Backend gaps from `reports/qa-m2-web.md`: summaries now readable ("5.00 USDC (simulated)"); approvals arise on the counterparty side by design; dev clock jumps past a funding deadline are refused with 409 (D-34) (backend, P1)
 - [x] Collaboration: agreement states, simulated payout split through ledger + `authorize` (D-46..D-48), list/detail/propose views, buttons from `actions`; browser-verified propose → accept → fund → complete and cancel 2026-11-16 (backend/frontend, P2)
@@ -102,4 +112,4 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 ## Notes from owner
 
-(write here)
+- 2026-11-17 — not started, think about only: after the UI redesign (owner, Wed night), the app still needs animated explainers. Most of the product happens in the background (discovery, negotiation, escrow lock, resolution, firm payouts); the user mostly sees agent performance summaries and a transaction/position log, so the hard parts (escrow above all) need visual explaining. Owner will look for Claude visual tools/skills on GitHub.
