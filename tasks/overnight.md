@@ -22,7 +22,7 @@ Branch: `overnight-1118` (from `main` a2bcdcc, which now holds PRs #1–#3 via #
 
 ## Items
 
-- [ ] 0. Preflight: `cargo test --workspace`, `cd web && npm test && npm run build`, `cd contracts && forge test`. Record baseline counts here. If something fails on a clean `main`, that is item 0's fix.
+- [~] 0. Preflight: `cargo test --workspace`, `cd web && npm test && npm run build`, `cd contracts && forge test`. Record baseline counts here. If something fails on a clean `main`, that is item 0's fix.
 - [ ] 1. Fake market catalog: several fake markets (incl. a commodities/energy one, a non-crypto prediction market) so the market wheel demos offline with `MARKET_DATA=fake`. Tests. (TODO M3b, P1)
 - [ ] 2. Testnet gaps: record the vault release tx and its activity row; `/stats/portfolio` for `arc_testnet`; discovery threshold from bid/ask mid instead of a stale last trade. Tests on anvil first, then one live Arc run (≤5 USDC) per `backend/README.md` "Run against Arc testnet"; record tx hashes and drift. (TODO M3b, P1)
 - [ ] 3. Firm demo seed endpoint (`/api/dev/...`, dev-only like `seed-demo`) + README "Firm demo" section, using the script in `reports/handoffs/2026-11-18-approach-firms.md`. Integration test. (TODO M3b, P2)
