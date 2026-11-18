@@ -1,4 +1,5 @@
 import type {
+  Env,
   ActivityItem,
   ApprovalDecision,
   Approval,
@@ -169,7 +170,8 @@ export const api = {
     post<Collaboration>(`/collaborations/${encodeURIComponent(id)}/cancel`, reason ? { reason } : {}),
   testRunCode: (agentId: string, source?: string) =>
     post<TestRun>(`/agents/${encodeURIComponent(agentId)}/code/test-run`, source === undefined ? {} : { source }),
-  getPortfolio: () => get<Portfolio>("/stats/portfolio"),
+  /** One environment per response; simulated and testnet funds are never summed. */
+  getPortfolio: (env: Env = "simulated") => get<Portfolio>(`/stats/portfolio?env=${env}`),
 
   getChain: () => get<ChainConfig>("/chain"),
   getVault: (agentId: string) => get<VaultView>(`/agents/${encodeURIComponent(agentId)}/vault`),

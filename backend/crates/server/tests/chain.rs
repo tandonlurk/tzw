@@ -503,6 +503,42 @@ async fn challenge_settles_onchain_and_the_ledger_matches_the_vaults() {
     ] {
         assert!(kinds.iter().any(|k| k == kind), "{kind} missing: {kinds:?}");
     }
+
+    // Both vault releases are recorded once, with a tx hash and activity.
+    let i = get(&c.app, &format!("/api/interactions/{id}")).await;
+    let releases = ["proposer_release_tx", "counterparty_release_tx"]
+        .map(|k| i["escrow"][k].as_str().unwrap_or_default().to_owned());
+    assert!(
+        releases
+            .iter()
+            .all(|t| t.len() == 66 && t.starts_with("0x")),
+        "{i}"
+    );
+    assert_ne!(releases[0], releases[1]);
+    assert_eq!(kinds.iter().filter(|k| *k == "vault_released").count(), 2);
+    let released: Vec<Value> = sqlx::query_scalar(
+        "SELECT detail FROM activity WHERE interaction_id = $1 AND kind = 'vault_released' \
+         ORDER BY seq",
+    )
+    .bind(id)
+    .fetch_all(&c.pool)
+    .await
+    .unwrap();
+    assert_eq!(released[0]["tx_hash"], releases[0].as_str());
+    assert_eq!(released[1]["tx_hash"], releases[1].as_str());
+    assert_eq!(released[0]["env"], "arc_testnet");
+
+    // The dashboard shows the testnet result when asked for that env only.
+    let arc = get(&c.app, "/api/stats/portfolio?env=arc_testnet").await;
+    assert_eq!(arc["env"], "arc_testnet");
+    assert_eq!(arc["outcomes"]["settled"], 1);
+    assert_eq!(arc["totals"]["realized_pnl"], "0"); // one owner, both sides
+    assert_eq!(arc["totals"]["committed"], "0");
+    assert_eq!(arc["pnl_over_time"].as_array().unwrap().len(), 2);
+    assert_eq!(arc["agents"].as_array().unwrap().len(), 2);
+    let sim = get(&c.app, "/api/stats/portfolio").await;
+    assert_eq!(sim["outcomes"]["settled"], 0);
+    assert!(sim["agents"].as_array().unwrap().is_empty());
 }
 
 #[tokio::test]

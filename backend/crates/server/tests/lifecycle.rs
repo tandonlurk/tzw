@@ -733,6 +733,20 @@ async fn settlement_pays_the_winner_and_keeps_the_ledger_balanced() {
         .unwrap();
     assert_eq!(winner["win_rate_bps"], 10_000);
 
+    // One environment per response: nothing simulated shows up as testnet.
+    assert_eq!(
+        get(&c.app, "/api/stats/portfolio?env=simulated").await["totals"],
+        portfolio["totals"]
+    );
+    let arc = get(&c.app, "/api/stats/portfolio?env=arc_testnet").await;
+    assert_eq!(arc["env"], "arc_testnet");
+    assert_eq!(arc["totals"]["allocated"], "0");
+    assert_eq!(arc["outcomes"]["settled"], 0);
+    assert!(arc["pnl_over_time"].as_array().unwrap().is_empty());
+    assert!(arc["agents"].as_array().unwrap().is_empty());
+    let (status, _) = send(&c.app, "GET", "/api/stats/portfolio?env=mainnet", None).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
     // A later tick changes nothing.
     let report = tick(&c, after_end(&c) + Duration::seconds(60)).await;
     assert_eq!(report.settled, 0);

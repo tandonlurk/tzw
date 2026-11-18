@@ -255,7 +255,7 @@ pub async fn preview(
                     subcategory: event.meta.subcategories.last().cloned(),
                     structure: event.meta.structure,
                     symbol: symbol.as_deref().map(base_symbol),
-                    yes_price_bps: contract.last_trade_price_bps,
+                    yes_price_bps: contract.quote_bps(),
                     move_bps: moved,
                     expiry_ts: contract.expiry_ts.or(event.expiry_ts),
                     volume_delta_24h_bps: event.meta.volume_delta_24h_bps,

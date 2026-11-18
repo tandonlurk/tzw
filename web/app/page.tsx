@@ -27,9 +27,11 @@ function byEnv(agents: Agent[]) {
 export default function Dashboard() {
   const agents = useAsync(api.listAgents, "agents");
   const wallet = useAsync(api.getWallet, "wallet");
-  const portfolio = useAsync(api.getPortfolio, "portfolio");
+  const portfolio = useAsync(() => api.getPortfolio("simulated"), "portfolio");
+  const arcPortfolio = useAsync(() => api.getPortfolio("arc_testnet"), "portfolio-arc");
+  const hasArc = agents.data?.some((a) => a.env === "arc_testnet") ?? false;
   const pending = useAsync(() => api.listSuggestions({ status: "pending" }), "pending-suggestions");
-  const reloadAll = () => { agents.reload(); wallet.reload(); portfolio.reload(); pending.reload(); };
+  const reloadAll = () => { agents.reload(); wallet.reload(); portfolio.reload(); arcPortfolio.reload(); pending.reload(); };
 
   return (
     <div>
@@ -47,6 +49,9 @@ export default function Dashboard() {
 
       <h2>Challenges and performance</h2>
       <Async state={portfolio} what="portfolio">{(p) => <PortfolioCharts p={p} />}</Async>
+      {hasArc && (
+        <Async state={arcPortfolio} what="testnet portfolio">{(p) => <PortfolioCharts p={p} />}</Async>
+      )}
 
       <h2>Wallet</h2>
       <Async state={wallet} what="wallet">

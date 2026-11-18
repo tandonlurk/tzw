@@ -157,7 +157,7 @@ pub fn contract_facts(
         tags: event.meta.tags.clone(),
         symbol: ticker_symbol(&event.ticker),
         move_bps,
-        yes_price_bps: contract.last_trade_price_bps,
+        yes_price_bps: contract.quote_bps(),
         expiry_secs: expiry.map(|t| t - now),
         volume_delta_24h_bps: event.meta.volume_delta_24h_bps,
     }
@@ -205,8 +205,26 @@ pub struct PmContract {
     /// `prices.lastTradePrice` in basis points of 1.00; absent when the
     /// contract has not traded or is settled.
     pub last_trade_price_bps: Option<i64>,
+    /// `prices.bestBid` / `prices.bestAsk` (YES side) in basis points; absent
+    /// when that side of the book is empty.
+    pub best_bid_bps: Option<i64>,
+    pub best_ask_bps: Option<i64>,
     /// `"yes"` or `"no"` once the contract is settled.
     pub resolution_side: Option<String>,
+}
+
+impl PmContract {
+    /// The YES price discovery and the approach filter use (D-67): the
+    /// bid/ask mid (rounded down) when both sides are quoted and the book is
+    /// not crossed, else the last trade. A last trade can be hours old on a
+    /// thin contract; the live book is the market's current price. Resolution
+    /// still reads the last trade (`PmYesPriceBpsV1`), unchanged.
+    pub fn quote_bps(&self) -> Option<i64> {
+        match (self.best_bid_bps, self.best_ask_bps) {
+            (Some(bid), Some(ask)) if bid <= ask => Some((bid + ask) / 2),
+            _ => self.last_trade_price_bps,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -342,7 +360,7 @@ pub async fn discover(
                     .contracts
                     .iter()
                     .filter(|c| c.status == "active" && c.resolution_side.is_none())
-                    .filter_map(|c| Some((c, c.last_trade_price_bps?)))
+                    .filter_map(|c| Some((c, c.quote_bps()?)))
                     .filter(|(_, p)| (MIN_OPEN_PRICE_BPS..=MAX_OPEN_PRICE_BPS).contains(p))
                     .min_by_key(|(c, p)| ((p - 5000).abs(), c.instrument_symbol.clone()))
                     .map(|(c, p)| (*event, c, p))
@@ -448,5 +466,52 @@ pub async fn observe(
         _ => Err(MarketError::NoData(
             "formula does not apply to this market".into(),
         )),
+    }
+}
+
+#[cfg(test)]
+mod quote_tests {
+    use super::PmContract;
+
+    fn contract(last: Option<i64>, bid: Option<i64>, ask: Option<i64>) -> PmContract {
+        PmContract {
+            instrument_symbol: "X".into(),
+            label: "X".into(),
+            status: "active".into(),
+            market_state: Some("open".into()),
+            expiry_ts: None,
+            last_trade_price_bps: last,
+            best_bid_bps: bid,
+            best_ask_bps: ask,
+            resolution_side: None,
+        }
+    }
+
+    #[test]
+    fn quote_prefers_the_book_mid_over_a_stale_last_trade() {
+        // The 2026-11-17 testnet run: last trade 0.14, book 0.34/0.41.
+        assert_eq!(
+            contract(Some(1400), Some(3400), Some(4100)).quote_bps(),
+            Some(3750)
+        );
+        // Rounded down.
+        assert_eq!(
+            contract(None, Some(5500), Some(5800)).quote_bps(),
+            Some(5650)
+        );
+        // One side missing, or a crossed book: the last trade (or nothing).
+        assert_eq!(
+            contract(Some(1400), Some(3400), None).quote_bps(),
+            Some(1400)
+        );
+        assert_eq!(
+            contract(Some(1400), None, Some(4100)).quote_bps(),
+            Some(1400)
+        );
+        assert_eq!(
+            contract(Some(1400), Some(4200), Some(4100)).quote_bps(),
+            Some(1400)
+        );
+        assert_eq!(contract(None, None, None).quote_bps(), None);
     }
 }

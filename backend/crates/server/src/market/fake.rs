@@ -137,6 +137,8 @@ impl Listing {
                     market_state: Some("open".into()),
                     expiry_ts: None,
                     last_trade_price_bps: Some(*price),
+                    best_bid_bps: None,
+                    best_ask_bps: None,
                     resolution_side: None,
                 })
                 .collect(),
@@ -320,6 +322,8 @@ impl FakeMarket {
                 market_state: Some(if settled { "closed" } else { "open" }.into()),
                 expiry_ts: None,
                 last_trade_price_bps: if settled { None } else { state.yes_price_bps },
+                best_bid_bps: None,
+                best_ask_bps: None,
                 resolution_side: state.resolution_side.clone(),
             }],
             meta: super::MarketMeta {

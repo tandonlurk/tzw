@@ -190,6 +190,10 @@ async fn save_tx(
             "UPDATE interactions SET counterparty_stake_tx = $2 WHERE id = $1"
         }
         "escrow_settle_tx" => "UPDATE interactions SET escrow_settle_tx = $2 WHERE id = $1",
+        "proposer_release_tx" => "UPDATE interactions SET proposer_release_tx = $2 WHERE id = $1",
+        "counterparty_release_tx" => {
+            "UPDATE interactions SET counterparty_release_tx = $2 WHERE id = $1"
+        }
         _ => return Err(ApiError::internal("unknown tx column")),
     };
     sqlx::query(sql)
@@ -731,11 +735,57 @@ async fn release_one(state: &AppState, cs: &ChainState, id: Uuid) -> Result<(), 
         )));
     }
     if let Some((va, vb)) = vaults(pool, &row).await? {
-        for vault in [va, vb] {
-            cs.chain
+        let (a_name, b_name) = {
+            let mut conn = pool.acquire().await?;
+            names(&mut conn, &row).await?
+        };
+        for (vault, agent, name, column, sent) in [
+            (
+                va,
+                row.proposer_id,
+                &a_name,
+                "proposer_release_tx",
+                &row.proposer_release_tx,
+            ),
+            (
+                vb,
+                row.counterparty_id,
+                &b_name,
+                "counterparty_release_tx",
+                &row.counterparty_release_tx,
+            ),
+        ] {
+            if sent.is_some() {
+                continue;
+            }
+            // `None`: nothing staked for this challenge (never staked, or
+            // released by a run that crashed before recording it).
+            let Some(tx) = cs
+                .chain
                 .vault_release(vault, challenge_id(id))
                 .await
-                .map_err(|e| rpc_failure(&e))?;
+                .map_err(|e| rpc_failure(&e))?
+            else {
+                continue;
+            };
+            save_tx(pool, id, column, tx).await?;
+            let mut conn = pool.acquire().await?;
+            record(
+                &mut conn,
+                Some(agent),
+                Some(id),
+                "vault_released",
+                format!(
+                    "\"{name}\"'s vault released its {} stake exposure now that the Arc testnet \
+                     escrow is final.",
+                    stake_text(row.stake()?, Env::ArcTestnet)
+                ),
+                json!({
+                    "env": Env::ArcTestnet, "tx_hash": hex(tx), "vault": vault.to_string(),
+                    "explorer_url": cs.chain.explorer_tx(tx),
+                }),
+            )
+            .await?;
         }
     }
     sqlx::query("UPDATE interactions SET vaults_released_at = now() WHERE id = $1")
