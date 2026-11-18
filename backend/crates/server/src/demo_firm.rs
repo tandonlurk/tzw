@@ -23,6 +23,7 @@ use crate::extract::ApiJson;
 use crate::firms::{self, CreateBody, JoinBody};
 use crate::ledger_db::{self, PostOutcome};
 use crate::models::{AgentInput, display_usdc};
+use aen_core::approach::APPROACH_PROFILE;
 use aen_core::firm::MemberRole;
 
 // The seed creates all agents in one transaction (equal `created_at`), and the
@@ -143,14 +144,16 @@ async fn seed_agent(conn: &mut PgConnection, demo: &FirmDemoAgent) -> Result<boo
         }
     }
     let (collab, ambition, firm_role) = demo.approach;
-    graph["nodes"]
+    let nodes = graph["nodes"]
         .as_array_mut()
-        .ok_or_else(|| ApiError::internal("template graph has no nodes"))?
-        .push(json!({
-            "id": "approach", "type": "approach.profile",
-            "params": {"stance": {"collaboration_bps": collab, "ambition_bps": ambition},
-                       "firm_role": firm_role, "markets": {}}
-        }));
+        .ok_or_else(|| ApiError::internal("template graph has no nodes"))?;
+    // The templates carry their own approach node (D-69); the demo's replaces it.
+    nodes.retain(|n| n["type"] != APPROACH_PROFILE);
+    nodes.push(json!({
+        "id": "approach", "type": "approach.profile",
+        "params": {"stance": {"collaboration_bps": collab, "ambition_bps": ambition},
+                   "firm_role": firm_role, "markets": {}}
+    }));
     let input: AgentInput = serde_json::from_value(json!({
         "name": demo.name, "description": demo.description,
         "config": config, "policy": policy, "graph": graph,

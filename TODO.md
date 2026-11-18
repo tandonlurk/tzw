@@ -72,7 +72,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [x] Fake market catalog: BTC + 6 fixed events (ETH, WTI and natural gas under Commodities/Energy, gold, Fed decision, sports final), 14 contracts; `/markets/categories` and `/markets/preview` demo offline; BTC demo numbers unchanged (D-66) (backend, P1)
 - [x] Testnet run gaps: vault release txs + `vault_released` activity; `/stats/portfolio?env=arc_testnet` + dashboard panel; discovery at bid/ask mid (D-67). Live Arc run settled, drift 0; mid not verified live (Gemini PM API 500 all night), stale spot `last` finding (`reports/handoffs/2026-11-18-testnet-gaps.md`) (backend, P1)
 - [x] Firm demo seed: `POST /api/dev/seed-firm-demo` + README "Firm demo"; lead +3.80, scout 0.70, analyst 0.50 over HTTP (D-68) (backend, P2)
-- [ ] Starter templates with an approach node (changes demo numbers, so recompute `docs/demo.md`) (backend, P2)
+- [x] Starter templates with an approach node: bull 15 %/100 %, skeptic 25 %/50 %, cautious 30 %/20 %; demo and firm-demo numbers unchanged on a fresh-db rerun, Cautious stakes 0.72 (D-69) (backend, P2)
 
 ## M3 — Observability (Tue Nov 17)
 

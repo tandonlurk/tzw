@@ -60,7 +60,7 @@ ActivityItem { id, ts, agent_id: string|null, interaction_id: string|null, colla
 | GET | `/agents/{id}/ledger` | → `LedgerEntry[]` | newest first |
 | POST | `/agents/{id}/allocate` | `{amount: money}` → `Agent` | Moves user unallocated → agent available. `simulated` env only in M1 |
 | POST | `/agents/{id}/deallocate` | `{amount: money}` → `Agent` | Reverse; fails if amount > available |
-| GET | `/templates` | → `Template[]` | |
+| GET | `/templates` | → `Template[]` | Each starter graph carries an `approach.profile` node (D-69): Momentum bull collaboration 15 % / ambition 100 %, Skeptic 25 % / 50 %, Cautious 30 % / 20 %; firm role none, any market |
 | GET | `/graph/blocks` | → `BlockDef[]` | The block catalog the builder renders |
 | POST | `/graph/validate` | `Graph` → `{valid: bool, errors: GraphError[]}` | Always 200 |
 | GET | `/wallet` | → `{env, unallocated: money, allocated: money, committed: money, entries: LedgerEntry[]}` | User-level overview |

@@ -4,6 +4,7 @@
 
 mod common;
 
+use aen_core::approach::Approach;
 use aen_core::graph::Graph;
 use aen_core::policy::AgentPolicy;
 use aen_server::{DEFAULT_CORS_ORIGIN, MIGRATOR, app};
@@ -159,6 +160,7 @@ async fn templates_are_seeded_and_all_valid() {
     assert_eq!(status, StatusCode::OK);
     let templates = body.as_array().unwrap();
     assert_eq!(templates.len(), 3);
+    let mut stances = Vec::new();
     for t in templates {
         let name = t["name"].as_str().unwrap();
         let graph: Graph = serde_json::from_value(t["graph"].clone()).unwrap();
@@ -166,6 +168,15 @@ async fn templates_are_seeded_and_all_valid() {
         let policy: AgentPolicy = serde_json::from_value(t["policy"].clone()).unwrap();
         assert_eq!(policy.validate(), vec![], "{name}");
         assert!(graph.nodes.iter().all(|n| n.ui.is_some()), "{name}");
+        // Every template opens with a stance on the approach wheel (D-69).
+        let approach = Approach::from_graph(&graph).unwrap_or_else(|| panic!("{name}"));
+        assert!(approach.markets.is_any(), "{name}");
+        stances.push((
+            name.to_owned(),
+            approach.stance.collaboration_bps,
+            approach.stance.ambition_bps,
+            approach.max_open_interactions(),
+        ));
 
         // A template can be used as-is to create an agent.
         let input = json!({
@@ -178,6 +189,14 @@ async fn templates_are_seeded_and_all_valid() {
         let (_, v) = post(&ctx.app, "/api/graph/validate", t["graph"].clone()).await;
         assert_eq!(v, json!({"valid": true, "errors": []}), "{name}");
     }
+    assert_eq!(
+        stances,
+        vec![
+            ("Momentum bull".to_owned(), 1500, 10_000, 5),
+            ("Skeptic".to_owned(), 2500, 5000, 3),
+            ("Cautious".to_owned(), 3000, 2000, 1),
+        ]
+    );
 }
 
 #[tokio::test]

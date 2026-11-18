@@ -64,6 +64,24 @@ Lead re-ran every demo section of `backend/README.md` verbatim on fresh database
 
 Web views for all of the above were browser-checked by the web specialist (`reports/qa-m2-web.md`); the custom-code editor was browser-checked too.
 
+## Rerun after starter templates gained approach nodes (verified 2026-11-18, overnight item 4, backend 392 tests)
+
+Templates now carry an `approach.profile` node (D-69). Lead re-ran `backend/README.md` "Demo script", the co-captain rounds and the collaboration step on a fresh db (`aen_item4_demo`, port 8097, `DEV_ENDPOINTS=true MARKET_DATA=fake TICK_INTERVAL_SECS=0`), then "Firm demo" on another fresh db (`aen_item4_firm`). Every number is unchanged:
+
+| Step | Observed |
+|---|---|
+| Templates | bull collab 15 % / ambition 100 %, skeptic 25 % / 50 %, cautious 30 % / 20 % |
+| Tick 1 | proposed 1, countered 1: bull offers 5.00 (its stake target is 10.00, so not lowered), skeptic counters 2.50 |
+| Tick 2, guard, approve | accepted 1, approvals_requested 1, funded 0; early clock jump 409 `clock_jump_would_expire`; approve → `active` at 2.50 |
+| Tick 3, resolve | nothing new; resolving 1, settled 1, outcome `a`, observed 7000 |
+| Portfolio | bull +2.50 / 1 win, skeptic -2.50; allocated 200.00, committed 0, portfolio realized 0 |
+| Co-captain rounds | `{"settled":1,"suggestions":0}`, then `{"settled":1,"suggestions":2}`; `lower_max_stake` accepted → skeptic v2, max 5.00; bull +7.50 / 3 / 3, skeptic -7.50 / 3 / 0 |
+| Collaboration | accept → `["fund","cancel"]`, fund → `approval_required`, owner-approved → `funded`, complete → `+1.80` / `-1.80` |
+| Firm demo | tick 1 `{"proposed":1,"firm_contributions":2,"accepted":1,"approvals_requested":1}`; rival approval 5.00; settle → lead +3.80, paid to members 1.20 (scout 0.70, analyst 0.50); balances 100.70 / 100.50 / 95.00 / 103.80; one approach node per agent |
+| New agent from "Cautious" as-is | created with its approach node; its stake target is 0.72 (36 % of 2.00), see the `owner_approval_flow_through_http` test |
+
+All simulated; nothing signed or sent.
+
 ## Testnet (Arc) demo: live Gemini data, autonomous scheduler (verified 2026-11-17/18)
 
 Real Arc testnet USDC (testnet asset, no real value) in two agent vaults, real Gemini exchange prediction-market data (`MARKET_DATA=gemini`, the default), the autonomous scheduler (`TICK_INTERVAL_SECS=10`). The only manual steps are the owner's: one config edit and one approval. Resolution is backend-administered: the backend reads Gemini and the resolver key calls the escrow. Full run, tx hashes and findings: `reports/handoffs/2026-11-17-testnet-gemini.md`.

@@ -1519,6 +1519,8 @@ async fn full_lifecycle_through_http() {
 async fn owner_approval_flow_through_http() {
     let c = setup().await;
     // "Cautious": approval threshold 0 and a flow ending in request_approval.
+    // Its approach (ambition 20 %, D-69) caps the stake at 36 % of the 2.00
+    // max per interaction: 0.72 instead of 1.00.
     let a = agent_from_template(&c, "Cautious", json!({}), 100).await;
     let b = skeptic(&c, 100).await;
     c.fake.set_move_bps(700); // enough conviction for both
@@ -1532,7 +1534,7 @@ async fn owner_approval_flow_through_http() {
     let id = uuid(&interaction["id"]);
     assert_eq!(interaction["state"], "awaiting_approval");
     assert_eq!(interaction["pending_approvals"], 1);
-    assert_eq!(interaction["stake"], "1000000");
+    assert_eq!(interaction["stake"], "720000");
     assert_eq!(committed(&c.pool, a).await, 0);
     assert_eq!(
         committed(&c.pool, b).await,
@@ -1564,8 +1566,8 @@ async fn owner_approval_flow_through_http() {
     .await;
     assert_eq!(result["approval"]["status"], "approved");
     assert_eq!(result["interaction"]["state"], "active");
-    assert_eq!(committed(&c.pool, a).await, USDC);
-    assert_eq!(committed(&c.pool, b).await, USDC);
+    assert_eq!(committed(&c.pool, a).await, 720_000);
+    assert_eq!(committed(&c.pool, b).await, 720_000);
     assert!(
         get(&c.app, "/api/approvals")
             .await

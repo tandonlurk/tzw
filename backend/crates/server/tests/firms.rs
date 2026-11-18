@@ -105,6 +105,16 @@ fn approach(collab: u32, ambition: u32, role: &str, markets: Value) -> Value {
                       "firm_role": role, "markets": markets}})
 }
 
+/// A template graph without its approach node (D-69), so a test controls it.
+fn without_approach(graph: &Value) -> Value {
+    let mut graph = graph.clone();
+    graph["nodes"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|n| n["type"] != "approach.profile");
+    graph
+}
+
 /// An agent from a seeded template, optionally with an approach node and
 /// policy overrides, funded with `funds` simulated USDC.
 async fn agent(
@@ -123,7 +133,7 @@ async fn agent(
         .find(|t| t["name"] == template)
         .unwrap()
         .clone();
-    let mut graph = t["graph"].clone();
+    let mut graph = without_approach(&t["graph"]);
     if let Some(node) = ap {
         graph["nodes"].as_array_mut().unwrap().push(node);
     }
@@ -237,7 +247,7 @@ async fn approach_block_in_catalog_and_validation() {
     // Bad params name the field under graph.nodes.<id>.params.
     let templates = get(&c.app, "/api/templates").await;
     let t = &templates[0];
-    let mut graph = t["graph"].clone();
+    let mut graph = without_approach(&t["graph"]);
     graph["nodes"].as_array_mut().unwrap().push(approach(
         5000,
         10_001,
