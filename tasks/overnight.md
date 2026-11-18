@@ -52,3 +52,13 @@ Branch: `overnight-1118` (from `main` a2bcdcc, which now holds PRs #1–#3 via #
 - Item 5 finding (for item 6): interaction detail page does not render the `escrow` tx hashes (create, stakes, resolve, releases); they are only in Activity's expandable detail and, after settle, the ledger rows. Small functional web fix candidate.
 
 ## Morning summary
+
+All items 0–8 done (none blocked). Handoff: `reports/handoffs/2026-11-18-overnight.md`.
+
+- Tests at the end: backend 392 passed / 1 ignored (was 388), contracts 100, web 123 (was 112), build OK.
+- Shipped: fake market catalog (D-66); testnet release txs, per-env portfolio, bid/ask mid (D-67); firm demo seed (D-68); templates with approach nodes (D-69); testnet video script rehearsed on Arc; E2E regression + 3 small web fixes; honest submission docs; web token proxy (D-70); explainer storyboard.
+- Arc testnet: two live runs settled with drift 0, 1.25 staked per side, ~0.16 USDC gas, funds withdrawn.
+- Your calls: Gemini prediction-markets API was HTTP 500 all night (bid/ask mid not verified live; re-check before recording); stale Gemini spot `last` resolved a live run on a tie (spot mid formula or void-if-stale?); review D-66..D-70; storyboard open questions; D-65 and PR merges still pending.
+- `overnight-1118` is pushed, not merged.
+
+OVERNIGHT: DONE
