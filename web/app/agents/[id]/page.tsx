@@ -16,6 +16,7 @@ import { usesCustomCode } from "@/lib/customCode";
 import { interactionCounts, versionHistory, winRateText } from "@/lib/agentView";
 import { VaultPanel } from "@/components/wallet/VaultPanel";
 import { TESTNET_LABEL } from "@/components/wallet/WalletStatus";
+import { ApproachCard } from "@/components/approach/ApproachCard";
 
 export default function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -203,6 +204,8 @@ function Detail({ agent: a, onChanged, active }: { agent: Agent; onChanged: () =
           </tbody></table>
         </div>
       </div>
+
+      <ApproachCard agent={a} />
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Behavior graph</h3>
