@@ -875,12 +875,23 @@ async fn discover_one(
         return Ok(());
     };
     let now = clock_for(agent.env.as_str(), now);
-    // Nothing to stake, or not allowed to act: do not even reason. A vault
-    // agent does not propose while this server has no chain access.
+    // Not allowed to act: do not even reason. A vault agent does not propose
+    // while this server has no chain access.
     if agent.snapshot.status != AgentStatus::Active
-        || agent.snapshot.available.is_zero()
         || (agent.env == Env::ArcTestnet && state.chain.is_none())
     {
+        return Ok(());
+    }
+    // A firm scout works without funds of its own; anyone else with nothing
+    // to stake does not reason.
+    let scouting = match agent.env {
+        Env::Simulated => match crate::firms::membership(&mut conn, agent.id).await? {
+            Some((firm, MemberRole::Scout)) => Some(firm),
+            _ => None,
+        },
+        Env::ArcTestnet => None,
+    };
+    if agent.snapshot.available.is_zero() && scouting.is_none() {
         return Ok(());
     }
 
@@ -966,14 +977,11 @@ async fn discover_one(
         return Ok(());
     }
     // Scout task: independent of the agent's own proposals.
-    if agent.env == Env::Simulated
-        && let Some((firm, MemberRole::Scout)) =
-            crate::firms::membership(&mut conn, agent.id).await?
-    {
-        let outcome = crate::firms::scout(state, &agent, &firm, &view, now, report).await;
+    if let Some(firm) = &scouting {
+        let outcome = crate::firms::scout(state, &agent, firm, &view, now, report).await;
         step(report, outcome);
     }
-    if !may_initiate_challenges(&effective.stance) {
+    if agent.snapshot.available.is_zero() || !may_initiate_challenges(&effective.stance) {
         return Ok(());
     }
     if let Err(misses) = market_matches(&effective.markets, &view.facts(now.timestamp())) {
