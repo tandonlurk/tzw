@@ -141,7 +141,7 @@ pub struct PreviewBody {
 /// One matching contract.
 #[derive(Debug, Serialize)]
 pub struct PreviewMarket {
-    /// `pm:{event}:{instrument}`, the same key challenges use.
+    /// `gemini_pm:{instrument}`, the same key challenges use.
     pub market_id: String,
     pub title: String,
     pub category: String,

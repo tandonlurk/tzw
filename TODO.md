@@ -69,7 +69,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 - [?] Approach block: stance wheel (competitive ↔ collaborative, cautious ↔ ambitious, firm role) + market wheel (any → category → subcategory, structure, keywords, symbols, ranges) with live preview; backend gates discovery and incoming challenges; ambition sizes stakes when an approach node exists (D-64). Design: `docs/design/approach-and-firms.md`
 - [?] Firms: lead keeps 80%, scouts/analysts share 20% by role weight, optional task fee, losses on the lead; simulated only (D-64, D-65). E2E over HTTP + browser-checked against the real backend (`reports/handoffs/2026-11-18-approach-firms.md`)
-- [ ] Fake market catalog with several markets (incl. a commodities/energy one) so the market wheel demos offline; today fake mode has one BTC market (backend, P1)
+- [x] Fake market catalog: BTC + 6 fixed events (ETH, WTI and natural gas under Commodities/Energy, gold, Fed decision, sports final), 14 contracts; `/markets/categories` and `/markets/preview` demo offline; BTC demo numbers unchanged (D-66) (backend, P1)
 - [ ] Testnet run gaps: record vault release tx + activity; `/stats/portfolio` for `arc_testnet`; discovery threshold from bid/ask mid, not a stale last trade (backend, P1)
 - [ ] Firm demo seed endpoint + README firm demo (script exists in the handoff) (backend, P2)
 - [ ] Starter templates with an approach node (changes demo numbers, so recompute `docs/demo.md`) (backend, P2)

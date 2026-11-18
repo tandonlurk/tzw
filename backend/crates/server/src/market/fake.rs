@@ -1,8 +1,14 @@
 //! Deterministic in-memory market for tests and offline demos. Everything it
 //! returns is labelled `fake`; it never touches the network.
+//!
+//! One controllable BTC event (`/api/dev/fake-market` moves it) plus a fixed
+//! catalog across categories (crypto, commodities/energy, metals, economics,
+//! sports) so the approach market filter can be shown offline. Catalog
+//! prices never change and catalog events never settle.
 
 use std::sync::Mutex;
 
+use aen_core::approach::MarketStructure;
 use serde::Deserialize;
 
 use super::{
@@ -14,9 +20,151 @@ pub const FAKE_INSTRUMENT: &str = "FAKE-BTC-1H-UP";
 
 /// Reference spot price: 65,000 USD in micro-USD.
 const REFERENCE_PRICE: i64 = 65_000_000_000;
+/// ETH reference spot price: 3,200 USD in micro-USD.
+const ETH_REFERENCE_PRICE: i64 = 3_200_000_000;
 const LATEST_TS_MS: i64 = 2_000_000_000_000;
 /// Older than any trigger window, so it is always the reference candle.
 const REFERENCE_AGE_MS: i64 = 400 * 86_400 * 1000;
+
+/// One fixed catalog event: the contracts are `(instrument, label, YES price bps)`.
+struct Listing {
+    ticker: &'static str,
+    title: &'static str,
+    category: &'static str,
+    /// Slug and name, as Gemini lists them.
+    subcategory: (&'static str, &'static str),
+    tags: &'static [&'static str],
+    structure: Option<MarketStructure>,
+    volume_delta_24h_bps: Option<i64>,
+    contracts: &'static [(&'static str, &'static str, i64)],
+}
+
+/// Fixed fake listings besides the controllable BTC event. Every price is
+/// inside the 0.05-0.95 band discovery accepts.
+const CATALOG: [Listing; 6] = [
+    Listing {
+        ticker: "ETH-FAKE-FRI",
+        title: "[fake] ETH price on Friday",
+        category: "Crypto",
+        subcategory: ("ethereum", "Ethereum"),
+        tags: &["ETH", "Weekly"],
+        structure: Some(MarketStructure::PriceLadder),
+        volume_delta_24h_bps: Some(800),
+        contracts: &[
+            ("FAKE-ETH-FRI-3400", "$3,400 or above", 6200),
+            ("FAKE-ETH-FRI-3500", "$3,500 or above", 4800),
+            ("FAKE-ETH-FRI-3600", "$3,600 or above", 2900),
+        ],
+    },
+    Listing {
+        ticker: "WTI-FAKE-FRI",
+        title: "[fake] WTI crude oil on Friday",
+        category: "Commodities",
+        subcategory: ("energy", "Energy"),
+        tags: &["Oil", "WTI", "Energy"],
+        structure: Some(MarketStructure::PriceLadder),
+        volume_delta_24h_bps: Some(1250),
+        contracts: &[
+            ("FAKE-WTI-FRI-78", "$78 or above", 6600),
+            ("FAKE-WTI-FRI-80", "$80 or above", 4500),
+            ("FAKE-WTI-FRI-82", "$82 or above", 2100),
+        ],
+    },
+    Listing {
+        ticker: "NG-FAKE-DEC",
+        title: "[fake] Natural gas in December",
+        category: "Commodities",
+        subcategory: ("energy", "Energy"),
+        tags: &["Natural gas", "Energy", "Monthly"],
+        structure: Some(MarketStructure::BinaryUpDown),
+        volume_delta_24h_bps: Some(-300),
+        contracts: &[("FAKE-NG-DEC-UP", "Up", 5300)],
+    },
+    Listing {
+        ticker: "GOLD-FAKE-DEC",
+        title: "[fake] Gold at month end",
+        category: "Commodities",
+        subcategory: ("metals", "Metals"),
+        tags: &["Gold", "Metals", "Monthly"],
+        structure: Some(MarketStructure::PriceLadder),
+        volume_delta_24h_bps: None,
+        contracts: &[("FAKE-GOLD-DEC-2700", "$2,700 or above", 5800)],
+    },
+    Listing {
+        ticker: "FED-FAKE-DEC",
+        title: "[fake] Fed decision in December",
+        category: "Economics",
+        subcategory: ("fed-rates", "Fed rates"),
+        tags: &["Fed", "Rates"],
+        structure: Some(MarketStructure::Categorical),
+        volume_delta_24h_bps: Some(2000),
+        contracts: &[
+            ("FAKE-FED-DEC-CUT25", "Cut 25 bps", 5200),
+            ("FAKE-FED-DEC-HOLD", "Hold", 4300),
+            ("FAKE-FED-DEC-HIKE", "Hike", 600),
+        ],
+    },
+    Listing {
+        ticker: "FINAL-FAKE-CHAMP",
+        title: "[fake] Championship final winner",
+        category: "Sports",
+        subcategory: ("basketball", "Basketball"),
+        tags: &["Final", "Basketball"],
+        structure: Some(MarketStructure::Categorical),
+        volume_delta_24h_bps: None,
+        contracts: &[
+            ("FAKE-FINAL-HOME", "Home team", 5700),
+            ("FAKE-FINAL-AWAY", "Away team", 4400),
+        ],
+    },
+];
+
+impl Listing {
+    fn event(&self) -> PmEvent {
+        PmEvent {
+            ticker: self.ticker.into(),
+            title: self.title.into(),
+            category: self.category.into(),
+            status: "active".into(),
+            expiry_ts: None,
+            contracts: self
+                .contracts
+                .iter()
+                .map(|(symbol, label, price)| PmContract {
+                    instrument_symbol: (*symbol).into(),
+                    label: (*label).into(),
+                    status: "active".into(),
+                    market_state: Some("open".into()),
+                    expiry_ts: None,
+                    last_trade_price_bps: Some(*price),
+                    resolution_side: None,
+                })
+                .collect(),
+            meta: super::MarketMeta {
+                subcategories: vec![self.subcategory.0.into(), self.subcategory.1.into()],
+                tags: self.tags.iter().map(|t| (*t).into()).collect(),
+                structure: self.structure,
+                expiry_ts: None,
+                volume_delta_24h_bps: self.volume_delta_24h_bps,
+            },
+        }
+    }
+}
+
+/// Whether `event` fits the listing query: category equal and search a
+/// substring of ticker or title, both case-insensitive. Status is not
+/// filtered (callers check it).
+fn fits(event: &PmEvent, query: &EventQuery) -> bool {
+    let category_ok = query
+        .category
+        .as_deref()
+        .is_none_or(|c| event.category.eq_ignore_ascii_case(c));
+    let search_ok = query.search.as_deref().is_none_or(|s| {
+        let s = s.to_lowercase();
+        event.ticker.to_lowercase().contains(&s) || event.title.to_lowercase().contains(&s)
+    });
+    category_ok && search_ok
+}
 
 #[derive(Debug)]
 struct State {
@@ -143,8 +291,18 @@ impl FakeMarket {
         }
     }
 
-    fn last_price(state: &State) -> i64 {
-        REFERENCE_PRICE + REFERENCE_PRICE / 10_000 * state.move_bps
+    /// Reference price of a known spot symbol (`btcusd`, `ethusd`); both move
+    /// by the same `move_bps`. Other symbols have no fake spot market.
+    fn reference_price(symbol: &str) -> Result<i64, MarketError> {
+        match symbol.to_ascii_lowercase().as_str() {
+            "btcusd" => Ok(REFERENCE_PRICE),
+            "ethusd" => Ok(ETH_REFERENCE_PRICE),
+            _ => Err(MarketError::NotFound),
+        }
+    }
+
+    fn last_price(state: &State, reference: i64) -> i64 {
+        reference + reference / 10_000 * state.move_bps
     }
 
     fn event(state: &State) -> PmEvent {
@@ -167,7 +325,7 @@ impl FakeMarket {
             meta: super::MarketMeta {
                 subcategories: vec!["bitcoin".into(), "Bitcoin".into()],
                 tags: vec!["BTC".into(), "Hourly".into()],
-                structure: Some(aen_core::approach::MarketStructure::BinaryUpDown),
+                structure: Some(MarketStructure::BinaryUpDown),
                 expiry_ts: None,
                 volume_delta_24h_bps: None,
             },
@@ -180,10 +338,10 @@ impl MarketData for FakeMarket {
         "fake"
     }
 
-    fn spot_ticker<'a>(&'a self, _symbol: &'a str) -> BoxFut<'a, Result<SpotTicker, MarketError>> {
+    fn spot_ticker<'a>(&'a self, symbol: &'a str) -> BoxFut<'a, Result<SpotTicker, MarketError>> {
         Box::pin(async move {
             let state = self.enter()?;
-            let last = Self::last_price(&state);
+            let last = Self::last_price(&state, Self::reference_price(symbol)?);
             Ok(SpotTicker {
                 bid: last,
                 ask: last,
@@ -194,11 +352,12 @@ impl MarketData for FakeMarket {
 
     fn spot_candles<'a>(
         &'a self,
-        _symbol: &'a str,
+        symbol: &'a str,
         _frame: TimeFrame,
     ) -> BoxFut<'a, Result<Vec<Candle>, MarketError>> {
         Box::pin(async move {
             let state = self.enter()?;
+            let reference = Self::reference_price(symbol)?;
             let flat = |ts_ms, price| Candle {
                 ts_ms,
                 open: price,
@@ -207,34 +366,42 @@ impl MarketData for FakeMarket {
                 close: price,
             };
             Ok(vec![
-                flat(LATEST_TS_MS, Self::last_price(&state)),
-                flat(LATEST_TS_MS - REFERENCE_AGE_MS, REFERENCE_PRICE),
+                flat(LATEST_TS_MS, Self::last_price(&state, reference)),
+                flat(LATEST_TS_MS - REFERENCE_AGE_MS, reference),
             ])
         })
     }
 
     fn list_events<'a>(
         &'a self,
-        _query: &'a EventQuery,
+        query: &'a EventQuery,
     ) -> BoxFut<'a, Result<Vec<PmEvent>, MarketError>> {
         Box::pin(async move {
             let state = self.enter()?;
-            Ok(if state.prediction_markets {
-                vec![Self::event(&state)]
-            } else {
-                Vec::new()
-            })
+            if !state.prediction_markets {
+                return Ok(Vec::new());
+            }
+            Ok(std::iter::once(Self::event(&state))
+                .chain(CATALOG.iter().map(Listing::event))
+                .filter(|e| fits(e, query))
+                .collect())
         })
     }
 
     fn get_event<'a>(&'a self, ticker: &'a str) -> BoxFut<'a, Result<PmEvent, MarketError>> {
         Box::pin(async move {
             let state = self.enter()?;
-            if state.prediction_markets && ticker == FAKE_EVENT_TICKER {
-                Ok(Self::event(&state))
-            } else {
-                Err(MarketError::NotFound)
+            if !state.prediction_markets {
+                return Err(MarketError::NotFound);
             }
+            if ticker == FAKE_EVENT_TICKER {
+                return Ok(Self::event(&state));
+            }
+            CATALOG
+                .iter()
+                .find(|l| l.ticker == ticker)
+                .map(Listing::event)
+                .ok_or(MarketError::NotFound)
         })
     }
 }
@@ -244,7 +411,7 @@ mod tests {
     use aen_core::challenge::{FormulaId, MarketRef};
 
     use super::*;
-    use crate::market::{discover, observe};
+    use crate::market::{MAX_OPEN_PRICE_BPS, MIN_OPEN_PRICE_BPS, discover, observe};
 
     fn contract() -> MarketRef {
         MarketRef::GeminiPredictionContract {
@@ -324,6 +491,111 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, MarketError::NoData(_)), "{err:?}");
+    }
+
+    #[tokio::test]
+    async fn catalog_spans_categories_and_honours_the_query() {
+        let fake = FakeMarket::demo();
+        let all = fake.list_events(&EventQuery::default()).await.unwrap();
+        assert_eq!(all.len(), 1 + CATALOG.len());
+        let categories: std::collections::BTreeSet<&str> =
+            all.iter().map(|e| e.category.as_str()).collect();
+        assert_eq!(
+            categories.into_iter().collect::<Vec<_>>(),
+            ["Commodities", "Crypto", "Economics", "Sports"]
+        );
+        // Every catalog contract is open, inside the discovery band, and unique.
+        let mut symbols = std::collections::BTreeSet::new();
+        for c in all.iter().flat_map(|e| &e.contracts) {
+            assert!(symbols.insert(c.instrument_symbol.clone()), "{c:?}");
+            let p = c.last_trade_price_bps.unwrap();
+            assert!(
+                (MIN_OPEN_PRICE_BPS..=MAX_OPEN_PRICE_BPS).contains(&p),
+                "{c:?}"
+            );
+        }
+
+        let energy = fake
+            .list_events(&EventQuery {
+                category: Some("commodities".into()),
+                search: Some("oil".into()),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(energy.len(), 1);
+        assert_eq!(energy[0].ticker, "WTI-FAKE-FRI");
+        assert_eq!(energy[0].meta.subcategories, ["energy", "Energy"]);
+
+        // Discovery's own query still sees only the BTC event.
+        let btc = fake
+            .list_events(&EventQuery {
+                search: Some("BTC".into()),
+                category: Some("Crypto".into()),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(btc.len(), 1);
+        assert_eq!(btc[0].ticker, FAKE_EVENT_TICKER);
+
+        fake.set_prediction_markets(false);
+        assert!(
+            fake.list_events(&EventQuery::default())
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            fake.get_event("WTI-FAKE-FRI").await.unwrap_err(),
+            MarketError::NotFound
+        );
+    }
+
+    #[tokio::test]
+    async fn catalog_contracts_are_discoverable_and_observable() {
+        let fake = FakeMarket::demo();
+        // ETH: the ladder rung closest to 0.50, on its own spot price.
+        let view = discover(&fake, "ETHUSD", 3600, 0).await.unwrap();
+        assert_eq!(
+            view.market,
+            MarketRef::GeminiPredictionContract {
+                event_ticker: "ETH-FAKE-FRI".into(),
+                instrument_symbol: "FAKE-ETH-FRI-3500".into(),
+            }
+        );
+        assert_eq!(view.value, 4800);
+        assert_eq!(view.move_bps, 300);
+        assert_eq!(view.title, "[fake] ETH price on Friday: $3,500 or above");
+        assert_eq!(
+            fake.spot_ticker("ethusd").await.unwrap().last,
+            3_296_000_000
+        );
+        // BTC discovery is unchanged by the catalog.
+        let view = discover(&fake, "BTCUSD", 3600, 0).await.unwrap();
+        assert_eq!(view.market, contract());
+
+        let oil = MarketRef::GeminiPredictionContract {
+            event_ticker: "WTI-FAKE-FRI".into(),
+            instrument_symbol: "FAKE-WTI-FRI-80".into(),
+        };
+        let obs = observe(&fake, &oil, FormulaId::PmYesPriceBpsV1)
+            .await
+            .unwrap();
+        assert_eq!((obs.value, obs.source), (4500, "fake"));
+        // The dev controls move only the BTC contract.
+        fake.set_resolution(Some("yes"));
+        let obs = observe(&fake, &oil, FormulaId::PmYesPriceBpsV1)
+            .await
+            .unwrap();
+        assert_eq!(obs.value, 4500);
+
+        // No fake spot market for anything but BTC and ETH.
+        assert_eq!(
+            fake.spot_ticker("wtiusd").await.unwrap_err(),
+            MarketError::NotFound
+        );
+        assert!(discover(&fake, "WTIUSD", 3600, 0).await.is_err());
     }
 
     #[test]

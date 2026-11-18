@@ -270,8 +270,8 @@ pub struct Observation {
 
 /// A contract is worth disagreeing about only while its YES price is away
 /// from both ends.
-const MIN_OPEN_PRICE_BPS: i64 = 500;
-const MAX_OPEN_PRICE_BPS: i64 = 9500;
+pub(crate) const MIN_OPEN_PRICE_BPS: i64 = 500;
+pub(crate) const MAX_OPEN_PRICE_BPS: i64 = 9500;
 /// Listings come back soonest-expiring first and an asset has dozens of
 /// 5 and 15 minute events, so a small page never reaches the longer-dated
 /// contracts. 100 was accepted live; a BTC search returned 24 events.

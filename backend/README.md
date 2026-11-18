@@ -61,6 +61,14 @@ scheduler), `MAX_NEGOTIATION_ROUNDS` (3), `FUNDING_WINDOW_SECS` (300),
 market, `0` disables), `DEFAULT_SYMBOL` (`BTCUSD`), `DEV_ENDPOINTS`
 (`true`), `GEMINI_BASE_URL`.
 
+`MARKET_DATA=fake` serves one controllable event (`BTC-FAKE-1H`, moved by
+`/dev/fake-market`) plus a fixed catalog for the approach market filter:
+ETH price ladder, WTI crude oil ladder and natural gas (Commodities/Energy),
+gold (Commodities/Metals), a Fed decision (Economics, categorical) and a
+championship final (Sports). Catalog prices never change and never settle.
+Only `btcusd` and `ethusd` have a fake spot price, so only BTC and ETH can be
+discovered by a market-move trigger (D-66).
+
 ### Demo script (offline, simulated funds)
 
 Deterministic on a fresh database (other active agents would also take part).

@@ -900,8 +900,18 @@ async fn market_categories_and_preview() {
     let c = setup().await;
     let cats = get(&c.app, "/api/markets/categories").await;
     assert_eq!(cats["source"], "fake");
-    assert_eq!(cats["categories"], json!(["Crypto"]));
-    assert_eq!(cats["subcategories"]["Crypto"], json!(["Bitcoin"]));
+    assert_eq!(
+        cats["categories"],
+        json!(["Commodities", "Crypto", "Economics", "Sports"])
+    );
+    assert_eq!(
+        cats["subcategories"]["Crypto"],
+        json!(["Bitcoin", "Ethereum"])
+    );
+    assert_eq!(
+        cats["subcategories"]["Commodities"],
+        json!(["Energy", "Metals"])
+    );
     assert_eq!(
         cats["structures"],
         json!(["binary_up_down", "price_ladder", "categorical"])
@@ -909,9 +919,10 @@ async fn market_categories_and_preview() {
 
     let app = &c.app;
     let preview = |markets: Value| post(app, "/api/markets/preview", json!({"markets": markets}));
+    // The fake catalog: BTC 1 + ETH 3 + WTI 3 + natural gas 1 + gold 1 + Fed 3 + final 2.
     let (s, p) = preview(json!({"scope": "any"})).await;
     assert_eq!(s, StatusCode::OK, "{p}");
-    assert_eq!(p["count"], 1);
+    assert_eq!(p["count"], 14);
     assert_eq!(p["source"], "fake");
     assert!(p["sample"][0]["title"].as_str().unwrap().contains("BTC"));
     assert_eq!(p["sample"][0]["category"], "Crypto");
@@ -922,10 +933,27 @@ async fn market_categories_and_preview() {
                 .await
                 .1
         ),
-        0
+        5
     );
     // Category OR subcategory.
-    assert_eq!(count(&preview(json!({"scope": "specific", "categories": ["commodities"], "subcategories": ["bitcoin"]})).await.1), 1);
+    assert_eq!(count(&preview(json!({"scope": "specific", "categories": ["commodities"], "subcategories": ["bitcoin"]})).await.1), 6);
+    // An energy market with a price near even money.
+    let (_, energy) = preview(json!({"scope": "specific", "subcategories": ["energy"], "keywords": ["oil"], "ranges": {"yes_price_bps": {"min": 4000, "max": 6000}}})).await;
+    assert_eq!(count(&energy), 1, "{energy}");
+    assert_eq!(
+        energy["sample"][0]["market_id"],
+        "gemini_pm:FAKE-WTI-FRI-80"
+    );
+    assert_eq!(energy["sample"][0]["subcategory"], "Energy");
+    assert_eq!(energy["sample"][0]["structure"], "price_ladder");
+    assert_eq!(
+        count(
+            &preview(json!({"scope": "specific", "structures": ["categorical"], "categories": ["economics"]}))
+                .await
+                .1
+        ),
+        3
+    );
     assert_eq!(
         count(
             &preview(
@@ -944,7 +972,8 @@ async fn market_categories_and_preview() {
         ),
         1
     );
-    // The fake moved 3 %.
+    // The fake moved 3 %; only BTC and ETH have a fake spot price, so other
+    // markets have no move and fail a move bound.
     assert_eq!(
         count(
             &preview(
@@ -953,7 +982,7 @@ async fn market_categories_and_preview() {
             .await
             .1
         ),
-        1
+        4
     );
     assert_eq!(
         count(
