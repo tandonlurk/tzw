@@ -1,0 +1,20 @@
+# Final renders
+output/*
+!output/.gitkeep
+
+# Large media anywhere under demo-video/: recorded voiceover, screen recordings, rendered animations
+*.mov
+*.mp4
+*.m4v
+*.webm
+*.mkv
+*.wav
+*.aif
+*.aiff
+*.mp3
+*.m4a
+*.flac
+
+# Animation project build artifacts (once the animations package exists)
+node_modules/
+animations/out/
