@@ -7,6 +7,7 @@ import { explorerTxUrl } from "@/lib/chain";
 import { useChainConfig } from "@/lib/useChainConfig";
 import { formatMoney } from "@/lib/money";
 import { EnvBadge } from "./ui";
+import { shortName } from "@/lib/agentColors";
 import type { ChallengeTerms, EscrowTxs } from "@/lib/api";
 
 export function StateBadge({ state }: { state: InteractionState }) {
@@ -16,19 +17,20 @@ export function StateBadge({ state }: { state: InteractionState }) {
 export function InteractionCard({ i }: { i: Interaction }) {
   const outcome = outcomeText(i);
   return (
-    <div className="card">
-      <div className="row spread">
-        <Link href={`/interactions/${i.id}`}><strong>{i.market_title}</strong></Link>
-        <span className="row"><StateBadge state={i.state} /><EnvBadge env={i.env} /></span>
+    <div className="card ic">
+      <div className="ic-top">
+        <Link href={`/interactions/${i.id}`} className="ic-title">{i.market_title}</Link>
+        <span className="row" style={{ gap: 6 }}><StateBadge state={i.state} /><EnvBadge env={i.env} /></span>
       </div>
-      <div style={{ margin: ".3rem 0" }}>
-        <Link href={`/agents/${i.proposer_id}`}>{i.proposer_name}</Link> vs{" "}
-        <Link href={`/agents/${i.counterparty_id}`}>{i.counterparty_name}</Link>
-        <span className="dim"> &middot; {formatMoney(i.stake)} each</span>
+      <div className="ic-parties">
+        <Link href={`/agents/${i.proposer_id}`}>{shortName(i.proposer_name)}</Link>
+        <span className="vs">vs</span>
+        <Link href={`/agents/${i.counterparty_id}`}>{shortName(i.counterparty_name)}</Link>
+        <span className="ic-stake"><span className="num">{formatMoney(i.stake)}</span> each</span>
       </div>
-      <div className="dim">{i.claim}</div>
-      {i.pending_approvals > 0 && <div className="pend">{i.pending_approvals} approval(s) pending. <Link href="/approvals">Review</Link></div>}
-      {outcome && <div className={i.outcome === "void" || i.state !== "settled" ? "neg" : "pos"}>{outcome}</div>}
+      <div className="dim small">{i.claim}</div>
+      {i.pending_approvals > 0 && <div className="pend small" style={{ marginTop: 6 }}>{i.pending_approvals} approval{i.pending_approvals === 1 ? "" : "s"} pending · <Link href="/approvals">Review</Link></div>}
+      {outcome && <div className={`small ${i.outcome === "void" || i.state !== "settled" ? "neg" : "pos"}`} style={{ marginTop: 6 }}>{outcome}</div>}
     </div>
   );
 }

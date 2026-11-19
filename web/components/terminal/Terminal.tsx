@@ -176,12 +176,14 @@ function PanelGrid({ panels, d, onChange }: { panels: Panel[]; d: TerminalData; 
   const [resize, setResize] = useState<{ id: string; w: number; h: number } | null>(null);
   const gap = 12;
   const colW = (width - gap * (cols - 1)) / cols;
+  // Widths are stored in 4-column units and scaled to the columns that fit (2 on tablets, 1 on phones).
+  const toCols = (w: number) => Math.max(1, Math.min(cols, Math.round((w * cols) / GRID_COLS)));
 
   function startResize(e: React.PointerEvent, p: Panel) {
     e.preventDefault();
     const sx = e.clientX;
     const sy = e.clientY;
-    const startW = Math.min(p.w, cols);
+    const startW = toCols(p.w);
     let cur = { id: p.id, w: startW, h: p.h };
     setResize(cur);
     const move = (ev: PointerEvent) => {
@@ -192,7 +194,7 @@ function PanelGrid({ panels, d, onChange }: { panels: Panel[]; d: TerminalData; 
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
-      onChange((ps) => updatePanel(ps, cur.id, { w: cols < GRID_COLS && cur.w === cols ? Math.max(p.w, cols) : cur.w, h: cur.h }));
+      onChange((ps) => updatePanel(ps, cur.id, { w: cur.w === startW ? p.w : Math.round((cur.w * GRID_COLS) / cols), h: cur.h }));
       setResize(null);
     };
     window.addEventListener("pointermove", move);
@@ -212,7 +214,7 @@ function PanelGrid({ panels, d, onChange }: { panels: Panel[]; d: TerminalData; 
     <div className="tgrid" ref={grid} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: ROW_H, gap }}>
       {panels.map((p) => {
         const live = resize?.id === p.id ? resize : null;
-        const w = Math.min(live?.w ?? p.w, cols);
+        const w = live ? live.w : toCols(p.w);
         const h = live?.h ?? p.h;
         const meta = METRICS.find((m) => m.id === p.metric)!;
         const agentId = p.metric === "agent_pnl" ? panelAgentId(p, d) : null;

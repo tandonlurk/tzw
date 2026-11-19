@@ -219,3 +219,17 @@ a.list-row:hover { background: oklch(1 0 0 / 0.03); color: inherit; }
 .switch:hover:not(:disabled) { background: var(--surface-3); }
 .switch[aria-checked="true"]:hover:not(:disabled) { background: var(--blue); }
 .ws-desc { color: var(--text-3); margin: -6px 0 var(--s-5); max-width: 72ch; font-size: .9rem; }
+.approval-card { display: flex; gap: var(--s-6); align-items: center; flex-wrap: wrap; }
+.approval-card .ap-main { flex: 1; min-width: 260px; }
+.ap-title { color: var(--text-2); }
+.ap-amount { font-size: 1.9rem; font-weight: 500; color: var(--yellow); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.ap-actions { display: flex; flex-direction: column; gap: 8px; min-width: 150px; }
+.ap-actions button { height: 40px; }
+.ic { padding: var(--s-4) var(--s-5); }
+.ic-top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.ic-title { color: var(--text); font-weight: 500; }
+.ic-title:hover { color: var(--blue); }
+.ic-parties { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0 4px; font-size: .88rem; }
+.ic-parties .vs { color: var(--text-3); font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; }
+.ic-stake { margin-left: auto; color: var(--text-3); font-size: .8rem; }
+.ic-stake .num { color: var(--yellow); }
