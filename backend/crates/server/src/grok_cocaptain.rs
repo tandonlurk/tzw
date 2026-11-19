@@ -62,7 +62,9 @@ struct ModelSuggestion {
 }
 
 fn answer_schema() -> Value {
-    let money = json!({"type": ["string", "null"], "pattern": "^(0|[1-9][0-9]{0,17})$"});
+    // Nullable fields use `anyOf` (documented by xAI), not type arrays.
+    let nullable = |schema: Value| json!({"anyOf": [schema, {"type": "null"}]});
+    let money = nullable(json!({"type": "string", "pattern": "^(0|[1-9][0-9]{0,17})$"}));
     json!({
         "type": "object",
         "additionalProperties": false,
@@ -72,30 +74,30 @@ fn answer_schema() -> Value {
             "additionalProperties": false,
             "required": ["agent_id", "kind", "title", "body", "proposed_change"],
             "properties": {
-                "agent_id": {"type": ["string", "null"]},
+                "agent_id": nullable(json!({"type": "string"})),
                 "kind": {"type": "string", "enum": [
                     "approval_expiring", "idle_funds", "lower_max_stake", "repeated_denials",
                     "raise_approval_threshold", "agent_halted", "general"
                 ]},
                 "title": {"type": "string", "maxLength": MAX_TITLE_LEN},
                 "body": {"type": "string", "maxLength": MAX_BODY_LEN},
-                "proposed_change": {"type": ["object", "null"], "additionalProperties": false,
+                "proposed_change": nullable(json!({"type": "object", "additionalProperties": false,
                     "required": ["policy", "config"],
                     "properties": {
-                        "policy": {"type": ["object", "null"], "additionalProperties": false,
+                        "policy": nullable(json!({"type": "object", "additionalProperties": false,
                             "required": ["max_per_interaction", "max_aggregate_exposure",
                                          "approval_threshold", "min_conviction_bps", "stop_loss"],
                             "properties": {
                                 "max_per_interaction": money,
                                 "max_aggregate_exposure": money,
                                 "approval_threshold": money,
-                                "min_conviction_bps": {"type": ["integer", "null"], "minimum": 0, "maximum": 10000},
+                                "min_conviction_bps": nullable(json!({"type": "integer", "minimum": 0, "maximum": 10000})),
                                 "stop_loss": money
-                            }},
-                        "config": {"type": ["object", "null"], "additionalProperties": false,
+                            }})),
+                        "config": nullable(json!({"type": "object", "additionalProperties": false,
                             "required": ["risk_tolerance"],
-                            "properties": {"risk_tolerance": {"type": ["string", "null"], "enum": ["low", "medium", "high", null]}}}
-                    }}
+                            "properties": {"risk_tolerance": nullable(json!({"type": "string", "enum": ["low", "medium", "high"]}))}}))
+                    }}))
             }
         }}}
     })

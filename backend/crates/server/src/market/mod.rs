@@ -240,6 +240,10 @@ pub trait MarketData: Send + Sync {
     /// never mistaken for exchange data.
     fn name(&self) -> &'static str;
     fn spot_ticker<'a>(&'a self, symbol: &'a str) -> BoxFut<'a, Result<SpotTicker, MarketError>>;
+    /// Unix ms of the most recent spot trade, or `None` when the source has
+    /// no trade tape (the fake). Used to refuse resolving on a stale `last`.
+    fn last_trade_ms<'a>(&'a self, symbol: &'a str)
+    -> BoxFut<'a, Result<Option<i64>, MarketError>>;
     /// Newest first.
     fn spot_candles<'a>(
         &'a self,
@@ -290,6 +294,11 @@ pub struct Observation {
 /// from both ends.
 pub(crate) const MIN_OPEN_PRICE_BPS: i64 = 500;
 pub(crate) const MAX_OPEN_PRICE_BPS: i64 = 9500;
+/// A spot `last` older than this does not resolve a challenge (D-71): the
+/// observation is an error, so resolution waits out the grace period and
+/// voids if no newer trade arrives. On 2026-11-18 Gemini BTC `last` sat
+/// unchanged for 17+ minutes and a live run settled a false tie on it.
+pub const MAX_SPOT_TRADE_AGE_SECS: i64 = 600;
 /// Listings come back soonest-expiring first and an asset has dozens of
 /// 5 and 15 minute events, so a small page never reaches the longer-dated
 /// contracts. 100 was accepted live; a BTC search returned 24 events.
@@ -457,10 +466,22 @@ pub async fn observe(
         }
         (MarketRef::GeminiSpot { symbol }, FormulaId::SpotLastPriceMicrosV1) => {
             let ticker = source.spot_ticker(symbol).await?;
+            let detail = match source.last_trade_ms(symbol).await? {
+                Some(ts_ms) => {
+                    let age_secs = (chrono::Utc::now().timestamp_millis() - ts_ms) / 1000;
+                    if age_secs > MAX_SPOT_TRADE_AGE_SECS {
+                        return Err(MarketError::NoData(format!(
+                            "spot last trade is {age_secs} s old (limit {MAX_SPOT_TRADE_AGE_SECS} s)"
+                        )));
+                    }
+                    format!("spot last price (last trade {age_secs} s old)")
+                }
+                None => "spot last price".to_owned(),
+            };
             Ok(Observation {
                 value: ticker.last,
                 source: source.name(),
-                detail: "spot last price".to_owned(),
+                detail,
             })
         }
         _ => Err(MarketError::NoData(

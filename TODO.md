@@ -15,7 +15,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
   2. [x] Verified escrow, factory and AgentVault on Blockscout (D-61)
   3. [x] Chain wired into the lifecycle (D-63) and browser wallet UI built (D-62); live Arc run settled with drift 0 (`reports/handoffs/2026-11-17-arc-live-run.md`)
   4. [x] Committed the doc edits on `chain-vaults` (2f03581). Open PR: https://github.com/tandonlurk/tzw/pull/1
-  5. [ ] **You:** merge the stacked PRs in order #1 → #2 → #3; review the approach wheels and Firms pages (PR #3), and confirm D-65 (80/20 reading, task fee as the "guarantee")
+  5. [x] PRs #2–#5 merged into `main` (#1 closed). Still open for you: review the approach wheels and Firms pages, and confirm D-65 (80/20 reading, task fee as the "guarantee")
   6. [ ] **You:** try the wallet UI with MetaMask on Arc Testnet (create a vault for an agent, allocate, withdraw). Run instructions: `backend/README.md` "Run against Arc testnet"
 
 ## Needs you (review list)
@@ -31,6 +31,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [?] D-11 custom code = JavaScript in a Wasmtime/QuickJS sandbox: spike says GO (`docs/research/sandbox-spike.md`); also review D-40 (build `runner.wasm` locally vs commit it)
 - [?] D-17 main track "Agentic Payments & AI" + Arc award + all bounties
 - [?] Ask at sponsor office hours (Nov 16-19): what "Grok Bot" means for the xAI bounty
+- [?] Branch `afternoon-1118` (2026-11-18 evening, **uncommitted**: the agent was not allowed to commit): D-71 stale spot guard, xAI/QuickNode docs re-check. Review, then commit/merge. Handoff: `reports/handoffs/2026-11-18-afternoon.md`
 - [?] Streams: create a QuickNode stream and expose the webhook through a tunnel (needs `AEN_API_TOKEN` + `ALLOWED_HOSTS`); capture one real delivery to confirm the header names and payload (all UNVERIFIED today)
 - [x] Pushed to GitHub `tandonlurk/tzw`; `main` = `recovery` as of 2026-11-16 (consider making `main` the default branch). Repo is PUBLIC: make it private if you do not want the docs visible
 
@@ -54,7 +55,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 - [x] Graph executor + agent runtime (interval tick + `POST /api/dev/tick`), simulated env (backend, P0)
 - [x] Gemini exchange market data incl. prediction-market contracts, spot fallback, deterministic fake; shapes in `docs/research/gemini-prediction-markets.md` (backend, P0)
-- [~] Reasoner trait: rule-based done; Grok wired behind `XAI_API_KEY` but only mock-tested, endpoint/model unverified (backend, P0/P1, needs D-8 + key)
+- [~] Reasoner trait: rule-based done; Grok wired behind `XAI_API_KEY` but only mock-tested. Docs re-check 2026-11-18: model `grok-4.7` is listed; `/v1/chat/completions` is now labelled "Legacy" (still documented with `response_format`); schemas switched to documented `anyOf` + null (backend, P0/P1, needs D-8 + key)
 - [x] Challenge proposal, bounded negotiation, approvals, resolve, settle/void in the simulated ledger; 211 backend tests (backend, P0)
 - [x] Proposal cooldown (600 s per agent and market, D-33); `schemas/challenge_terms.schema.json`; demo seed `POST /api/dev/seed-demo` + seeded lifecycle test; 222 backend tests (backend, P1)
 - [x] `AgentVault` + `VaultFactory` contracts: onchain caps, pause, operator revoke, owner withdraw; 100 Foundry tests (contracts, P0, D-57)
@@ -70,13 +71,14 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [?] Approach block: stance wheel (competitive ↔ collaborative, cautious ↔ ambitious, firm role) + market wheel (any → category → subcategory, structure, keywords, symbols, ranges) with live preview; backend gates discovery and incoming challenges; ambition sizes stakes when an approach node exists (D-64). Design: `docs/design/approach-and-firms.md`
 - [?] Firms: lead keeps 80%, scouts/analysts share 20% by role weight, optional task fee, losses on the lead; simulated only (D-64, D-65). E2E over HTTP + browser-checked against the real backend (`reports/handoffs/2026-11-18-approach-firms.md`)
 - [x] Fake market catalog: BTC + 6 fixed events (ETH, WTI and natural gas under Commodities/Energy, gold, Fed decision, sports final), 14 contracts; `/markets/categories` and `/markets/preview` demo offline; BTC demo numbers unchanged (D-66) (backend, P1)
+- [x] Live re-check 2026-11-18 evening: Gemini PM API back up; discovery picked `GEMI-BTC05M2611190140-UP` at book 0.50/0.51 → 5050 (D-67 mid verified live, contract had no last trade). Stale spot `last`: refuse to resolve when the latest trade is > 10 min old (wait, then void) (D-71). Live test: `cargo test -p aen-server live_gemini -- --ignored --nocapture` (backend, P1)
 - [x] Testnet run gaps: vault release txs + `vault_released` activity; `/stats/portfolio?env=arc_testnet` + dashboard panel; discovery at bid/ask mid (D-67). Live Arc run settled, drift 0; mid not verified live (Gemini PM API 500 all night), stale spot `last` finding (`reports/handoffs/2026-11-18-testnet-gaps.md`) (backend, P1)
 - [x] Firm demo seed: `POST /api/dev/seed-firm-demo` + README "Firm demo"; lead +3.80, scout 0.70, analyst 0.50 over HTTP (D-68) (backend, P2)
 - [x] Starter templates with an approach node: bull 15 %/100 %, skeptic 25 %/50 %, cautious 30 %/20 %; demo and firm-demo numbers unchanged on a fresh-db rerun, Cautious stakes 0.72 (D-69) (backend, P2)
 
 ## M3 — Observability (Tue Nov 17)
 
-- [x] QuickNode Streams webhook ingestion, local only: HMAC + skew check, idempotent on (tx hash, log index), reorg-aware, fixture tests (D-49..D-51). Header names and payload shape UNVERIFIED until one real delivery; not exposed (backend, P1)
+- [x] QuickNode Streams webhook ingestion, local only: HMAC + skew check, idempotent on (tx hash, log index), reorg-aware, fixture tests (D-49..D-51). Header names, signed message and payload now match QuickNode's docs (2026-11-18); gzip gets a clear 415. Still not confirmed by a real delivery; not exposed (backend, P1)
 - [x] Full lifecycle end to end on testnet with real Gemini data: autonomous scheduler, Gemini settled `no`, drift 0 (`reports/handoffs/2026-11-17-testnet-gemini.md`) (lead, P0)
 - [x] Wallet overview, Activity view, approvals queue, interactions list/detail, Dashboard charts from `/stats/portfolio` only (per-agent P&L lines by default); 25 web tests. Browser-verified 2026-11-15 incl. reject, approve-then-cancelled notice, agent-detail challenges, template prefill (frontend, P0)
 - [x] Backend gaps from `reports/qa-m2-web.md`: summaries now readable ("5.00 USDC (simulated)"); approvals arise on the counterparty side by design; dev clock jumps past a funding deadline are refused with 409 (D-34) (backend, P1)

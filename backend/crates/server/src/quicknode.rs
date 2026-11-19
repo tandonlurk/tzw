@@ -7,8 +7,11 @@
 //! is stored once, keyed on `(tx_hash, log_index)`, so duplicate and
 //! reordered deliveries are no-ops, and is recorded as activity.
 //!
-//! **UNVERIFIED** (docs/research/sponsors.md): the header names, the signed
-//! message layout and the payload field names. Header names are
+//! Header names (`X-QN-Signature`, `X-QN-Timestamp`, `X-QN-Nonce`), the
+//! signed message (hex HMAC-SHA256 of nonce + timestamp + decompressed body,
+//! keyed with the stream's security token) and the `{data, metadata}` log
+//! fields match QuickNode's docs as read 2026-11-18 (docs/research/sponsors.md).
+//! Still UNVERIFIED until one real delivery is captured. Header names stay
 //! configurable; the assumptions are documented in docs/api.md. Nothing here
 //! acts on an event: there is no chain executor, and nothing signs or sends.
 
@@ -316,6 +319,18 @@ pub async fn webhook(
     let Some(cfg) = state.settings.quicknode.as_ref() else {
         return Err(ApiError::not_found("route"));
     };
+    // QuickNode can gzip deliveries and signs the decompressed body; this
+    // endpoint reads plain JSON only, so say so instead of failing the
+    // signature check.
+    if header(&headers, "content-encoding")
+        .is_some_and(|e| !e.trim().eq_ignore_ascii_case("identity"))
+    {
+        return Err(ApiError::new(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "unsupported_media_type",
+            "compressed deliveries are not accepted: turn compression off on the stream's webhook destination",
+        ));
+    }
     let signature = header(&headers, &cfg.signature_header)
         .ok_or_else(|| unauthorized("missing_signature", "the signature header is missing"))?;
     let timestamp = header(&headers, &cfg.timestamp_header)

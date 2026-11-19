@@ -354,6 +354,14 @@ impl MarketData for FakeMarket {
         })
     }
 
+    fn last_trade_ms<'a>(
+        &'a self,
+        _symbol: &'a str,
+    ) -> BoxFut<'a, Result<Option<i64>, MarketError>> {
+        // No trade tape: the fake's price is fresh by construction.
+        Box::pin(async { Ok(None) })
+    }
+
     fn spot_candles<'a>(
         &'a self,
         symbol: &'a str,
