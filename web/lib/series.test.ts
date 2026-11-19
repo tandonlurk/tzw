@@ -33,7 +33,7 @@ describe("portfolioSeries", () => {
     } as unknown as Portfolio;
     const s = portfolioSeries(p);
     expect(s.agents.map((a) => [a.name, a.points.map((x) => x.v)])).toEqual([["A", [100, 300]], ["B", [-100]]]);
-    expect(s.total.points.map((x) => x.v)).toEqual([100, 0, 200]);
+    expect(s.total.points.map((x) => x.v)).toEqual([0, 200]); // same-time points collapse to the last value
   });
 });
 

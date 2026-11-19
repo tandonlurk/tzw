@@ -53,7 +53,12 @@ export function portfolioSeries(p: Portfolio): { agents: Series[]; total: Series
     s.points.push({ t, v: Number(e.agent_cumulative) });
     total.points.push({ t, v: Number(e.portfolio_cumulative) });
   }
-  const sort = (s: Series) => s.points.sort((a, b) => a.t - b.t);
+  // Stable sort, then keep the last value per timestamp: two sides of one settlement share a time,
+  // and the intermediate running total between them is not a real state.
+  const sort = (s: Series) => {
+    s.points.sort((a, b) => a.t - b.t);
+    s.points = s.points.filter((p, i, arr) => i === arr.length - 1 || arr[i + 1].t !== p.t);
+  };
   by.forEach(sort);
   sort(total);
   return { agents: [...by.values()], total };

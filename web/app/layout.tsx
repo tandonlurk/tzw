@@ -8,6 +8,8 @@ import "./globals.css";
 import "./shell.css";
 import "./ui.css";
 import "./canvas.css";
+import "./terminal.css";
+import "./code.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jbmono", display: "swap" });

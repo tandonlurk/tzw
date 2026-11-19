@@ -54,6 +54,8 @@ export interface Stats {
   realized_pnl: Money; // signed
   settled: number;
   wins: number;
+  /** Firm payouts and task fees received; separate from challenge P&L. Absent on older backends. */
+  firm_income?: Money;
 }
 
 export interface Agent {

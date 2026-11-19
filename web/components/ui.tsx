@@ -47,12 +47,16 @@ export function Async<T>({
   state,
   what,
   children,
+  stale = false,
 }: {
   state: AsyncState<T>;
   what?: string;
   children: (data: T) => ReactNode;
+  /** Keep showing the previous data while a reload of the same thing is in flight (no loading flash on refresh). */
+  stale?: boolean;
 }) {
   if (state.error) return <ErrorState error={state.error} onRetry={state.reload} />;
+  if (stale && state.data !== null) return <>{children(state.data)}</>;
   if (state.loading || state.data === null) return <Loading what={what} />;
   return <>{children(state.data)}</>;
 }
