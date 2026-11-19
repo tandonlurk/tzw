@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import { ADV, MODE_COOKIE, agentIdOfPath, counterpartPath, modeOfPath, type Mode } from "@/lib/mode";
 import { Icon, type IconName } from "./icons";
@@ -132,6 +132,9 @@ export function AppShell({ initialMode, children }: { initialMode: Mode; childre
   }, [switchMode]);
 
   const pending = usePendingApprovals(path);
+  // The page scrolls inside .app-scroll, not the window, so reset it on navigation ourselves.
+  const scroller = useRef<HTMLDivElement>(null);
+  useEffect(() => { scroller.current?.scrollTo({ top: 0 }); }, [path]);
   const groups = mode === "basic" ? BASIC : ADVANCED;
   const fullBleed = /\/(logic|code)$/.test(path);
 
@@ -192,7 +195,7 @@ export function AppShell({ initialMode, children }: { initialMode: Mode; childre
               </button>
             </div>
           </header>
-          <div className="app-scroll">
+          <div className="app-scroll" ref={scroller}>
             <main key={mode} className={`app-content mode-enter${fullBleed ? " full" : ""}`}>{children}</main>
           </div>
         </div>
