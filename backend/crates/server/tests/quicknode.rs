@@ -299,6 +299,15 @@ async fn bad_missing_or_stale_signatures_store_nothing() {
 }
 
 #[tokio::test]
+async fn gzip_deliveries_get_a_clear_415() {
+    let c = setup().await;
+    let req = delivery(FIXTURE, SECRET, &now(), &[("content-encoding", "gzip")]);
+    let (status, body) = call(&c.app, req).await;
+    assert_eq!(status, StatusCode::UNSUPPORTED_MEDIA_TYPE, "{body}");
+    assert!(events(&c.pool).await.is_empty());
+}
+
+#[tokio::test]
 async fn malformed_logs_are_rejected_one_by_one() {
     let c = setup().await;
     let mut f = fixture();

@@ -138,6 +138,12 @@ struct RawTicker {
     last: String,
 }
 
+/// One row of `GET /v1/trades/{symbol}`; only the time is read.
+#[derive(Deserialize)]
+struct RawTrade {
+    timestampms: i64,
+}
+
 pub fn parse_ticker(body: &str) -> Result<SpotTicker, MarketError> {
     let raw: RawTicker =
         serde_json::from_str(body).map_err(|e| MarketError::Decode(e.to_string()))?;
@@ -383,6 +389,27 @@ impl MarketData for GeminiClient {
         })
     }
 
+    fn last_trade_ms<'a>(
+        &'a self,
+        symbol: &'a str,
+    ) -> BoxFut<'a, Result<Option<i64>, MarketError>> {
+        Box::pin(async move {
+            let symbol = path_segment(symbol)?.to_lowercase();
+            let trades: Vec<RawTrade> = self
+                .get(
+                    &format!("/v1/trades/{symbol}"),
+                    &[("limit_trades", "1".to_owned())],
+                )
+                .await?;
+            match trades.first() {
+                Some(t) => Ok(Some(t.timestampms)),
+                None => Err(MarketError::NoData(format!(
+                    "no recent trades for {symbol}"
+                ))),
+            }
+        })
+    }
+
     fn spot_candles<'a>(
         &'a self,
         symbol: &'a str,
@@ -463,7 +490,7 @@ mod tests {
         Path(symbol): Path<String>,
     ) -> (StatusCode, String) {
         match symbol.as_str() {
-            "btcusd" => (StatusCode::OK, TICKER.into()),
+            "btcusd" | "quietusd" => (StatusCode::OK, TICKER.into()),
             // Fails twice, then answers.
             "flaky" => {
                 if hits.flaky.fetch_add(1, Ordering::SeqCst) < 2 {
@@ -496,6 +523,23 @@ mod tests {
         }
     }
 
+    /// `quietusd` last traded 17 minutes ago (the 2026-11-18 stale `last`).
+    async fn trades_route(Path(symbol): Path<String>) -> (StatusCode, String) {
+        let now = chrono::Utc::now().timestamp_millis();
+        let ts = match symbol.as_str() {
+            "btcusd" => now - 5_000,
+            "quietusd" => now - 17 * 60_000,
+            _ => return (StatusCode::OK, "[]".into()),
+        };
+        (
+            StatusCode::OK,
+            format!(
+                r#"[{{"timestamp":{},"timestampms":{ts},"tid":2840141037607365,"price":"62930.96","amount":"0.00007945","exchange":"gemini","type":"buy"}}]"#,
+                ts / 1000
+            ),
+        )
+    }
+
     async fn events_route(
         State(hits): State<Arc<Hits>>,
         Query(query): Query<HashMap<String, String>>,
@@ -520,6 +564,7 @@ mod tests {
         let hits = Arc::new(Hits::default());
         let app = Router::new()
             .route("/v1/pubticker/{symbol}", get(ticker_route))
+            .route("/v1/trades/{symbol}", get(trades_route))
             .route("/v2/candles/{symbol}/{frame}", get(|| async { CANDLES }))
             .route("/v1/prediction-markets/events", get(events_route))
             .route("/v1/prediction-markets/events/{ticker}", get(event_route))
@@ -715,6 +760,57 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(obs.value, 65_029_830_000);
+        assert!(
+            obs.detail.starts_with("spot last price (last trade"),
+            "{}",
+            obs.detail
+        );
+    }
+
+    #[tokio::test]
+    async fn stale_spot_last_does_not_resolve() {
+        // D-71: a `last` whose trade is older than the limit is an error, so
+        // resolution waits out the grace period instead of settling on it.
+        let (client, _) = server().await;
+        let quiet = MarketRef::GeminiSpot {
+            symbol: "quietusd".into(),
+        };
+        let err = observe(&client, &quiet, FormulaId::SpotLastPriceMicrosV1)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&err, MarketError::NoData(m) if m.contains("old")),
+            "{err:?}"
+        );
+        // No trades at all is not fresh either.
+        assert!(matches!(
+            client.last_trade_ms("ethusd").await,
+            Err(MarketError::NoData(_))
+        ));
+    }
+
+    /// Reaches the real Gemini API; run before recording a live demo:
+    /// `cargo test -p aen-server live_gemini -- --ignored --nocapture`.
+    #[tokio::test]
+    #[ignore = "needs the internet"]
+    async fn live_gemini_discovery_and_spot_resolution() {
+        let client = GeminiClient::new(GeminiClient::DEFAULT_BASE_URL).unwrap();
+        let now = chrono::Utc::now().timestamp();
+        let view = crate::market::discover(&client, "BTCUSD", 3600, now + 3600)
+            .await
+            .unwrap();
+        println!(
+            "discovery: {} = {} ({:?}, fallback {:?})",
+            view.title, view.value, view.market, view.fallback_reason
+        );
+        let spot = MarketRef::GeminiSpot {
+            symbol: "btcusd".into(),
+        };
+        let obs = observe(&client, &spot, FormulaId::SpotLastPriceMicrosV1)
+            .await
+            .unwrap();
+        println!("spot resolution: {} ({})", obs.value, obs.detail);
+        assert!(obs.value > 0);
     }
 
     #[tokio::test]

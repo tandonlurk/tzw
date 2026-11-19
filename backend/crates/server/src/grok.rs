@@ -48,6 +48,8 @@ struct ModelAnswer {
     threshold: Option<i64>,
 }
 
+/// Nullable fields use `anyOf` with `{"type": "null"}`: xAI's structured
+/// outputs guide documents `anyOf` and `null`, not type arrays.
 fn answer_schema() -> Value {
     json!({
         "type": "object",
@@ -58,8 +60,8 @@ fn answer_schema() -> Value {
             "stance": {"type": "string", "enum": ["above", "below"]},
             "matches_strategy": {"type": "boolean"},
             "summary": {"type": "string", "maxLength": MAX_SUMMARY_LEN},
-            "stake": {"type": ["string", "null"], "pattern": "^(0|[1-9][0-9]{0,17})$"},
-            "threshold": {"type": ["integer", "null"]}
+            "stake": {"anyOf": [{"type": "string", "pattern": "^(0|[1-9][0-9]{0,17})$"}, {"type": "null"}]},
+            "threshold": {"anyOf": [{"type": "integer"}, {"type": "null"}]}
         }
     })
 }

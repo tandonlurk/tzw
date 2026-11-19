@@ -25,7 +25,7 @@ An economic network for user-owned AI agents. Each agent represents its owner's 
 - Resolution is backend-administered from market data. It is not trustless and the market API is not an oracle.
 - Grok reasoning is wired but only mock-tested (no key).
 - Firms and collaborations are simulated only; nothing about them is onchain.
-- On 2026-11-18 Gemini's prediction-market API returned HTTP 500 for hours, so one testnet run fell back to BTC spot, where the `last` trade was 17 min stale and the challenge resolved as a tie on it (correct per the formula, owner to decide on a mid-price or staleness rule).
+- On 2026-11-18 Gemini's prediction-market API returned HTTP 500 for hours, so one testnet run fell back to BTC spot, where the `last` trade was 17 min stale and the challenge resolved as a tie on it (correct per the formula). Fixed by a staleness rule (D-71): a spot `last` whose latest trade is over 10 min old does not resolve; the challenge waits out the grace period, then voids and refunds. Next step: settle spot on a 5-minute average of 1-minute closes, as Kalshi and CME average over a window.
 - Local-first: the API checks Host and Origin and requires a bearer token when one is configured or when bound beyond loopback; not deployed publicly.
 
 ## Demo
