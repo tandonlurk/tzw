@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, isApiError, type TickReport } from "@/lib/api";
 
 /** Dev-only control. Calls POST /dev/tick (one lifecycle step). Hidden when the endpoint is not mounted (404). */
@@ -9,7 +9,11 @@ export function DevTick({ onDone }: { onDone?: () => void }) {
   const [report, setReport] = useState<TickReport | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [hidden, setHidden] = useState(false);
-  if (hidden) return null;
+  const [off, setOff] = useState(false);
+  // Settings > Developer can hide this control (browser-only preference).
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setOff(window.localStorage.getItem("tzw.devControls") === "0"), []);
+  if (hidden || off) return null;
 
   async function run() {
     setBusy(true);
@@ -30,11 +34,10 @@ export function DevTick({ onDone }: { onDone?: () => void }) {
     : null;
 
   return (
-    <div className="dev-box row">
-      <span className="badge pend">Dev</span>
-      <button className="sm" disabled={busy} onClick={run}>Dev: run tick</button>
-      <span className="dim" style={{ fontSize: ".85rem" }}>Runs one lifecycle step now. Development only.</span>
-      {summary && <span className="info">{summary}</span>}
+    <div className="dev-box" title="Runs one lifecycle step now. Development only.">
+      <span className="badge pend plain">Dev</span>
+      <button className="xs ghost" disabled={busy} onClick={run} aria-label="Dev: run tick">{busy ? "Running..." : "Run tick"}</button>
+      {summary && <span className="info xs">{summary}</span>}
       {report && report.errors.length > 0 && <span className="neg">{report.errors.join("; ")}</span>}
       {msg && <span className="neg">{msg}</span>}
     </div>

@@ -52,7 +52,7 @@ export function CodeEditor({ source, onChange, agentId }: { source: string; onCh
   );
 }
 
-function TestRunView({ r }: { r: TestRun }) {
+export function TestRunView({ r }: { r: TestRun }) {
   return (
     <div className="card" style={{ marginTop: ".4rem" }} role="status">
       <div className="notice" style={{ marginBottom: ".4rem" }}>Dry run, simulated: nothing was written. No ledger entry, run, activity, challenge or approval.</div>

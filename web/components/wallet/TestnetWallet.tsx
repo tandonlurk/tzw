@@ -27,7 +27,7 @@ async function loadRows(): Promise<Row[]> {
 export function TestnetWallet() {
   return (
     <div className="stack">
-      <h2>Arc testnet</h2>
+      <h2 style={{ marginTop: 0 }}>Arc testnet</h2>
       <div className="dim">{TESTNET_LABEL}. Separate from the simulated balances above; the two are never added together.</div>
       <ChainGate>{(cfg) => <Inner cfg={cfg} />}</ChainGate>
     </div>

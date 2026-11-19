@@ -2,30 +2,29 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, isApiError, type ApiError, type AgentInput, type Template } from "@/lib/api";
-import { clearPositions, loadPositions, savePositions } from "@/lib/graph";
+import { api, isApiError, type ApiError, type AgentInput } from "@/lib/api";
+import { clearPositions, emptyGraph } from "@/lib/graph";
 import { useAsync } from "@/lib/useAsync";
-import { Async, Empty } from "@/components/ui";
+import { Async, PageHead } from "@/components/ui";
 import { AgentForm } from "@/components/AgentForm";
+
+const BLANK: AgentInput = {
+  name: "",
+  description: "",
+  config: { goals: "", strategy: "", categories: [], horizon_secs: 3600, risk_tolerance: "medium", schedule_secs: 300 },
+  policy: { max_per_interaction: "5000000", max_aggregate_exposure: "20000000", approval_threshold: "2000000", allowed_interaction_types: ["challenge"], min_conviction_bps: 6000, stop_loss: null },
+  graph: emptyGraph(),
+};
 
 export default function NewAgentPage() {
   const templates = useAsync(api.listTemplates, "templates");
-  const blocks = useAsync(api.listBlocks, "blocks");
-  const [picked, setPicked] = useState<Template | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const router = useRouter();
-
-  function pick(t: Template | null) {
-    clearPositions("new"); // a different starting graph gets a fresh auto layout
-    setError(null);
-    setPicked(t);
-  }
 
   async function create(input: AgentInput) {
     setError(null);
     try {
       const agent = await api.createAgent(input);
-      savePositions(agent.id, loadPositions("new"));
       clearPositions("new");
       router.push(`/agents/${agent.id}`);
     } catch (e) {
@@ -35,46 +34,19 @@ export default function NewAgentPage() {
 
   return (
     <div>
-      <div className="page-head"><div><h1>Create agent</h1></div></div>
+      <PageHead eyebrow="New agent" title="Create an agent" sub="A few short steps. Limits you set here are enforced by the server, not by the agent." />
       <Async state={templates} what="templates">
-        {(tpls) =>
-          tpls.length === 0 ? (
-            <Empty>The backend has no templates to start from.</Empty>
-          ) : !picked ? (
-            <div>
-              <div className="dim" style={{ marginBottom: ".75rem" }}>Pick a template. You can change everything afterwards.</div>
-              <div className="grid">
-                {tpls.map((t) => (
-                  <div key={t.id} className="card stack">
-                    <strong>{t.name}</strong>
-                    <div className="dim">{t.description}</div>
-                    <button className="primary" onClick={() => pick(t)}>Use this template</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <Async state={blocks} what="block catalog">
-              {(defs) => (
-                <div>
-                  <div className="row" style={{ marginBottom: ".75rem" }}>
-                    <span>Template: <strong>{picked.name}</strong></span>
-                    <button className="sm" onClick={() => pick(null)}>Change template</button>
-                  </div>
-                  <AgentForm
-                    key={picked.id}
-                    blocks={defs}
-                    initial={{ name: "", description: picked.description, config: picked.config, policy: picked.policy, graph: picked.graph }}
-                    storageId="new"
-                    submitLabel="Create agent"
-                    onSubmit={create}
-                    serverError={error}
-                  />
-                </div>
-              )}
-            </Async>
-          )
-        }
+        {(tpls) => (
+          <AgentForm
+            variant="wizard"
+            templates={tpls}
+            initial={tpls[0] ? { ...BLANK, description: tpls[0].description, config: tpls[0].config, policy: tpls[0].policy, graph: tpls[0].graph } : BLANK}
+            submitLabel="Create agent"
+            onSubmit={create}
+            serverError={error}
+            onCancel={() => router.push("/agents")}
+          />
+        )}
       </Async>
     </div>
   );

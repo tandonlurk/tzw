@@ -4,10 +4,13 @@ import Link from "next/link";
 import { useState } from "react";
 import { api, isApiError, type Approval, type ApprovalDecision } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
-import { Async, Empty, EnvBadge, ErrorBanner, Money, formatTs } from "@/components/ui";
+import { Async, Empty, EnvBadge, ErrorBanner, Money, PageHead, formatTs } from "@/components/ui";
 import { reasonSuffix } from "@/lib/interactions";
 import { DevTick } from "@/components/DevTick";
 import type { ApiError } from "@/lib/api";
+import { shortName } from "@/lib/agentColors";
+import { Icon } from "@/components/shell/icons";
+import { APPROVALS_CHANGED } from "@/components/shell/AppShell";
 
 type Result = { approval: Approval; decision: "approve" | "reject"; result: ApprovalDecision };
 
@@ -17,10 +20,9 @@ export default function ApprovalsPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div><h1>Approvals</h1><div className="dim">Challenges that need your decision before an agent commits funds. Stakes are simulated.</div></div>
+      <PageHead title="Approvals" sub="Stakes above an agent's approval limit wait here. Nothing is committed until you approve.">
         <DevTick onDone={pending.reload} />
-      </div>
+      </PageHead>
 
       {results.map((r) => <ResultNotice key={r.approval.id} r={r} />)}
 
@@ -37,6 +39,7 @@ export default function ApprovalsPage() {
                   onDecided={(decision, result) => {
                     setResults((rs) => [{ approval: a, decision, result }, ...rs]);
                     pending.reload();
+                    window.dispatchEvent(new Event(APPROVALS_CHANGED));
                   }}
                   onStale={pending.reload}
                 />
@@ -92,19 +95,20 @@ function ApprovalCard({ a, onDecided, onStale }: {
   }
 
   return (
-    <div className="card">
-      <div className="row spread">
-        <strong>{a.agent_name} wants to stake <Money value={a.stake} /></strong>
-        <EnvBadge env={a.env} />
+    <div className="card attention approval-card">
+      <div className="ap-main">
+        <div className="row" style={{ gap: 8, marginBottom: 6 }}><span className="eyebrow" style={{ color: "var(--yellow)" }}>Needs your decision</span><EnvBadge env={a.env} /></div>
+        <div className="ap-title"><strong>{shortName(a.agent_name)}</strong> wants to stake</div>
+        <div className="ap-amount"><Money value={a.stake} /></div>
+        <div className="small" style={{ marginTop: 6 }}>On &quot;{a.market_title}&quot; · <Link href={`/interactions/${a.interaction_id}`}>Open challenge</Link></div>
+        <div className="dim small" style={{ marginTop: 4 }}>{a.reason}</div>
+        <div className="dim xs" style={{ marginTop: 4 }}>Requested {formatTs(a.requested_at)} · expires {formatTs(a.expires_at)}</div>
+        <div style={{ marginTop: ".5rem" }}><ErrorBanner error={error} /></div>
       </div>
-      <div style={{ margin: ".3rem 0" }}>On &quot;{a.market_title}&quot;. <Link href={`/interactions/${a.interaction_id}`}>Open challenge</Link></div>
-      <div className="dim">{a.reason}</div>
-      <div className="dim" style={{ fontSize: ".8rem" }}>Requested {formatTs(a.requested_at)} &middot; expires {formatTs(a.expires_at)}</div>
-      <div className="row" style={{ marginTop: ".6rem" }}>
-        <button className="primary" disabled={busy} onClick={() => decide("approve")}>Approve</button>
-        <button disabled={busy} onClick={() => decide("reject")}>Reject</button>
+      <div className="ap-actions">
+        <button className="primary" disabled={busy} onClick={() => decide("approve")}><Icon name="check" size={15} />Approve</button>
+        <button className="outline" disabled={busy} onClick={() => decide("reject")}><Icon name="close" size={15} />Reject</button>
       </div>
-      <div style={{ marginTop: ".5rem" }}><ErrorBanner error={error} /></div>
     </div>
   );
 }

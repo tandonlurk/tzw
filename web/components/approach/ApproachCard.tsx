@@ -17,7 +17,7 @@ export function ApproachCard({ agent: a }: { agent: Agent }) {
     <div className="card">
       <div className="row spread">
         <h3 style={{ margin: 0 }}>Approach</h3>
-        <Link className="btn sm" href={`/agents/${a.id}/edit`}>Edit approach</Link>
+        <Link className="btn sm outline" href={`/agents/${a.id}/logic?node=${approachNodeOf(a.graph)?.id ?? ""}`}>Edit in logic</Link>
       </div>
       {!approachNodeOf(a.graph) && <div className="dim small">No approach block saved yet: the defaults below apply.</div>}
       <div className="grid-2" style={{ marginTop: ".5rem" }}>

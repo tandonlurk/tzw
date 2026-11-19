@@ -376,6 +376,8 @@ Avoid adding unnecessary navigation items just because the underlying architectu
 
 ## 4.4 Provisional color palette
 
+> **Superseded 2026-11-19** by the owner's TZW UI brief: charcoal monochrome with soft-blue (interactive) and muted-yellow (money, pending) accents; mint and rose kept for gains and losses. Tokens: `web/app/globals.css`. Design notes: `docs/design/ui.md` (D-72). The table below is the original starting point.
+
 Use the following palette as a starting point:
 
 | Purpose | Color | Hex |

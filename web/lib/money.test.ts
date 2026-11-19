@@ -54,3 +54,11 @@ describe("sumMoney / signOf", () => {
     expect(signOf("5")).toBe(1);
   });
 });
+
+describe("parseMoney leniency", () => {
+  it("accepts currency symbols, separators and a unit suffix", () => {
+    expect(parseMoney("$1,000.50")).toBe("1000500000");
+    expect(parseMoney("1 000.5 USDC")).toBe("1000500000");
+    expect(parseMoney("$-1")).toBe(null);
+  });
+});

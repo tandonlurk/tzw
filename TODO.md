@@ -32,6 +32,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [?] D-17 main track "Agentic Payments & AI" + Arc award + all bounties
 - [?] Ask at sponsor office hours (Nov 16-19): what "Grok Bot" means for the xAI bounty
 - [?] Branch `afternoon-1118` (2026-11-18 evening, **uncommitted**: the agent was not allowed to commit): D-71 stale spot guard, xAI/QuickNode docs re-check. Review, then commit/merge. Handoff: `reports/handoffs/2026-11-18-afternoon.md`
+- [?] **New UI (2026-11-19 overnight)**: branch `ui-1119`, local only. Open http://localhost:3000, toggle Basic/Advanced (top-right icon or ⌘\\), try the Terminal and an agent's Logic and Code tabs. Review D-72, then merge. Handoff: `reports/handoffs/2026-11-19-ui-overnight.md`
 - [?] Streams: create a QuickNode stream and expose the webhook through a tunnel (needs `AEN_API_TOKEN` + `ALLOWED_HOSTS`); capture one real delivery to confirm the header names and payload (all UNVERIFIED today)
 - [x] Pushed to GitHub `tandonlurk/tzw`; `main` = `recovery` as of 2026-11-16 (consider making `main` the default branch). Repo is PUBLIC: make it private if you do not want the docs visible
 

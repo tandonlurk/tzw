@@ -2,10 +2,12 @@
 
 Goal: one coherent lifecycle, about 4 minutes, on Arc testnet with real testnet USDC. Anything simulated is labelled on screen.
 
+> **UI renamed 2026-11-19 (branch `ui-1119`, D-72).** Dashboard → **Overview** `/` (Basic) or **Terminal** `/advanced` (Advanced; its Simulated / Arc testnet switch replaces the second dashboard panel, and Overview shows an "Onchain agents" strip when a vault exists). "Dev: run tick" → the dashed **Dev · Run tick** control (Overview, Terminal, Approvals, Challenges). Interactions → **Challenges**. Logic builder and Edit → the agent's **Logic** and **Configuration** tabs. The mode switch is the icon in the top right (⌘\\).
+
 | # | Step | What the audience sees | Proves |
 |---|---|---|---|
 | 1 | Create agent "Bull" from a template | Config form: goals, risk, limits (max 5 USDC per challenge, approval above 3) | Config-based creation |
-| 2 | Open the logic builder | Blocks: market move → evaluate → conviction ≥ 0.6 → propose challenge. Edit a threshold, validate, save | Visual builder, versioned graph |
+| 2 | Open the agent's Logic tab | Blocks: market move → evaluate → conviction ≥ 0.6 → propose challenge. Edit a threshold, validate, save | Visual builder, versioned graph |
 | 3 | Show second agent "Skeptic" (pre-made, different owner settings) | Its own wallet address, balance, strategy | Persistent identity + wallet context |
 | 4 | Trigger a tick | Both agents read the Gemini exchange BTC price and form opposite views | Independent discovery |
 | 5 | Negotiation | Activity feed: proposal, counter-offer on stake/threshold, acceptance, explicit terms | Negotiated measurable challenge |
