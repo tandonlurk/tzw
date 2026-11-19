@@ -286,12 +286,12 @@ function Inner({ agent, blocks, onSaved, codeHref }: Props) {
           </div>
 
           <div className="lc-bar lc-br">
-            <button type="button" className={`icon-btn sm ghost${legend ? " on" : ""}`} onClick={() => setLegend((l) => !l)} aria-pressed={legend} data-tip="Shapes legend"><Icon name="layout" size={15} /></button>
-            <button type="button" className={`icon-btn sm ghost${minimap ? " on" : ""}`} onClick={() => setMinimap((m) => !m)} aria-pressed={minimap} data-tip="Minimap"><Icon name="minimap" size={15} /></button>
+            <button type="button" className={`icon-btn sm ghost${legend ? " on" : ""}`} onClick={() => setLegend((l) => !l)} aria-pressed={legend} aria-label="Shapes legend" data-tip="Shapes legend"><Icon name="layout" size={15} /></button>
+            <button type="button" className={`icon-btn sm ghost${minimap ? " on" : ""}`} onClick={() => setMinimap((m) => !m)} aria-pressed={minimap} aria-label="Minimap" data-tip="Minimap"><Icon name="minimap" size={15} /></button>
             <span className="sep" />
             <button type="button" className="icon-btn sm ghost" onClick={() => rf.zoomOut({ duration: 200 })} aria-label="Zoom out">−</button>
             <button type="button" className="icon-btn sm ghost" onClick={() => rf.zoomIn({ duration: 200 })} aria-label="Zoom in">+</button>
-            <button type="button" className="icon-btn sm ghost" onClick={() => rf.fitView({ padding: 0.25, duration: 300, maxZoom: 1.1 })} data-tip="Fit to view"><Icon name="fit" size={15} /></button>
+            <button type="button" className="icon-btn sm ghost" onClick={() => rf.fitView({ padding: 0.25, duration: 300, maxZoom: 1.1 })} aria-label="Fit to view" data-tip="Fit to view"><Icon name="fit" size={15} /></button>
           </div>
 
           {legend && (

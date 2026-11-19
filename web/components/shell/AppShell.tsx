@@ -144,6 +144,7 @@ export function AppShell({ initialMode, children }: { initialMode: Mode; childre
   return (
     <ModeContext.Provider value={{ mode, switchMode, lastAgentId }}>
       <div className="app" data-mode={mode}>
+        <a href="#main" className="skip-link">Skip to content</a>
         <aside className="sidebar" aria-label="Primary">
           <div className="sidebar-top">
             <Link href={mode === "basic" ? "/" : ADV} className="wordmark" aria-label="TZW home">
@@ -158,7 +159,7 @@ export function AppShell({ initialMode, children }: { initialMode: Mode; childre
                 {g.items.map((i) => {
                   const active = i.match ? i.match(path) : path === i.href;
                   return (
-                    <Link key={i.href} href={i.href} className={`nav-item${active ? " active" : ""}`} aria-current={active ? "page" : undefined} data-tip={i.label}>
+                    <Link key={i.href} href={i.href} className={`nav-item${active ? " active" : ""}`} aria-current={active ? "page" : undefined} aria-label={i.count && pending > 0 ? `${i.label}, ${pending} pending` : i.label} data-tip={i.label}>
                       <Icon name={i.icon} size={mode === "advanced" ? 18 : 17} />
                       <span className="label">{i.label}</span>
                       {i.count && pending > 0 && <span className="count" aria-label={`${pending} pending`}>{pending}</span>}
@@ -169,7 +170,7 @@ export function AppShell({ initialMode, children }: { initialMode: Mode; childre
             ))}
           </nav>
           <div className="sidebar-foot">
-            <Link href="/settings" className={`nav-item${path.startsWith("/settings") ? " active" : ""}`} data-tip="Settings">
+            <Link href="/settings" className={`nav-item${path.startsWith("/settings") ? " active" : ""}`} aria-label="Settings" data-tip="Settings">
               <Icon name="settings" size={mode === "advanced" ? 18 : 17} />
               <span className="label">Settings</span>
             </Link>
@@ -199,7 +200,7 @@ export function AppShell({ initialMode, children }: { initialMode: Mode; childre
             </div>
           </header>
           <div className="app-scroll" ref={scroller}>
-            <main key={mode} className={`app-content mode-enter${fullBleed ? " full" : ""}`}>{children}</main>
+            <main id="main" tabIndex={-1} key={mode} className={`app-content mode-enter${fullBleed ? " full" : ""}`}>{children}</main>
           </div>
         </div>
       </div>

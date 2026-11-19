@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ActivityItem } from "@/lib/api";
 import { CATEGORIES, categoryOf, type ActivityCategory } from "@/lib/activityKinds";
 import { shortName } from "@/lib/agentColors";
@@ -14,6 +14,16 @@ export function HistoryTable({ items, names, showAgent = true }: { items: Activi
   const [cat, setCat] = useState<ActivityCategory | "all">("all");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<ActivityItem | null>(null);
+  const closeBtn = useRef<HTMLButtonElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  const show = (it: ActivityItem) => { opener.current = document.activeElement as HTMLElement; setOpen(it); };
+  useEffect(() => {
+    if (!open) return;
+    closeBtn.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(null); };
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("keydown", onKey); opener.current?.focus(); };
+  }, [open]);
   const counts = useMemo(() => {
     const m = new Map<ActivityCategory, number>();
     for (const it of items) { const c = categoryOf(it.kind); m.set(c, (m.get(c) ?? 0) + 1); }
@@ -39,7 +49,7 @@ export function HistoryTable({ items, names, showAgent = true }: { items: Activi
             {rows.map((it) => {
               const c = categoryOf(it.kind);
               return (
-                <tr key={it.id} className={open?.id === it.id ? "selected" : undefined} onClick={() => setOpen(it)} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && setOpen(it)}>
+                <tr key={it.id} className={open?.id === it.id ? "selected" : undefined} onClick={() => show(it)} tabIndex={0} aria-label={`${it.summary}. Open details`} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), show(it))}>
                   <td className="dim num">{new Date(it.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })}</td>
                   <td><span className={`feed-ico c-${c}`} style={{ width: 22, height: 22, borderRadius: 6 }}><Icon name={CATEGORY_ICON[c]} size={12} /></span></td>
                   <td><ActivityKindBadge kind={it.kind} /></td>
@@ -62,10 +72,10 @@ export function HistoryTable({ items, names, showAgent = true }: { items: Activi
       {open && (
         <>
           <div className="drawer-backdrop" onClick={() => setOpen(null)} />
-          <aside className="drawer" role="dialog" aria-label="Event details">
+          <aside className="drawer" role="dialog" aria-modal="true" aria-label="Event details">
             <div className="drawer-head">
               <div className="row"><ActivityKindBadge kind={open.kind} /><span className="dim small">{new Date(open.ts).toLocaleString()}</span></div>
-              <button type="button" className="icon-btn sm ghost" onClick={() => setOpen(null)} aria-label="Close"><Icon name="close" size={15} /></button>
+              <button ref={closeBtn} type="button" className="icon-btn sm ghost" onClick={() => setOpen(null)} aria-label="Close details (Esc)"><Icon name="close" size={15} /></button>
             </div>
             <div className="drawer-body">
               <div className="text" style={{ fontSize: "1rem", marginBottom: 12 }}>{open.summary}</div>

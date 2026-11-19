@@ -103,3 +103,9 @@
 .mode-switch .ico.off { opacity: 0; filter: blur(4px); transform: scale(.6) rotate(-20deg); }
 .mode-switch .ico.on { opacity: 1; filter: blur(0); transform: none; }
 [data-mode="advanced"] .mode-switch { width: 30px; height: 30px; }
+
+/* Keyboard: skip link, and keep focused fields clear of the sticky save bar (focus not obscured) */
+.skip-link { position: fixed; top: 8px; left: 8px; z-index: 100; padding: 8px 12px; border-radius: var(--r); background: var(--blue); color: var(--on-accent); font-weight: 500; transform: translateY(-160%); transition: transform var(--dur-2) var(--ease-out); }
+.skip-link:focus { transform: none; color: var(--on-accent); }
+.app-scroll { scroll-padding: 16px 0 96px; }
+main:focus { outline: none; }

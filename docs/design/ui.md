@@ -80,3 +80,13 @@ validation. ⌘↵ test run, ⌘S save.
 - Arc testnet terminal view only appears when an agent has a vault (button disabled otherwise).
 - ElevenLabs / voice co-captain has no UI yet (brief priority 5).
 - Light theme: none (brief asks for dark only).
+
+## Accessibility pass (ui-ux-pro-max review, 2026-11-19)
+
+- Contrast measured on the tokens: all text ≥ 4.5:1 on every surface (lowest: muted `#999` on elevated `#303030`, 4.63).
+  Code-editor line numbers and comments were 3.1 / 3.5:1 and are now ≥ 4.5:1.
+- Skip-to-content link; `main` is focusable. Sidebar links carry `aria-label` (labels are hidden in the icon rail), with the pending count.
+- Icon-only canvas controls have accessible names (tooltips alone are not names).
+- History drawer: `aria-modal`, focus moves to Close, Esc closes, focus returns to the row; rows open with Enter or Space.
+- Scroll padding keeps focused fields clear of the sticky Configuration save bar.
+- Already in place: visible focus ring on every control, `prefers-reduced-motion` plus a Settings switch, aria-pressed/expanded on toggles, charts labelled and their values repeated in legends/tables.

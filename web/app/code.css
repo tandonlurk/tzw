@@ -16,7 +16,7 @@
 .cw-tab.on { color: var(--text); background: oklch(0.19 0 0); box-shadow: inset 0 2px 0 var(--blue); }
 .cw-editor { flex: 1; min-height: 0; display: flex; font-family: var(--font-mono); font-size: 13px; line-height: 20px; }
 .cw-editor.ro { background: oklch(0.21 0.01 248); }
-.cw-gutter { width: 48px; flex-shrink: 0; overflow: hidden; padding: 12px 10px 12px 0; text-align: right; color: oklch(0.5 0 0); user-select: none; border-right: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.cw-gutter { width: 48px; flex-shrink: 0; overflow: hidden; padding: 12px 10px 12px 0; text-align: right; color: oklch(0.64 0 0); user-select: none; border-right: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .cw-code { position: relative; flex: 1; min-width: 0; }
 .cw-code textarea, .cw-hl {
   position: absolute; inset: 0; margin: 0; border: 0; border-radius: 0; padding: 12px 16px; height: 100%;
@@ -25,7 +25,7 @@
 .cw-hl { color: var(--text-2); pointer-events: none; overflow: hidden; }
 .cw-code textarea { color: transparent; caret-color: var(--text); resize: none; outline: none; }
 .cw-code textarea::selection { background: oklch(0.84 0.067 248.6 / 0.28); color: transparent; }
-.hl-k { color: var(--lavender); } .hl-s { color: var(--mint); } .hl-n { color: var(--yellow); } .hl-c { color: oklch(0.55 0 0); font-style: italic; } .hl-f { color: var(--blue); } .hl-v { color: oklch(0.85 0.06 30); }
+.hl-k { color: var(--lavender); } .hl-s { color: var(--mint); } .hl-n { color: var(--yellow); } .hl-c { color: oklch(0.66 0 0); font-style: italic; } .hl-f { color: var(--blue); } .hl-v { color: oklch(0.85 0.06 30); }
 .cw-status { display: flex; align-items: center; gap: 16px; height: 26px; padding: 0 12px; border-top: 1px solid var(--line); background: var(--bg); font-size: .72rem; color: var(--text-3); flex-shrink: 0; }
 .cw-st-btn { height: 20px; padding: 0 6px; background: none; border: 0; font-size: .72rem; gap: 4px; font-weight: 400; }
 .cw-st-btn.pos { color: var(--mint); } .cw-st-btn.neg { color: var(--rose); }
