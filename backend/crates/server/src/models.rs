@@ -138,8 +138,25 @@ pub struct Agent {
     pub graph: Value,
     pub balances: Balances,
     pub stats: Stats,
+    /// The family (D-73): the root agent's id, for the root and all its
+    /// clones; `None` for an agent that was never multiplied.
+    pub family_id: Option<Uuid>,
+    /// How this agent was cloned; `None` unless it is a clone.
+    pub clone: Option<CloneInfo>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+/// Where a clone came from and the exact variance it got (agent_clones).
+#[derive(Debug, Serialize)]
+pub struct CloneInfo {
+    pub index: i32,
+    pub multiplication_id: Uuid,
+    pub source_agent_id: Uuid,
+    pub source_version: i32,
+    pub variance_bps: i32,
+    pub seed: i64,
+    pub params: Value,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]

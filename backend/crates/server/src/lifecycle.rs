@@ -1307,17 +1307,29 @@ async fn next_round_seq(conn: &mut PgConnection, interaction: Uuid) -> Result<i3
 
 /// The first other active agent (oldest first) in the same environment that
 /// listens for challenges and has no open interaction on this market.
+///
+/// Never a sibling (D-73): agents of one family (a multiplied agent and its
+/// clones) do not challenge each other, since that would only move the
+/// owner's money between the owner's own agents.
 async fn pick_counterparty(
     conn: &mut PgConnection,
     proposer: &AgentRec,
     market_key: &str,
 ) -> Result<Option<AgentRec>, ApiError> {
-    let candidates: Vec<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM agents WHERE status = 'active' AND id <> $1 AND env = $2 \
-         ORDER BY created_at, id",
-    )
+    let family = crate::multiply::family_of(conn, proposer.id).await?;
+    let candidates: Vec<Uuid> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "SELECT a.id FROM agents a LEFT JOIN agent_clones c ON c.agent_id = a.id \
+         WHERE a.status = 'active' AND a.id <> $1 AND a.env = $2 \
+           AND COALESCE(c.family_id, a.id) <> $3 \
+           AND NOT EXISTS (SELECT 1 FROM interactions i WHERE i.market_key = $4 \
+                           AND i.{OPEN_STATES_SQL} \
+                           AND (i.proposer_id = a.id OR i.counterparty_id = a.id)) \
+         ORDER BY a.created_at, a.id"
+    )))
     .bind(proposer.id)
     .bind(proposer.env.as_str())
+    .bind(family)
+    .bind(market_key)
     .fetch_all(&mut *conn)
     .await?;
     for id in candidates {

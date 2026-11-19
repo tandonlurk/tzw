@@ -16,8 +16,8 @@ use crate::error::ApiError;
 use crate::extract::{ApiJson, ApiPath};
 use crate::ledger_db::{self, PostOutcome};
 use crate::models::{
-    Agent, AgentInput, AgentVersion, AmountBody, Balances, LedgerEntry, Stats, StatusBody,
-    display_usdc,
+    Agent, AgentInput, AgentVersion, AmountBody, Balances, CloneInfo, LedgerEntry, Stats,
+    StatusBody, display_usdc,
 };
 use crate::state::AppState;
 
@@ -41,6 +41,14 @@ struct AgentRow {
     settled: i64,
     wins: i64,
     firm_income: i64,
+    family_id: Option<Uuid>,
+    clone_index: Option<i32>,
+    multiplication_id: Option<Uuid>,
+    clone_variance: Option<Value>,
+    multiplication_seed: Option<i64>,
+    multiplication_variance_bps: Option<i32>,
+    multiplication_source: Option<Uuid>,
+    multiplication_source_version: Option<i32>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
@@ -53,8 +61,40 @@ impl TryFrom<AgentRow> for Agent {
             Money::from_minor(units)
                 .ok_or_else(|| ApiError::internal(format!("negative {what} balance for {}", r.id)))
         };
+        let clone = match (
+            r.clone_index,
+            r.multiplication_id,
+            r.multiplication_source,
+            r.multiplication_source_version,
+            r.multiplication_variance_bps,
+            r.multiplication_seed,
+        ) {
+            (
+                Some(index),
+                Some(multiplication_id),
+                Some(source),
+                Some(version),
+                Some(v),
+                Some(seed),
+            ) => Some(CloneInfo {
+                index,
+                multiplication_id,
+                source_agent_id: source,
+                source_version: version,
+                variance_bps: v,
+                seed,
+                params: r
+                    .clone_variance
+                    .as_ref()
+                    .and_then(|c| c.get("params").cloned())
+                    .unwrap_or(Value::Null),
+            }),
+            _ => None,
+        };
         Ok(Agent {
             id: r.id,
+            family_id: r.family_id,
+            clone,
             status: match r.status.as_str() {
                 "active" => AgentStatus::Active,
                 "paused" => AgentStatus::Paused,
@@ -103,9 +143,18 @@ SELECT a.id, a.name, a.description, a.status, a.env, a.wallet_address, a.vault_a
        (COALESCE(s.realized_pnl, 0) + COALESCE(f.paid, 0))::BIGINT AS realized_pnl,
        COALESCE(s.settled, 0)::BIGINT AS settled,
        COALESCE(s.wins, 0)::BIGINT AS wins,
-       COALESCE(f.income, 0)::BIGINT AS firm_income
+       COALESCE(f.income, 0)::BIGINT AS firm_income,
+       COALESCE(c.family_id,
+                CASE WHEN EXISTS (SELECT 1 FROM agent_clones x WHERE x.family_id = a.id)
+                     THEN a.id END) AS family_id,
+       c.clone_index, c.multiplication_id, c.variance AS clone_variance,
+       m.seed AS multiplication_seed, m.variance_bps AS multiplication_variance_bps,
+       m.source_agent_id AS multiplication_source,
+       m.source_version AS multiplication_source_version
 FROM agents a
 JOIN agent_versions v ON v.agent_id = a.id AND v.version = a.current_version
+LEFT JOIN agent_clones c ON c.agent_id = a.id
+LEFT JOIN agent_multiplications m ON m.id = c.multiplication_id
 LEFT JOIN LATERAL (
     SELECT SUM(e.delta) FILTER (WHERE e.account = 'agent:' || a.id || ':available') AS available,
            SUM(e.delta) FILTER (WHERE e.account = 'agent:' || a.id || ':committed') AS committed
