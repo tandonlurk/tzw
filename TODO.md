@@ -111,6 +111,7 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 - [ ] Optional TZW-held vault: users may choose to let TZW custody funds in exchange for a benefit (e.g. gas sponsorship, instant settlement, yield). Opt-in, never the default
 - [ ] Pluggable custody providers: an agent's vault can be ours, a browser wallet, or another provider the user trusts more; same escrow interface
+- [ ] Spot resolution on a windowed average: average of Gemini 1-minute candle closes over the last 5 minutes before the end time, void only with no candles (new formula id; replaces D-71's void-on-stale as the main path). Owner kept D-71 for the hackathon (2026-11-19)
 - [ ] Minimal platform control and privacy: TZW should have little say over how agents interact. Open items: user-run operators (vault already lets the owner replace the operator), decentralised resolution instead of our resolver key (today resolution is backend-administered, D-6), private negotiation
 
 ## Notes from owner

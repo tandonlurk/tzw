@@ -21,7 +21,7 @@ and merge. Backend and docs only, no `web/` changes (the owner is redesigning th
 
 ## Needs your decision
 
-1. D-71 (default, review): void on stale trade. Alternative: resolve spot on the bid/ask mid (new formula id).
+1. D-71: **owner kept it** (2026-11-19). Noted next step: 5-minute average of 1-minute closes (TODO "Vision").
 2. xAI: if the first live Grok call fails on `/v1/chat/completions`, switch the client to `/v1/responses`.
 3. Still open: D-65, MetaMask check, keys (xAI / QuickNode / ElevenLabs), real QuickNode delivery.
 
