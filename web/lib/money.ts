@@ -28,7 +28,8 @@ export function formatMoney(minor: string, opts: { signed?: boolean; minFrac?: n
  * empty, negative, non-numeric, or more than 6 decimals. Commas and surrounding spaces are tolerated.
  */
 export function parseMoney(input: string): string | null {
-  const s = input.trim().replace(/,/g, "");
+  // Lenient on input (Postel): "$1,000.50", "1 000.5 USDC" and " 2 " all parse; the output is always exact minor units.
+  const s = input.trim().replace(/^\$/, "").replace(/\s*usdc$/i, "").replace(/[,\s_]/g, "");
   const m = /^(\d+)(?:\.(\d{0,6}))?$/.exec(s);
   if (!m) return null;
   const whole = BigInt(m[1]);

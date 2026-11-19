@@ -8,7 +8,14 @@ import { API_URL } from "@/lib/api";
 import { unreachableHint } from "@/lib/errors";
 
 export function Loading({ what = "data" }: { what?: string }) {
-  return <div className="state" role="status">Loading {what}...</div>;
+  return (
+    <div className="loading" role="status" aria-label={`Loading ${what}`}>
+      <div className="skeleton" style={{ height: 14, width: "38%" }} />
+      <div className="skeleton" style={{ height: 14, width: "72%" }} />
+      <div className="skeleton" style={{ height: 14, width: "56%" }} />
+      <span className="sr-only">Loading {what}...</span>
+    </div>
+  );
 }
 
 export function Empty({ children }: { children: ReactNode }) {
@@ -52,14 +59,14 @@ export function Async<T>({
 
 export function EnvBadge({ env }: { env: Env }) {
   return env === "simulated" ? (
-    <span className="badge sim" title="Simulated balance. Not real funds.">simulated</span>
+    <span className="badge sim plain" title="Simulated balance. Not real funds.">Simulated</span>
   ) : (
-    <span className="badge chain" title="Arc testnet USDC: onchain testnet tokens, not real funds.">arc_testnet</span>
+    <span className="badge chain plain" title="Arc testnet USDC: onchain testnet tokens, not real funds.">Arc testnet</span>
   );
 }
 
 export function StatusBadge({ status }: { status: "active" | "paused" }) {
-  return <span className={`badge ${status}`}>{status}</span>;
+  return <span className={`badge ${status}`}>{status === "active" ? "Active" : "Paused"}</span>;
 }
 
 /** Money with optional semantic sign coloring (mint positive, rose negative). */
@@ -74,7 +81,69 @@ export function Tile({ label, children, note }: { label: string; children: React
     <div className="card tile">
       <div className="label">{label}</div>
       <div className="value">{children}</div>
-      {note && <div className="dim" style={{ fontSize: ".8rem" }}>{note}</div>}
+      {note && <div className="dim small" style={{ marginTop: 2 }}>{note}</div>}
+    </div>
+  );
+}
+
+/** Page title row with optional subtitle and actions on the right (primary action last, Fitts). */
+export function PageHead({ title, sub, eyebrow, children }: { title: ReactNode; sub?: ReactNode; eyebrow?: ReactNode; children?: ReactNode }) {
+  return (
+    <div className="page-head">
+      <div className="grow">
+        {eyebrow && <div className="eyebrow" style={{ marginBottom: 6 }}>{eyebrow}</div>}
+        <h1>{title}</h1>
+        {sub && <div className="sub">{sub}</div>}
+      </div>
+      {children && <div className="row">{children}</div>}
+    </div>
+  );
+}
+
+/** Agent monogram in its identity colour. */
+export function Avatar({ name, color, size = 32 }: { name: string; color: string; size?: number }) {
+  const words = name.replace(/\(.*?\)/g, "").trim().split(/\s+/).filter(Boolean);
+  const text = words.length > 1 ? (words[0][0] + words[1][0]).toUpperCase() : (words[0] ?? "?").slice(0, 2).toUpperCase();
+  return (
+    <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.36, ["--c" as string]: color }} aria-hidden>
+      {text}
+    </span>
+  );
+}
+
+/** Compact metric: label over value, optional delta line. */
+export function Kpi({ label, children, note, tone }: { label: ReactNode; children: ReactNode; note?: ReactNode; tone?: "pos" | "neg" | "pend" | "info" }) {
+  return (
+    <div className="kpi">
+      <div className="kpi-label">{label}</div>
+      <div className={`kpi-value ${tone ?? ""}`}>{children}</div>
+      {note && <div className="kpi-note">{note}</div>}
+    </div>
+  );
+}
+
+export interface SegPart { key: string; label: string; value: bigint; tone: "free" | "alloc" | "commit" | "other"; display: string }
+
+/** Proportional stacked bar for money states (available / allocated / committed). Exact amounts are in the legend. */
+export function MoneyBar({ parts, label }: { parts: SegPart[]; label: string }) {
+  const total = parts.reduce((t, p) => t + (p.value > BigInt(0) ? p.value : BigInt(0)), BigInt(0));
+  return (
+    <div>
+      <div className="moneybar" role="img" aria-label={label}>
+        {total === BigInt(0) ? <div className="seg-empty" /> : parts.map((p) => {
+          const pct = Number((p.value * BigInt(10000)) / total) / 100;
+          return pct > 0 ? <div key={p.key} className={`mb-${p.tone}`} style={{ width: `${pct}%` }} title={`${p.label}: ${p.display}`} /> : null;
+        })}
+      </div>
+      <div className="moneybar-legend">
+        {parts.map((p) => (
+          <div key={p.key} className="mbl">
+            <span className={`mbl-sw mb-${p.tone}`} />
+            <span className="dim">{p.label}</span>
+            <span className="num text">{p.display}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
