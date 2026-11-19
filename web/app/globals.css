@@ -196,9 +196,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .btn.danger:hover, button.danger:hover:not(:disabled) { background: var(--rose-a); color: var(--rose); }
 .btn.sm, button.sm { height: 28px; padding: 0 10px; font-size: .8rem; border-radius: var(--r-inner); }
 .btn.xs, button.xs { height: 24px; padding: 0 8px; font-size: .75rem; border-radius: var(--r-inner); }
-.icon-btn { width: var(--control-h); padding: 0; }
-.icon-btn.sm { width: 28px; }
-.icon-btn.xs { width: 24px; }
+button.icon-btn, .btn.icon-btn { width: var(--control-h); padding: 0; flex-shrink: 0; }
+button svg, .btn svg { flex-shrink: 0; }
+button.icon-btn.sm, .btn.icon-btn.sm { width: 28px; padding: 0; }
+button.icon-btn.xs, .btn.icon-btn.xs { width: 24px; padding: 0; }
 
 /* Forms */
 label { display: block; font-size: .8rem; color: var(--text-2); margin-bottom: 6px; font-weight: 500; }

@@ -21,14 +21,16 @@ export function ParamsForm({ schema, params, onChange }: { schema: JsonSchema; p
   return (
     <div>
       {keys.map((k) => (
-        <ParamField
-          key={k}
-          name={k}
-          schema={props[k]}
-          required={schema.required?.includes(k) ?? false}
-          value={params[k]}
-          onChange={(v) => set(k, v)}
-        />
+        <div key={k}>
+          <ParamField
+            name={k}
+            schema={props[k]}
+            required={schema.required?.includes(k) ?? false}
+            value={params[k]}
+            onChange={(v) => set(k, v)}
+          />
+          {props[k].description && <div className="hint" style={{ marginTop: -10, marginBottom: 14, color: "var(--text-3)", fontSize: ".76rem" }}>{props[k].description}</div>}
+        </div>
       ))}
     </div>
   );
@@ -37,7 +39,7 @@ export function ParamsForm({ schema, params, onChange }: { schema: JsonSchema; p
 function ParamField({ name, schema, required, value, onChange }: {
   name: string; schema: JsonSchema; required: boolean; value: unknown; onChange: (v: unknown) => void;
 }) {
-  const label = `${schema.title ?? name}${required ? " *" : ""}`;
+  const label = `${schema.title ?? humanize(name)}${required ? " *" : ""}`;
   const type = schema.type;
 
   if (Array.isArray(schema.enum)) {
@@ -118,4 +120,11 @@ function JsonField({ label, value, onChange }: { label: string; value: unknown; 
       {err && <div className="field-error">{err}</div>}
     </div>
   );
+}
+
+/** "min_bps" -> "Min (%, in bps)", "every_secs" -> "Every (seconds)": readable labels when the schema has no title. */
+export function humanize(name: string): string {
+  const unit = name.endsWith("_bps") ? " (basis points, 100 = 1%)" : name.endsWith("_secs") ? " (seconds)" : "";
+  const base = name.replace(/_(bps|secs)$/, "").replace(/_/g, " ");
+  return base.charAt(0).toUpperCase() + base.slice(1) + unit;
 }

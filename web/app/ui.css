@@ -82,8 +82,8 @@
 .ws-head h1 { margin: 0; }
 .ws-head .meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; color: var(--text-3); font-size: .8rem; }
 .ws-head .desc { color: var(--text-3); margin-top: 6px; max-width: 70ch; font-size: .88rem; }
-[data-mode="advanced"] .ws-head { margin-bottom: var(--s-3); align-items: center; }
-[data-mode="advanced"] .ws-head h1 { font-size: 1.15rem; }
+.ws-head.compact { margin-bottom: var(--s-3); align-items: center; }
+.ws-head.compact h1 { font-size: 1.15rem; }
 .ws-body { padding-top: var(--s-6); }
 [data-mode="advanced"] .ws-body { padding-top: var(--s-4); }
 .ws-full { display: flex; flex-direction: column; height: 100%; min-height: 0; }

@@ -51,7 +51,7 @@ export function AgentWorkspace({ id, advanced, children }: { id: string; advance
   const ctx = useMemo(() => ({ agent, color, bump, refresh: () => { agent.reload(); setBump((b) => b + 1); } }), [agent, color, bump]);
 
   const head = agent.error && !agent.data ? <ErrorState error={agent.error} onRetry={agent.reload} /> : !agent.data ? <Loading what="agent" /> : (
-    <Header a={agent.data} color={color} advanced={advanced} onChanged={ctx.refresh} />
+    <Header a={agent.data} color={color} advanced={advanced} compact={full} onChanged={ctx.refresh} />
   );
   const nav = (
     <nav className="tabs" aria-label="Agent sections">
@@ -84,7 +84,7 @@ export function AgentWorkspace({ id, advanced, children }: { id: string; advance
   );
 }
 
-function Header({ a, color, advanced, onChanged }: { a: Agent; color: string; advanced: boolean; onChanged: () => void }) {
+function Header({ a, color, advanced, compact, onChanged }: { a: Agent; color: string; advanced: boolean; compact: boolean; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   async function toggle() {
@@ -114,10 +114,10 @@ function Header({ a, color, advanced, onChanged }: { a: Agent; color: string; ad
     </button>
   );
 
-  if (advanced) {
+  if (advanced || compact) {
     return (
       <>
-        <div className="ws-head">
+        <div className="ws-head compact">
           <div className="who">
             <Avatar name={a.name} color={color} size={34} />
             <div style={{ minWidth: 0 }}>
@@ -131,6 +131,7 @@ function Header({ a, color, advanced, onChanged }: { a: Agent; color: string; ad
             <div className="kpi"><div className="kpi-label">Realized P&amp;L</div><div className={`kpi-value ${pnl > 0 ? "pos" : pnl < 0 ? "neg" : ""}`}>{formatMoney(a.stats.realized_pnl, { signed: true, unit: false })}</div></div>
             <div className="kpi"><div className="kpi-label">Record</div><div className="kpi-value">{a.stats.wins}W / {a.stats.settled - a.stats.wins}L</div></div>
             {pause}
+            {!advanced && <Link className="btn sm ghost" href={`${ADV}/agents/${a.id}/logic`} title="Open this agent in the Advanced workspace"><Icon name="advanced-mode" size={14} />Advanced</Link>}
           </div>
         </div>
         <ErrorBanner error={error} />
