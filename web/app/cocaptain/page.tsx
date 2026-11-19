@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { Icon } from "@/components/shell/icons";
 import { useState } from "react";
 import { api, isApiError, type Agent, type Suggestion } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
-import { Async, Empty, ErrorBanner, formatTs } from "@/components/ui";
+import { Async, Empty, ErrorBanner, PageHead, formatTs } from "@/components/ui";
 import { changeRows, decisionError, evidenceRows, sourceLabel, statusTone, type DecisionNotice } from "@/lib/suggestions";
 import type { ApiError } from "@/lib/api";
 
@@ -49,16 +50,12 @@ export default function CoCaptainPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div>
-          <h1>Co-captain</h1>
-          <div className="dim">
-            Suggestions from your co-captain. They are advisory only: nothing here moves funds or approves a challenge.
-            Accepting a suggestion that proposes a change only edits that agent&apos;s configuration, as a new version, with the same checks as editing it yourself.
-          </div>
-        </div>
-        <button className="primary" disabled={checking} onClick={checkNow}>{checking ? "Checking..." : "Check now"}</button>
-      </div>
+      <PageHead
+        title="Co-captain"
+        sub={<>Advisory suggestions about your agents. Nothing here moves funds or approves a challenge. Accepting a change edits that agent&apos;s configuration as a new version, with the same checks as editing it yourself.</>}
+      >
+        <button className="primary" disabled={checking} onClick={checkNow}><Icon name="cocaptain" size={15} />{checking ? "Checking..." : "Check now"}</button>
+      </PageHead>
 
       {checkMsg && <div className="notice info" role="status">{checkMsg}</div>}
       <ErrorBanner error={checkError} />
@@ -91,17 +88,14 @@ export default function CoCaptainPage() {
           list.length === 0 ? (
             <Empty>Nothing decided yet.</Empty>
           ) : (
-            <div className="stack">
+            <div className="card list" style={{ paddingTop: 6, paddingBottom: 6 }}>
               {list.map((s) => (
-                <div className="card" key={s.id}>
-                  <div className="row spread">
-                    <strong>{s.title}</strong>
-                    <span className={`badge ${statusTone(s.status)}`}>{s.status}</span>
+                <div className="list-row" key={s.id}>
+                  <div className="grow">
+                    <div className="t">{s.title}</div>
+                    <div className="s">{s.agent_name ?? "All agents"} · {sourceLabel(s.source)} · created {formatTs(s.created_at)}{s.decided_at ? ` · decided ${formatTs(s.decided_at)}` : ""}</div>
                   </div>
-                  <div className="dim" style={{ fontSize: ".8rem" }}>
-                    {s.agent_name ?? "All agents"} &middot; {sourceLabel(s.source)} &middot; created {formatTs(s.created_at)}
-                    {s.decided_at ? ` · decided ${formatTs(s.decided_at)}` : ""}
-                  </div>
+                  <span className={`badge ${statusTone(s.status)}`}>{s.status}</span>
                 </div>
               ))}
             </div>
@@ -150,9 +144,12 @@ function SuggestionCard({ s, agent, onNotice, onChanged }: {
   }
 
   return (
-    <div className="card">
-      <div className="row spread">
-        <strong>{s.title}</strong>
+    <div className={`card suggestion${s.loosens_control ? " attention" : ""}`}>
+      <div className="row spread nowrap" style={{ alignItems: "flex-start" }}>
+        <span className="row nowrap" style={{ gap: 12 }}>
+          <span className="feed-ico c-discovery"><Icon name="cocaptain" size={15} /></span>
+          <strong>{s.title}</strong>
+        </span>
         <span className="badge neutral">{sourceLabel(s.source)}</span>
       </div>
       <div className="dim" style={{ fontSize: ".8rem" }}>
@@ -194,8 +191,8 @@ function SuggestionCard({ s, agent, onNotice, onChanged }: {
       )}
 
       <div className="row" style={{ marginTop: ".6rem" }}>
-        <button className="primary" disabled={busy} onClick={() => decide("accept")}>Accept</button>
-        <button disabled={busy} onClick={() => decide("dismiss")}>Dismiss</button>
+        <button className="primary" disabled={busy} onClick={() => decide("accept")}><Icon name="check" size={14} />Accept</button>
+        <button className="ghost" disabled={busy} onClick={() => decide("dismiss")}>Dismiss</button>
       </div>
     </div>
   );

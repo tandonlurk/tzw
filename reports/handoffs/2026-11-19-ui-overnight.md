@@ -35,7 +35,8 @@ Decision D-72 (default, review). Design notes `docs/design/ui.md`; your UI tips 
 ## Not done / not verified
 
 - Verified in Chrome: canvas edit + ⌘S → v2; Configuration save → v3 with the canvas change kept (checked in the API);
-  approve from Approvals; Dev tick from the Terminal; terminal corner-resize; layout persists across reload.
+  approve from Approvals; Dev tick from the Terminal; terminal corner-resize; layout persists across reload; the creation
+  wizard end to end (Cautious template → "Night Owl" created).
 - Not verified: panel drag-reorder with a real mouse (HTML5 drag; logic unit-tested), Arc testnet terminal view, MetaMask vault flows.
 - No canvas undo/redo; ElevenLabs voice UI not started (brief priority 5).
 - `docs/demo.md` got a rename note at the top; the step tables still use the old page names.
