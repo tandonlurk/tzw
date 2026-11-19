@@ -6,8 +6,10 @@ Decision D-72 (default, review). Design notes `docs/design/ui.md`; your UI tips 
 ## State
 
 - Web: `npm test` 154 passed (was 147 at start of night; +7 files of pure-logic tests), `npm run lint` 0 errors, `npm run build` OK.
-- Backend untouched. No API, ledger or permission change. Servers left running for you: backend on :8080 (`aen_ui` db, seeded),
-  `next dev` on :3000. Stop with `pkill -f aen-server; pkill -f "next dev"`. `caffeinate` runs until ~14:00.
+- Backend untouched. No API, ledger or permission change. Scratch db `aen_ui` (demo + firm seeds, 4 rounds, one agent "Night Owl"
+  made with the wizard). Servers may still be up (backend :8080, `next dev` :3000); if not:
+  `cd backend && DATABASE_URL="postgres://$USER@localhost/aen_ui" MARKET_DATA=fake TICK_INTERVAL_SECS=0 cargo run -p aen-server`
+  and `cd web && npm run dev`. `caffeinate` runs until ~14:00.
 
 ## What you can look at (open http://localhost:3000)
 

@@ -13,6 +13,8 @@ const ModeContext = createContext<ModeCtx>({ mode: "basic", switchMode: () => {}
 export const useMode = () => useContext(ModeContext);
 
 const LAST_AGENT_KEY = "tzw.lastAgent";
+/** Fire after approving or rejecting so the sidebar count updates without waiting for the poll. */
+export const APPROVALS_CHANGED = "tzw:approvals-changed";
 
 interface Item { href: string; label: string; icon: IconName; match?: (p: string) => boolean; count?: boolean }
 interface Group { label: string; items: Item[] }
@@ -86,7 +88,8 @@ function usePendingApprovals(path: string): number {
     const load = () => api.listApprovals("pending").then((a) => alive && setN(a.length)).catch(() => alive && setN(0));
     load();
     const t = window.setInterval(load, 15_000);
-    return () => { alive = false; window.clearInterval(t); };
+    window.addEventListener(APPROVALS_CHANGED, load);
+    return () => { alive = false; window.clearInterval(t); window.removeEventListener(APPROVALS_CHANGED, load); };
   }, [path]);
   return n;
 }

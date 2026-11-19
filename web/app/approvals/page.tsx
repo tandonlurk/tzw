@@ -10,6 +10,7 @@ import { DevTick } from "@/components/DevTick";
 import type { ApiError } from "@/lib/api";
 import { shortName } from "@/lib/agentColors";
 import { Icon } from "@/components/shell/icons";
+import { APPROVALS_CHANGED } from "@/components/shell/AppShell";
 
 type Result = { approval: Approval; decision: "approve" | "reject"; result: ApprovalDecision };
 
@@ -38,6 +39,7 @@ export default function ApprovalsPage() {
                   onDecided={(decision, result) => {
                     setResults((rs) => [{ approval: a, decision, result }, ...rs]);
                     pending.reload();
+                    window.dispatchEvent(new Event(APPROVALS_CHANGED));
                   }}
                   onStale={pending.reload}
                 />
