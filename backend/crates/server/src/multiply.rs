@@ -548,7 +548,7 @@ pub async fn multiply(
         "agents_multiplied",
         format!(
             "\"{}\" was multiplied {}x: {} clones with up to {} parameter variance, {} \
-             (simulated) each, {} in total",
+             (simulated) each, {} (simulated) in total",
             source.name,
             body.count,
             body.count,
