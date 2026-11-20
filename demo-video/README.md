@@ -1,6 +1,7 @@
 # Demo video
 
-Working folder for the 2–3 minute submission video. The plan (run sheet, animation specs, shot list,
+Working folder for the 2–3 minute submission video. Story spine and scene list: `story-outline.md`
+(supersedes the run sheet). The plan (animation specs, shot list,
 honesty flags): `animation-plan.md`. The assembly script comes later; this file fixes the naming it
 will rely on.
 
