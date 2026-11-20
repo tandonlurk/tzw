@@ -10,9 +10,11 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 Handoff: `reports/handoffs/2026-11-19-evening.md`.
 
-- [ ] **You:** merge PR #10 (it contains #8 and #9 with the `docs/decisions.md` conflict already resolved; merging it closes all three). Then `git checkout main && git pull`
+- [x] **You:** merge PR #10 (owner confirmed 2026-11-19; it contains #8 and #9). Local checkout still needs syncing before implementation, coordinating with the demo-video agent.
 - [ ] **You:** get an xAI key (console.x.ai → API Keys) into `backend/.env` as `XAI_API_KEY`, so Grok does real work (bounty). Then the agent runs one live Grok check
 - [ ] **You:** answer the demo plan's questions (`demo-video/animation-plan.md`, end) and record voiceover + screen recordings; then an agent builds the animations (Remotion) and the assembly script
+  - [x] Story outline (`demo-video/story-outline.md`) and the 10 full-frame animated scenes built (`demo-video/animations/README.md`, `npm run render`). Left: overlays 04/09/11 and the assembly script, after the recordings
+  - 2026-11-19: owner has another agent working on the first demo-video steps; coordinate file ownership before further video edits.
 - [ ] Optional: add vault addresses to the QuickNode filter (`docs/setup/quicknode-streams-filter.md`; addresses from `GET /api/streams`)
 - [ ] Optional: delete the terminated QuickNode stream "dry-abandoned-plateau"; withdraw ~6 testnet USDC from the two Streams-test demo vaults
 - [ ] ElevenLabs only if everything else is done
