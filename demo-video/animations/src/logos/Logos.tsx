@@ -8,7 +8,7 @@ const PF = { filter: "url(#paper)" } as const;
 const Word: React.FC<{ p: Palette; y?: number; size?: number }> = ({ p, y = 650, size = 96 }) => (
   <g>
     <text x={600} y={y} textAnchor="middle" style={{ fontFamily: SERIF, fontWeight: 700, fontSize: size, letterSpacing: "0.22em", fill: p.ink, ...PF }}>TZW</text>
-    <rect x={600 + size * 1.08} y={y - size * 0.17} width={size * 0.16} height={size * 0.16} rx={2} style={{ fill: p.gold, ...PF }} />
+    <rect x={600 + size * 1.2} y={y - size * 0.17} width={size * 0.16} height={size * 0.16} rx={2} style={{ fill: p.gold, ...PF }} />
   </g>
 );
 
