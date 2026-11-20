@@ -18,7 +18,7 @@ const Offer: React.FC<{ label: string; amount: string; tone: Tone }> = ({ label,
 const GATES: { title: string; lines: string[]; tone: Tone }[] = [
   { title: "AI model", lines: ["suggests 2.50", "suggestion only"], tone: "steel" },
   { title: "TZW backend", lines: ["≤ max per challenge 10.00 ✓", "total exposure ✓", "available balance ✓"], tone: "blue" },
-  { title: "Agent vault · onchain", lines: ["per-stake cap ✓", "only to the escrow ✓"], tone: "blue" },
+  { title: "Agent vault · onchain", lines: ["per-challenge cap ✓", "total exposure cap ✓", "pays only into the escrow ✓"], tone: "blue" },
   { title: "You, the owner", lines: ["above the 1.00 auto limit", "waits for your approval"], tone: "yellow" },
 ];
 
@@ -78,7 +78,7 @@ export const S07NegotiateGuard: React.FC = () => {
           const col = isOwner ? (approved > 0.5 ? "var(--mint)" : passed ? "var(--yellow)" : "var(--line-strong)") : passed ? toneColor(g.tone) : "var(--line-strong)";
           return (
             <At key={i} x={GX[i]} y={GY + 30} opacity={fade(f, 6.6 + i * 0.12)}>
-              <div style={{ width: 360, minHeight: 210, borderRadius: 18, background: "var(--surface)", border: `2px solid ${col}`, padding: 24 }}>
+              <div style={{ width: 360, minHeight: 236, borderRadius: 18, background: "var(--surface)", border: `2px solid ${col}`, padding: 24 }}>
                 <div style={{ fontSize: 17, color: "var(--text-3)", letterSpacing: ".1em", textTransform: "uppercase" }}>Check {i + 1}</div>
                 <div style={{ fontSize: 28, color: "var(--text)", fontWeight: 500, marginTop: 6 }}>{g.title}</div>
                 {g.lines.map((ln) => <div key={ln} style={{ fontSize: 21, color: passed ? "var(--text-2)" : "var(--text-3)", marginTop: 8 }}>{ln}</div>)}
