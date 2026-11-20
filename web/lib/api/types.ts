@@ -289,6 +289,43 @@ export interface InteractionDetail extends Interaction {
   approvals: Approval[];
   ledger: LedgerEntry[];
   activity: ActivityItem[];
+  /** Escrow events delivered by QuickNode Streams (D-74); older backends omit it. */
+  stream_events?: StreamEvent[];
+}
+
+/** How a QuickNode Streams event compares with the server's own confirmed transactions. */
+export type StreamStatus = "pending" | "confirmed" | "mismatch" | "observed" | "unmatched";
+
+export interface StreamEvent {
+  id: string;
+  /** Solidity event name: Created, Deposited, Activated, Resolved, Voided, Refunded, ... */
+  event: string;
+  status: StreamStatus;
+  note: string | null;
+  tx_hash: string;
+  log_index: number;
+  block_number: number;
+  block_timestamp: string | null;
+  received_at: string;
+  /** received_at - block_timestamp; block timestamps are whole seconds. */
+  latency_ms: number | null;
+  removed: boolean;
+  explorer_url: string | null;
+}
+
+/** GET /streams */
+export interface StreamsStatus {
+  webhook_enabled: boolean;
+  matching_enabled: boolean;
+  events_total: number;
+  last_delivery_at: string | null;
+  last_block_number: number | null;
+  median_latency_ms: number | null;
+  confirmed: number;
+  pending: number;
+  mismatch: number;
+  observed: number;
+  unmatched: number;
 }
 
 export interface ApprovalDecision {

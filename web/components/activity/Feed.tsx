@@ -7,6 +7,7 @@ import { categoryOf, groupByDay, type ActivityCategory } from "@/lib/activityKin
 import { shortName } from "@/lib/agentColors";
 import { ActivityExtra, ActivityFirmLink, ActivityKindBadge } from "@/components/ActivityDetail";
 import { Icon, type IconName } from "@/components/shell/icons";
+import { StreamActivityBadge } from "@/components/StreamBadge";
 
 export const CATEGORY_ICON: Record<ActivityCategory, IconName> = {
   discovery: "search",
@@ -35,6 +36,7 @@ export function FeedItem({ it, agentName }: { it: ActivityItem; agentName?: stri
         <div className="t">{it.summary}</div>
         <div className="m">
           <ActivityKindBadge kind={it.kind} />
+          <StreamActivityBadge it={it} />
           {it.agent_id && <Link href={`/agents/${it.agent_id}`}>{agentName ? shortName(agentName) : "agent"}</Link>}
           <ActivityFirmLink it={it} />
           {it.collaboration_id && <Link href={`/collaborations/${it.collaboration_id}`}>collaboration</Link>}

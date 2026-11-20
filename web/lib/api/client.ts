@@ -5,6 +5,7 @@ import type {
   Approval,
   Interaction,
   InteractionDetail,
+  StreamsStatus,
   Portfolio,
   TickReport,
   Agent,
@@ -178,6 +179,7 @@ export const api = {
   getPortfolio: (env: Env = "simulated") => get<Portfolio>(`/stats/portfolio?env=${env}`),
 
   getChain: () => get<ChainConfig>("/chain"),
+  getStreams: () => get<StreamsStatus>("/streams"),
   getVault: (agentId: string) => get<VaultView>(`/agents/${encodeURIComponent(agentId)}/vault`),
   /** Link the vault created by `txHash` (a VaultFactory.createVault tx) to the agent. */
   linkVault: (agentId: string, txHash: string) =>
