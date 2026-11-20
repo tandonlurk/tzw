@@ -16,12 +16,12 @@ CUT_BOX = (734, 499)                 # where the hand cutouts were taken from (c
 GOD_X = 600                          # god cutout starts at this x inside that crop
 # Final frame, 3:2, framed like the reference (forearms to the edges, hands slightly above centre)
 W, H = 1170, 780
-X0, Y0 = 718, 360
+X0, Y0 = 718, 352
 img = scan.crop((X0, Y0, X0 + W, Y0 + H))
 ox, oy = CUT_BOX[0] - X0, CUT_BOX[1] - Y0          # cutout -> frame offset
 
 # Coin: hangs just under the near-touching fingertips (Adam tip ~ (596,234), God tip ~ (606,220) in crop)
-R = 46
+R = 50
 CX, CY = ox + 601, oy + 227 + R - 6
 SS = 4                                            # supersample for clean edges
 
@@ -34,13 +34,16 @@ def coin_layer():
     # lit from the upper left, like the fresco
     lx, ly = (xx - cx) / (R * SS), (yy - cy) / (R * SS)
     light = np.clip(0.62 - 0.38 * lx - 0.46 * ly, 0, 1)
-    base_hi, base_lo = np.array([226, 190, 112]), np.array([128, 88, 34])   # muted fresco gold
+    base_hi, base_lo = np.array([246, 214, 136]), np.array([150, 104, 38])   # fresco gold
     col = base_lo + (base_hi - base_lo) * light[..., None]
     # rim: darker band with a bright inner bevel
     rim = (r > 0.86) & (r <= 1.0)
     col[rim] *= 0.78
     bevel = (r > 0.80) & (r <= 0.86)
     col[bevel] = col[bevel] * 1.12 + 10
+    # soft specular glint upper-left, like light on worn metal
+    spec = np.exp(-(((lx + 0.38) ** 2 + (ly + 0.42) ** 2) / 0.05))
+    col = col + (np.array([255, 244, 214]) - col) * (spec[..., None] * 0.55)
     alpha = np.clip((1.0 - r) * R * SS / 1.5, 0, 1)                          # anti-aliased edge
     rgba = np.dstack([np.clip(col, 0, 255), alpha * 255]).astype(np.uint8)
     c = Image.fromarray(rgba, "RGBA")
@@ -52,7 +55,7 @@ def coin_layer():
     o = 2.2 * SS
     d.text((tx + o, ty + o), "Z", font=font, fill=(92, 60, 20, 235))
     d.text((tx - o * 0.6, ty - o * 0.6), "Z", font=font, fill=(246, 222, 160, 200))
-    d.text((tx, ty), "Z", font=font, fill=(176, 132, 56, 255))
+    d.text((tx, ty), "Z", font=font, fill=(196, 150, 64, 255))
     return c.resize((S // SS, S // SS), Image.LANCZOS)
 
 coin = coin_layer()
@@ -81,15 +84,21 @@ cA[cy0:cy0 + cw, cx0:cx0 + cw] = ca[..., 3] / 255
 plaster_l = np.asarray(img.convert("L").filter(ImageFilter.GaussianBlur(0.6))).astype(float)
 local = np.asarray(img.convert("L").filter(ImageFilter.GaussianBlur(14))).astype(float)
 tex = np.clip(plaster_l / np.maximum(local, 1), 0.7, 1.15)              # cracks < 1, grain ~ 1
-cRGB = cRGB * (0.35 + 0.65 * tex[..., None])
+cRGB = cRGB * (0.5 + 0.5 * tex[..., None])
 noise = np.random.default_rng(5).normal(0, 5, (H, W, 1))
 cRGB = np.clip(cRGB + noise, 0, 255)
 # soften like brushwork and grade toward the fresco (slight desaturation)
 cImg = Image.fromarray(cRGB.astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.7))
 cRGB = np.asarray(cImg).astype(float)
 grey = cRGB.mean(axis=2, keepdims=True)
-cRGB = grey + (cRGB - grey) * 0.82
+cRGB = grey + (cRGB - grey) * 0.9
 base = base * (1 - cA[..., None]) + cRGB * cA[..., None]
+# painted contour, like the sienna outlines on the hands
+ring = Image.new("L", (W, H), 0)
+ImageDraw.Draw(ring).ellipse((CX - R + 1, CY - R + 1, CX + R - 1, CY + R - 1), outline=255, width=2)
+ring = np.asarray(ring.filter(ImageFilter.GaussianBlur(0.9))).astype(float) / 255
+sienna = np.array([112, 70, 40])
+base = base + (sienna - base) * (ring[..., None] * 0.55)
 
 # 4) the real fingers back on top, with a soft contact shadow on the coin
 hands = np.zeros((H, W))
