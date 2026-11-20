@@ -9,7 +9,7 @@ use aen_sandbox::Sandbox;
 
 use crate::chain::ChainState;
 use crate::cocaptain::{CoCaptain, RuleBasedCoCaptain};
-use crate::guard::GuardConfig;
+use crate::guard::{ApiToken, GuardConfig};
 use crate::market::MarketData;
 use crate::market::fake::FakeMarket;
 use crate::quicknode::QuickNodeConfig;
@@ -37,6 +37,8 @@ pub struct Settings {
     pub dev_endpoints: bool,
     /// Host allowlist and API token (SEC-02).
     pub guard: GuardConfig,
+    /// Separate credential limited to practice-session reads and adversary rounds.
+    pub sparring_bot_token: Option<ApiToken>,
     /// QuickNode Streams webhook; `None` (the default) = route not mounted.
     pub quicknode: Option<QuickNodeConfig>,
 }
@@ -52,6 +54,7 @@ impl Default for Settings {
             default_window_secs: 3600,
             dev_endpoints: true,
             guard: GuardConfig::default(),
+            sparring_bot_token: None,
             quicknode: None,
         }
     }

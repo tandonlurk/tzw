@@ -25,6 +25,7 @@ pub mod models;
 pub mod multiply;
 pub mod quicknode;
 pub mod reasoner;
+pub mod sparring;
 pub mod state;
 pub mod streams;
 pub mod suggestions;
@@ -61,6 +62,14 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
         .route("/agents/{id}/deallocate", post(agents::deallocate))
         .route("/agents/{id}/multiply", post(multiply::multiply))
         .route("/agents/{id}/code/test-run", post(custom_code::test_run))
+        .route(
+            "/agents/{id}/sparring",
+            get(sparring::list).post(sparring::create),
+        )
+        .route("/sparring/{id}", get(sparring::get))
+        .route("/sparring/{id}/rounds", post(sparring::owner_round))
+        .route("/bot/sparring/{id}", get(sparring::get))
+        .route("/bot/sparring/{id}/rounds", post(sparring::bot_round))
         .route("/templates", get(misc::templates))
         .route("/graph/blocks", get(misc::blocks))
         .route("/graph/validate", post(misc::validate_graph))
@@ -125,6 +134,7 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
 
     let guard = guard::Guard {
         config: state.settings.guard.clone(),
+        sparring_bot_token: state.settings.sparring_bot_token.clone(),
         origin: cors_origin.clone(),
     };
     Router::new()

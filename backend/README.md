@@ -486,3 +486,31 @@ A test fails if the checked-in files are out of date.
   migrations at startup with its own connection, so this needs a separate
   migrate step first; left as a default for review (D-proposal in
   `tasks/backend.md`).
+
+### Grok Bot mock adversary (practice only)
+
+Set `SPARRING_BOT_TOKEN` in the backend environment to a separate random secret
+of at least 32 characters, different from `AEN_API_TOKEN`, then restart. Grok Bot
+uses this credential to read a practice brief at `GET /api/bot/sparring/{id}` and
+submit a critique at `POST /api/bot/sparring/{id}/rounds`. Its POST body is
+`{"argument":"...","evidence_urls":["https://..."],"proposed_revision":null}`;
+it has no role or source field. The server assigns adversary provenance to
+requests authenticated through this restricted endpoint. The credential itself
+is not proof that an xAI product authored a response; preserve the actual Bot
+conversation for demonstration evidence.
+
+The owner creates a session with `POST /api/agents/{id}/sparring` and
+`{"thesis":"..."}`, lists sessions with `GET /api/agents/{id}/sparring`, and
+responds via `POST /api/sparring/{id}/rounds` with
+`{"role":"owner","argument":"...","evidence_urls":[],"proposed_revision":null}`.
+Sessions retain the original agent version and a whitelist of name, goals,
+strategy and horizon; they never expose policy, wallet keys or custom code.
+Theses and revisions allow 4000 characters, arguments 6000, evidence up to eight
+HTTP(S) URLs (2048 bytes each, no embedded credentials), and sessions 12 rounds.
+Evidence is untrusted and stored without server-side fetching. Practice neither
+changes live strategies nor creates challenges, approvals, ledger or chain
+transactions. Grok Bot's cloud computer needs a reachable API URL; use the
+existing authenticated tunnel setup with an allowed host, retaining the general
+API token. Share only the restricted token via the Bot's secure credential flow.
+Owner and restricted credentials are not interchangeable, and absent Bot
+credentials fail closed even on a local server with no general API token.
