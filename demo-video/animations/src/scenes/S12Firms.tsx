@@ -4,7 +4,7 @@ import React from "react";
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 import { fade, lerp, prog, snap, tick } from "../lib/anim";
 import { ICONS } from "../lib/icons";
-import { AgentAvatar, At, Caption, Card, Eyebrow, MONO, MoneyChip, Pill, Stage, Svg, Title } from "../lib/ui";
+import { AgentAvatar, At, Caption, Card, Eyebrow, MONO, MoneyChip, Pill, Stage, Svg, Title, useMinimal } from "../lib/ui";
 
 const LEAD = { x: 900, y: 470 }, SCOUT = { x: 400, y: 330 }, ANALYST = { x: 400, y: 640 }, RIVAL = { x: 1530, y: 470 };
 
@@ -24,6 +24,7 @@ export const S12Firms: React.FC = () => {
   const pour = prog(f, 10.6, 0.9);
   const loss = prog(f, 15.2, 0.5);
   const LockIcon = ICONS.Lock;
+  const minimal = useMinimal();
   const scoutEarned = t < 5.6 ? null : t < 11.5 ? "+0.10" : "+" + tick(f, 0.1, 0.7, 11.5, 0.5);
   const analystEarned = t < 5.6 ? null : t < 11.5 ? "+0.10" : "+" + tick(f, 0.1, 0.5, 11.5, 0.5);
   const leadVal = t < 8.4 ? null : t < 12.4 ? "+5.00" : "+" + tick(f, 5.0, 3.8, 12.4, 0.6);
@@ -32,12 +33,17 @@ export const S12Firms: React.FC = () => {
       <AbsoluteFill style={{ opacity: 1 - loss * 0.75 }}>
         {/* Firm card */}
         <At x={LEAD.x} y={190} opacity={fade(f, 0.6)}>
-          <Card style={{ padding: "18px 28px", display: "flex", gap: 28, alignItems: "center" }}>
+          {minimal ? (
+            <div style={{ display: "flex", gap: 18, alignItems: "center" }}>
+              <Pill tone="mint" size={26} mono>80 / 20</Pill>
+              <MoneyChip amount="0.10" size={26} />
+            </div>
+          ) : <Card style={{ padding: "18px 28px", display: "flex", gap: 28, alignItems: "center" }}>
             <span style={{ fontSize: 28, color: "var(--text)", fontWeight: 500 }}>Firm demo desk</span>
             <span style={{ fontSize: 22, color: "var(--text-2)" }}>lead keeps <b style={{ color: "var(--text)" }}>80 %</b></span>
             <span style={{ fontSize: 22, color: "var(--text-2)" }}>members share <b style={{ color: "var(--text)" }}>20 %</b></span>
             <span style={{ fontSize: 22, color: "var(--text-2)" }}>task fee <b style={{ fontFamily: MONO, color: "var(--yellow)" }}>0.10</b></span>
-          </Card>
+          </Card>}
         </At>
         {/* Membership lines */}
         <Svg>
@@ -70,7 +76,7 @@ export const S12Firms: React.FC = () => {
           <At x={lerp(LEAD.x, ANALYST.x, fee)} y={lerp(LEAD.y, ANALYST.y, fee)}><MoneyChip amount="0.10" size={20} /></At>
         </>}
         <At x={(LEAD.x + 220 + 260) / 2 + 100} y={LEAD.y + 220} opacity={fade(f, 4.9, 6.4)}>
-          <div style={{ fontSize: 21, color: "var(--text-3)", width: 380, textAlign: "center" }}>fee paid as each contribution is used, before any outcome</div>
+          {!minimal && <div style={{ fontSize: 21, color: "var(--text-3)", width: 380, textAlign: "center" }}>fee paid as each contribution is used, before any outcome</div>}
         </At>
         {/* The lead's challenge */}
         <At x={RIVAL.x} y={RIVAL.y} opacity={fade(f, 6.4)}>
@@ -79,18 +85,18 @@ export const S12Firms: React.FC = () => {
         <At x={RIVAL.x} y={RIVAL.y + 180}><Delta v="−5.00" tone="rose" o={prog(f, 8.4, 0.4)} /></At>
         <At x={(LEAD.x + RIVAL.x) / 2} y={LEAD.y - 50} opacity={fade(f, 7.0)}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, color: "var(--yellow)" }}>
-            <LockIcon size={34} /><span style={{ fontFamily: MONO, fontSize: 24 }}>5.00 per side</span>
+            <LockIcon size={34} /><span style={{ fontFamily: MONO, fontSize: 24 }}>{minimal ? "5.00" : "5.00 per side"}</span>
           </div>
         </At>
         <At x={(LEAD.x + RIVAL.x) / 2} y={LEAD.y + 50} scale={snap(f, fps, 8.2, 10)}>
-          <Pill tone="mint" size={22}>Lead wins</Pill>
+          {minimal ? <span style={{ color: "var(--mint)" }}><ICONS.Check size={48} /></span> : <Pill tone="mint" size={22}>Lead wins</Pill>}
         </At>
         {/* 80 / 20 split and the pool pouring to members by weight */}
         <At x={LEAD.x} y={LEAD.y + 275} opacity={fade(f, 9.4) * (1 - prog(f, 13.6, 0.4))}>
           <div style={{ width: 520 }}>
             <div style={{ display: "flex", gap: lerp(0, 10, split), height: 40 }}>
               <div style={{ flex: 80, borderRadius: 8, background: "var(--mint-a)", border: "1px solid var(--mint)", display: "grid", placeItems: "center",
-                fontFamily: MONO, fontSize: 20, color: "var(--mint)" }}>lead 4.00</div>
+                fontFamily: MONO, fontSize: 20, color: "var(--mint)" }}>{minimal ? "4.00" : "lead 4.00"}</div>
               <div style={{ flex: 20, borderRadius: 8, background: "var(--yellow-a)", border: "1px solid var(--yellow)", display: "grid", placeItems: "center",
                 fontFamily: MONO, fontSize: 20, color: "var(--yellow)", opacity: 1 - pour * 0.6 }}>1.00</div>
             </div>
@@ -102,11 +108,26 @@ export const S12Firms: React.FC = () => {
           <At x={lerp(LEAD.x + 210, ANALYST.x + 170, pour)} y={lerp(LEAD.y + 275, ANALYST.y - 20, pour)}><MoneyChip amount="0.40" tone="mint" size={20} /></At>
         </>}
         <At x={LEAD.x} y={LEAD.y + 290} opacity={fade(f, 13.8)}>
-          <div style={{ fontFamily: MONO, fontSize: 21, color: "var(--text-3)", textAlign: "center" }}>5.00 − 1.00 pool − 0.20 fees = 3.80</div>
+          {!minimal && <div style={{ fontFamily: MONO, fontSize: 21, color: "var(--text-3)", textAlign: "center" }}>5.00 − 1.00 pool − 0.20 fees = 3.80</div>}
         </At>
       </AbsoluteFill>
       {/* Loss variant */}
-      <At x={960} y={500} opacity={loss} scale={lerp(0.96, 1, loss)}>
+      {minimal && <At x={960} y={500} opacity={loss} scale={lerp(0.96, 1, loss)}>
+        {/* If the lead loses: its stake goes, members keep their fees */}
+        <Card elevated style={{ padding: "36px 60px", display: "flex", gap: 70, alignItems: "center" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+            <AgentAvatar name="Firm Lead" color={0} size={110} />
+            <MoneyChip amount="−5.00" tone="rose" size={26} />
+          </div>
+          {[2, 3].map((c) => (
+            <div key={c} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+              <AgentAvatar name={c === 2 ? "Firm Scout" : "Firm Analyst"} color={c} size={84} />
+              <MoneyChip amount="+0.10" tone="mint" size={24} />
+            </div>
+          ))}
+        </Card>
+      </At>}
+      <At x={960} y={500} opacity={minimal ? 0 : loss} scale={lerp(0.96, 1, loss)}>
         <Card elevated style={{ width: 820, padding: 34, textAlign: "center" }}>
           <Eyebrow>If the lead loses instead</Eyebrow>
           <div style={{ marginTop: 14, fontSize: 32, color: "var(--text)", fontWeight: 500 }}>The lead takes the loss.</div>

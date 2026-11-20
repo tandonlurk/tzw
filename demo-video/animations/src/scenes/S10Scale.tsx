@@ -3,7 +3,7 @@
 import React from "react";
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 import { fade, lerp, prog, snap } from "../lib/anim";
-import { AgentAvatar, At, BlockGlyph, BlockKind, Card, Eyebrow, MONO, Stage, Svg, Title, agentColor } from "../lib/ui";
+import { AgentAvatar, At, BlockGlyph, BlockKind, Card, Eyebrow, MONO, Stage, Svg, Title, agentColor, MoneyChip, useMinimal } from "../lib/ui";
 
 const AGENTS = [
   { name: "Momentum", color: 0, amt: "30.00", w: 0.3, blocks: ["trigger", "condition", "action"] as BlockKind[] },
@@ -25,6 +25,7 @@ export const S10Scale: React.FC = () => {
   const split = prog(f, 1.6, 0.8);
   const partB = prog(f, 5.2, 0.5);
   const partC = prog(f, 10.8, 0.5);
+  const minimal = useMinimal();
   const n = t < 6.4 ? 1 : t < 7.6 ? 10 : 100;
   return (
     <Stage env="sim" tag="Example">
@@ -34,7 +35,7 @@ export const S10Scale: React.FC = () => {
           <Card style={{ width: 1200, padding: 26 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
               <Eyebrow>Your wallet</Eyebrow>
-              <span style={{ fontFamily: MONO, fontSize: 34, color: "var(--text)", fontWeight: 600 }}>100.00 <span style={{ fontSize: 20, color: "var(--text-3)" }}>(simulated)</span></span>
+              <span style={{ fontFamily: MONO, fontSize: 34, color: "var(--text)", fontWeight: 600 }}>100.00 {!minimal && <span style={{ fontSize: 20, color: "var(--text-3)" }}>(simulated)</span>}</span>
             </div>
             <div style={{ display: "flex", gap: lerp(0, 8, split), marginTop: 16, height: 22 }}>
               {AGENTS.map((a) => <div key={a.name} style={{ flex: a.w, borderRadius: 6, background: lerp(0, 1, split) > 0.5 ? agentColor(a.color) : "var(--yellow)" }} />)}
@@ -52,7 +53,7 @@ export const S10Scale: React.FC = () => {
                   return <div key={j} style={{ transform: `translateY(${(1 - Math.min(1, p)) * -40}px) scale(${p})` }}><BlockGlyph kind={b} size={50} /></div>;
                 })}
               </div>
-              <div style={{ fontSize: 19, color: "var(--text-3)" }}>its own strategy, built from blocks</div>
+              {!minimal && <div style={{ fontSize: 19, color: "var(--text-3)" }}>its own strategy, built from blocks</div>}
             </Card>
           </At>
         ))}
@@ -85,10 +86,17 @@ export const S10Scale: React.FC = () => {
             <rect x={10} y={10} width={700} height={600} rx={40}
               style={{ fill: "none", stroke: "var(--blue)", strokeWidth: 2.5, strokeDasharray: "10 10", opacity: partC }} />
           </svg>
-          <div style={{ position: "absolute", left: 0, top: -88, fontSize: 22, color: "var(--blue)", opacity: partC }}>Family · one owner</div>
+          <div style={{ position: "absolute", left: 0, top: -88, fontSize: 22, color: "var(--blue)", opacity: minimal ? 0 : partC }}>Family · one owner</div>
         </div>
         {/* Readouts */}
-        <At x={1600} y={380} opacity={fade(f, 8.2) * (1 - partC)}>
+        {minimal && <At x={1560} y={420} opacity={fade(f, 8.2) * (1 - partC)}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
+            <MoneyChip amount="30.00" size={30} />
+            <span style={{ fontSize: 34, color: "var(--text-3)" }}>↓</span>
+            <MoneyChip amount="0.30" suffix=" × 100" size={30} />
+          </div>
+        </At>}
+        {!minimal && <At x={1600} y={380} opacity={fade(f, 8.2) * (1 - partC)}>
           <div style={{ width: 460, display: "flex", flexDirection: "column", gap: 22 }}>
             <div>
               <Eyebrow>Capital</Eyebrow>
@@ -103,7 +111,7 @@ export const S10Scale: React.FC = () => {
               <div style={{ fontSize: 22, color: "var(--text-2)", marginTop: 6 }}>every money limit</div>
             </div>
           </div>
-        </At>
+        </At>}
         {/* Family rule: siblings never face each other; outside agents can */}
         <Svg>
           <line x1={700} y1={300} x2={1010} y2={600} style={{ stroke: "var(--text-3)", strokeWidth: 3, strokeDasharray: "8 10",
@@ -116,7 +124,7 @@ export const S10Scale: React.FC = () => {
         <At x={1690} y={420} opacity={fade(f, 12.6)}>
           <AgentAvatar name="Other" color={4} size={84} label="Another owner's agent" />
         </At>
-        <At x={1650} y={640} opacity={fade(f, 11.4)}>
+        <At x={1650} y={640} opacity={minimal ? 0 : fade(f, 11.4)}>
           <div style={{ fontSize: 22, color: "var(--text-2)", width: 420, textAlign: "center" }}>Clones never challenge each other, so money can't just move between your own agents.</div>
         </At>
         <Title at={8.4} out={10.8} y={880} size={44}>Multiply an agent 10× or 100×, each a little different.</Title>
