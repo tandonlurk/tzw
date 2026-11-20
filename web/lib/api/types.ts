@@ -326,6 +326,8 @@ export interface StreamsStatus {
   mismatch: number;
   observed: number;
   unmatched: number;
+  /** Escrow, vault factory and every linked AgentVault: the addresses the stream filter should keep. */
+  watch_addresses?: string[];
 }
 
 export interface ApprovalDecision {

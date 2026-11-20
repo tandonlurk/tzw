@@ -26,6 +26,11 @@ sol! {
     interface FactoryEvents {
         event VaultCreated(address indexed vault, address indexed owner, address indexed operator, bytes32 agentRef, uint256 maxPerChallenge, uint256 maxExposure);
     }
+
+    interface VaultEvents {
+        event Staked(bytes32 indexed id, uint256 amount);
+        event Released(bytes32 indexed id, uint256 amount, uint8 status);
+    }
 }
 
 /// Which contract emitted the log.
@@ -33,6 +38,8 @@ sol! {
 pub enum Source {
     Escrow,
     Factory,
+    /// An `AgentVault` (any vault the caller recognizes).
+    Vault,
 }
 
 /// A decoded event. Addresses are lowercase `0x` hex; amounts are USDC base
@@ -96,6 +103,15 @@ pub enum ContractEvent {
         max_per_challenge: String,
         max_exposure: String,
     },
+    /// The vault staked `amount` into escrow challenge `id`.
+    Staked { id: B256, amount: String },
+    /// The vault freed its exposure for a final challenge (`status` is the
+    /// escrow status: 3 resolved, 4 voided, 5 refunded). Moves no funds.
+    Released {
+        id: B256,
+        amount: String,
+        status: u8,
+    },
 }
 
 fn addr(a: Address) -> String {
@@ -119,6 +135,8 @@ impl ContractEvent {
             ContractEvent::PayoutDeferred { .. } => "PayoutDeferred",
             ContractEvent::Claimed { .. } => "Claimed",
             ContractEvent::VaultCreated { .. } => "VaultCreated",
+            ContractEvent::Staked { .. } => "Staked",
+            ContractEvent::Released { .. } => "Released",
         }
     }
 
@@ -132,7 +150,9 @@ impl ContractEvent {
             | ContractEvent::Voided { id, .. }
             | ContractEvent::Refunded { id, .. }
             | ContractEvent::PayoutDeferred { id, .. }
-            | ContractEvent::Claimed { id, .. } => Some(*id),
+            | ContractEvent::Claimed { id, .. }
+            | ContractEvent::Staked { id, .. }
+            | ContractEvent::Released { id, .. } => Some(*id),
             ContractEvent::VaultCreated { .. } => None,
         }
     }
@@ -232,6 +252,24 @@ pub fn decode(source: Source, topics: &[String], data_hex: &str) -> Option<Contr
                     id: e.id,
                     party: addr(e.party),
                     amount: amount(e.amount),
+                }
+            }
+            _ => return None,
+        },
+        Source::Vault => match t0 {
+            VaultEvents::Staked::SIGNATURE_HASH => {
+                let e = VaultEvents::Staked::decode_log_data(&log).ok()?;
+                E::Staked {
+                    id: e.id,
+                    amount: amount(e.amount),
+                }
+            }
+            VaultEvents::Released::SIGNATURE_HASH => {
+                let e = VaultEvents::Released::decode_log_data(&log).ok()?;
+                E::Released {
+                    id: e.id,
+                    amount: amount(e.amount),
+                    status: e.status,
                 }
             }
             _ => return None,

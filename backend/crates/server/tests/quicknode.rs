@@ -779,3 +779,39 @@ async fn a_reorg_withdraws_a_confirmation_and_unknown_ids_stay_unmatched() {
         removed[0].0
     );
 }
+
+/// AgentVault logs reach the backend only once the owner adds the vault
+/// addresses to the stream filter (docs/setup/quicknode-streams-filter.md).
+/// The fixture is the two real `Released` logs of the same challenge, taken
+/// from their Arc testnet receipts (not from a stream delivery).
+#[tokio::test]
+async fn vault_releases_are_confirmed_once_their_vaults_are_streamed() {
+    let c = arc_setup().await;
+    seed_arc(&c, true).await;
+    let body = include_str!("fixtures/quicknode/arc_vault_release.json");
+    let (s, out) = call(&c.app, delivery(body, SECRET, &now(), &[])).await;
+    assert_eq!(s, StatusCode::OK, "{out}");
+    assert_eq!(
+        statuses(&c.pool).await,
+        pairs(&[("Released", "confirmed"), ("Released", "confirmed")])
+    );
+    let acts = stream_activity(&c.pool).await;
+    assert!(
+        acts[1]
+            .1
+            .starts_with("\"Demo Skeptic (simulated)\"'s vault released its 1.50 USDC"),
+        "{}",
+        acts[1].1
+    );
+    // A vault no agent is linked to stays a plain recorded log.
+    sqlx::query("UPDATE agents SET vault_address = NULL, vault_owner = NULL")
+        .execute(&c.pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM chain_events")
+        .execute(&c.pool)
+        .await
+        .unwrap();
+    call(&c.app, delivery(body, SECRET, &now(), &[])).await;
+    assert!(statuses(&c.pool).await.is_empty());
+}

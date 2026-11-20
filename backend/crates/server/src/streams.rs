@@ -102,6 +102,8 @@ pub struct Known {
     pub proposer_stake_tx: Option<String>,
     pub counterparty_stake_tx: Option<String>,
     pub escrow_settle_tx: Option<String>,
+    pub proposer_release_tx: Option<String>,
+    pub counterparty_release_tx: Option<String>,
     pub winner_id: Option<Uuid>,
     pub outcome: Option<String>,
 }
@@ -274,7 +276,49 @@ pub fn evaluate(ev: &ContractEvent, tx: &str, k: &Known) -> (Status, String) {
             Status::Observed,
             format!("a deferred payout was claimed for {party}"),
         ),
-        ContractEvent::VaultCreated { .. } => (Status::Unmatched, String::new()),
+        // Matched by `evaluate_vault` / `evaluate_vault_event`.
+        ContractEvent::VaultCreated { .. }
+        | ContractEvent::Staked { .. }
+        | ContractEvent::Released { .. } => (Status::Unmatched, String::new()),
+    }
+}
+
+/// An `AgentVault`'s own `Staked` / `Released`, emitted by `vault`, against
+/// the challenge it names.
+pub fn evaluate_vault_event(
+    ev: &ContractEvent,
+    vault: &str,
+    tx: &str,
+    k: &Known,
+) -> (Status, String) {
+    let proposer = same(&k.proposer_vault, vault);
+    if !proposer && !same(&k.counterparty_vault, vault) {
+        return (
+            Status::Mismatch,
+            format!("vault {vault} is neither agent's vault in this challenge"),
+        );
+    }
+    match ev {
+        ContractEvent::Staked { amount, .. } => {
+            if let Some(n) = amount_check(amount, k.stake, "the vault's stake") {
+                return (Status::Mismatch, n);
+            }
+            let server = if proposer {
+                &k.proposer_stake_tx
+            } else {
+                &k.counterparty_stake_tx
+            };
+            tx_check(server, tx, "stake")
+        }
+        ContractEvent::Released { .. } => {
+            let server = if proposer {
+                &k.proposer_release_tx
+            } else {
+                &k.counterparty_release_tx
+            };
+            tx_check(server, tx, "vault release")
+        }
+        _ => (Status::Unmatched, String::new()),
     }
 }
 
@@ -308,6 +352,10 @@ fn decoded_json(ev: &ContractEvent) -> Value {
             ..
         } => json!({"party_a": party_a, "party_b": party_b, "stake": stake,
                     "fund_deadline": fund_deadline, "resolve_deadline": resolve_deadline}),
+        ContractEvent::Staked { amount, .. } => json!({"amount": amount}),
+        ContractEvent::Released { amount, status, .. } => {
+            json!({"amount": amount, "escrow_status": status})
+        }
         ContractEvent::Deposited { party, amount, .. }
         | ContractEvent::PayoutDeferred { party, amount, .. }
         | ContractEvent::Claimed { party, amount, .. } => {
@@ -415,7 +463,12 @@ fn seen_text(row: &EventRow) -> String {
 }
 
 /// The readable sentence for a confirmed event.
-fn confirmed_text(ev: &ContractEvent, k: Option<&Known>, agent: Option<&str>) -> String {
+fn confirmed_text(
+    ev: &ContractEvent,
+    k: Option<&Known>,
+    agent: Option<&str>,
+    emitter: &str,
+) -> String {
     let name_of = |vault: &str| -> String {
         k.and_then(|k| {
             if same(&k.proposer_vault, vault) {
@@ -469,6 +522,16 @@ fn confirmed_text(ev: &ContractEvent, k: Option<&Known>, agent: Option<&str>) ->
             short(vault),
             agent.unwrap_or("an agent")
         ),
+        ContractEvent::Staked { amount, .. } => format!(
+            "\"{}\"'s vault staked {} into the Arc escrow",
+            name_of(emitter),
+            usdc(amount)
+        ),
+        ContractEvent::Released { amount, .. } => format!(
+            "\"{}\"'s vault released its {} stake exposure on Arc (no funds move)",
+            name_of(emitter),
+            usdc(amount)
+        ),
     }
 }
 
@@ -478,7 +541,8 @@ async fn known(conn: &mut PgConnection, id: Uuid) -> Result<Option<Known>, sqlx:
                 pa.name AS proposer_name, pb.name AS counterparty_name, \
                 pa.vault_address AS proposer_vault, pb.vault_address AS counterparty_vault, \
                 i.escrow_create_tx, i.proposer_stake_tx, i.counterparty_stake_tx, \
-                i.escrow_settle_tx, i.winner_id, i.outcome \
+                i.escrow_settle_tx, i.proposer_release_tx, i.counterparty_release_tx, \
+                i.winner_id, i.outcome \
          FROM interactions i \
          JOIN agents pa ON pa.id = i.proposer_id \
          JOIN agents pb ON pb.id = i.counterparty_id \
@@ -510,14 +574,27 @@ pub async fn check_event(
     if row.removed || matches!(row.match_status.as_deref(), Some(s) if s != "pending") {
         return Ok(None);
     }
+    let topics: Vec<String> = serde_json::from_value(row.topics.clone()).unwrap_or_default();
     let source = if row.address == contracts.escrow {
         Source::Escrow
     } else if row.address == contracts.factory {
         Source::Factory
     } else {
-        return Ok(None);
+        // An AgentVault linked to one of our agents (decoded first, so other
+        // contracts' logs cost no query).
+        if events::decode(Source::Vault, &topics, &row.data).is_none() {
+            return Ok(None);
+        }
+        let linked: Option<Uuid> =
+            sqlx::query_scalar("SELECT id FROM agents WHERE vault_address = $1")
+                .bind(&row.address)
+                .fetch_optional(&mut *conn)
+                .await?;
+        if linked.is_none() {
+            return Ok(None);
+        }
+        Source::Vault
     };
-    let topics: Vec<String> = serde_json::from_value(row.topics.clone()).unwrap_or_default();
     let Some(ev) = events::decode(source, &topics, &row.data) else {
         return Ok(None);
     };
@@ -559,7 +636,11 @@ pub async fn check_event(
             match found {
                 Some(found) => {
                     interaction_id = Some(found.id);
-                    let r = evaluate(&ev, &row.tx_hash, &found);
+                    let r = if source == Source::Vault {
+                        evaluate_vault_event(&ev, &row.address, &row.tx_hash, &found)
+                    } else {
+                        evaluate(&ev, &row.tx_hash, &found)
+                    };
                     k = Some(found);
                     r
                 }
@@ -601,10 +682,17 @@ pub async fn check_event(
                 Some(k.proposer_id)
             }
         }
+        (ContractEvent::Staked { .. } | ContractEvent::Released { .. }, Some(k)) => {
+            if same(&k.counterparty_vault, &row.address) {
+                Some(k.counterparty_id)
+            } else {
+                Some(k.proposer_id)
+            }
+        }
         (_, Some(k)) => Some(k.proposer_id),
         (_, None) => agent_id,
     };
-    let what = confirmed_text(&ev, k.as_ref(), agent_name.as_deref());
+    let what = confirmed_text(&ev, k.as_ref(), agent_name.as_deref(), &row.address);
     let (kind, summary) = match status {
         Status::Confirmed => (
             "stream_confirmed",
@@ -765,6 +853,9 @@ pub struct StreamsStatus {
     pub mismatch: i64,
     pub observed: i64,
     pub unmatched: i64,
+    /// Addresses the stream filter should keep: the escrow, the vault
+    /// factory, then every linked AgentVault (paste into the QuickNode filter).
+    pub watch_addresses: Vec<String>,
 }
 
 /// `GET /api/streams`: QuickNode Streams health for the UI.
@@ -797,9 +888,21 @@ pub async fn status(State(state): State<AppState>) -> Result<Json<StreamsStatus>
     )
     .fetch_one(&state.pool)
     .await?;
+    let contracts = contracts(&state);
+    let vaults: Vec<String> = sqlx::query_scalar(
+        "SELECT vault_address FROM agents WHERE vault_address IS NOT NULL ORDER BY vault_address",
+    )
+    .fetch_all(&state.pool)
+    .await?;
+    let watch_addresses = contracts
+        .iter()
+        .flat_map(|c| [c.escrow.clone(), c.factory.clone()])
+        .chain(vaults)
+        .collect();
     Ok(Json(StreamsStatus {
         webhook_enabled: state.settings.quicknode.is_some(),
-        matching_enabled: contracts(&state).is_some(),
+        matching_enabled: contracts.is_some(),
+        watch_addresses,
         events_total: total,
         last_delivery_at: last,
         last_block_number: block,
@@ -879,6 +982,32 @@ mod tests {
         k.winner_id = None;
         k.outcome = Some("void".into());
         assert_eq!(evaluate(&ev, TX, &k).0, Status::Mismatch);
+    }
+
+    #[test]
+    fn vault_events_match_the_emitting_vaults_side() {
+        let mut k = known();
+        let staked = ContractEvent::Staked {
+            id: Default::default(),
+            amount: "1500000".into(),
+        };
+        assert_eq!(evaluate_vault_event(&staked, VB, TX, &k).0, Status::Pending);
+        k.counterparty_stake_tx = Some(TX.into());
+        assert_eq!(
+            evaluate_vault_event(&staked, VB, TX, &k).0,
+            Status::Confirmed
+        );
+        // The proposer's vault did not send that transaction.
+        k.proposer_stake_tx = Some(OTHER.into());
+        assert_eq!(
+            evaluate_vault_event(&staked, VA, TX, &k).0,
+            Status::Mismatch
+        );
+        let stranger = "0x1111111111111111111111111111111111111111";
+        assert_eq!(
+            evaluate_vault_event(&staked, stranger, TX, &k).0,
+            Status::Mismatch
+        );
     }
 
     #[test]
