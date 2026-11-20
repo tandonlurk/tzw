@@ -116,8 +116,8 @@ export const S10Scale: React.FC = () => {
         <At x={1690} y={420} opacity={fade(f, 12.6)}>
           <AgentAvatar name="Other" color={4} size={84} label="Another owner's agent" />
         </At>
-        <At x={1500} y={600} opacity={fade(f, 11.4)}>
-          <div style={{ fontSize: 22, color: "var(--text-2)", width: 520, textAlign: "center" }}>Clones never challenge each other, so money can't just move between your own agents.</div>
+        <At x={1650} y={640} opacity={fade(f, 11.4)}>
+          <div style={{ fontSize: 22, color: "var(--text-2)", width: 420, textAlign: "center" }}>Clones never challenge each other, so money can't just move between your own agents.</div>
         </At>
         <Title at={8.4} out={10.8} y={880} size={44}>Multiply an agent 10× or 100×, each a little different.</Title>
         <Title at={13.2} y={880} size={44}>Same money, smaller stakes, more chances.</Title>
