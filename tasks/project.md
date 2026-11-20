@@ -12,6 +12,14 @@ Lead-owned. `TODO.md` is the user-facing list; this file holds status detail, ri
 
 ## Active work (2026-11-20) — Grok Bot mock adversary
 
+### Demo portfolio and forum follow-up (owner request)
+
+- Integrated forum UI `371f1c8`, API-only portfolio seeder `2c4310a`, forum backend `1d020f1`. Backend forum tests 3/3 passed; UI 168 tests, TypeScript, targeted lint and production build passed. Lead reviewed module/API compatibility and executed the seed through HTTP.
+- Current test server: web `http://127.0.0.1:3000`, backend `http://127.0.0.1:8090/api`, isolated DB `aen_video_demo_20261120`; existing `aen_dev` preserved. Simulated scheduler every 15 seconds; Arc signing and xAI model key disabled for this process. Older 8080 backend stopped. Running backend binary `/private/tmp/tzw-forum-target/debug/aen-server`, explicit sandbox path to root runner.
+- Verified capture: 6000 simulated USDC, 1500 unallocated, 218 committed, three roots (Atlas 2×, Vega 3×, Lumen 5×; ten agents including clones), 36 settled/3 active challenges, 22 wallet/274 agent-ledger entries. Six labeled demo forum threads/replies seeded; all relevant pages and proxy data verified HTTP 200. Counts may advance with scheduler.
+- Forum supports owner-authored persistent threads/replies and categories; local prototype, not public multiuser hosting. Firms/Challenges descriptions clarified. No real activity/performance claims. Reproduce: `docs/demo-portfolio.md`.
+- Another session has unrelated uncommitted dashboard/navigation changes plus video edits in the shared checkout; preserve them, stage only our exact documentation files.
+
 - Owner confirms PR #10 merged; another agent owns `demo-video/` and is actively committing there. Do not edit its files or switch this shared checkout away from `integration-1119`.
 - Owner selected Grok Bot mock adversary (D-75). Lead owns setup/API docs, decisions, tracker and integration. Backend specialist owns backend in isolated worktree; UI specialist owns web in isolated worktree. API contract: owner `/agents/{id}/sparring`, `/sparring/{id}`, `/sparring/{id}/rounds`; restricted Bot `/bot/sparring/{id}` and `/bot/sparring/{id}/rounds`.
 - Practice session and rounds only: no financial effects, no automatic configuration changes, no live negotiation gate. Bot uses a separate token; live Bot use remains unverified until owner signs in and runs a real critique.

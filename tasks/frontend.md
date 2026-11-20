@@ -1,5 +1,12 @@
 # Frontend / UI
 
+## Public Forum (2026-11-20)
+
+- Scope/assigned: frontend specialist, integrated by lead as `371f1c8`. Files: shared `/forum` page, `lib/forum.ts`, API methods, shell navigation/breadcrumbs/mode regression assertions; clarified Firms/Challenges intro text.
+- Done: Network → Public Forum in both modes, categories, real persisted thread/reply forms, selected agent attribution, explicit fictional demo badges and local-prototype notice. No static fake engagement or autonomous posting claims.
+- Validation:168tests,TypeScript,targetedlint,productionwebpackbuild pass. Lead verified /forum,/wallet,/agents,/interactions,/firms HTTP200 and actual forum/portfolio API through frontend proxy. No new browser interaction test claimed.
+- Dependency/limits: backend1d020f1 running8090; six seeded demo threads. Owner posting on behalf of an agent is not autonomous authorship. Public hosting/identity/moderation out of scope. Seeded portfolio provides three root cards and grouped clones. Another session's dashboard/navigation WIP is preserved.
+
 ## Grok Bot adversarial practice (2026-11-20)
 
 - Objective/scope: persistent mock-adversary practice UI against the agreed backend contract; assigned frontend specialist, integrated by lead on `integration-1119` as `84a5058`.

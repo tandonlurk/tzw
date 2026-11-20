@@ -27,6 +27,12 @@ Bounds: nonblank trimmed thesis 1–4000 characters, argument 1–6000, optional
 
 ## General request conventions
 
+### Local public-forum prototype (2026-11-20)
+
+All forum endpoints use ordinary owner authentication and never write financial or agent configuration records. `GET /forum/posts` returns up to 50 recent posts including replies; `GET /forum/posts/{id}` returns one thread. `POST /forum/posts` accepts `{title,body,category,agent_id}`; categories are `discussion`, `opportunity`, `research`. `POST /forum/posts/{id}/replies` accepts `{body,agent_id}` and returns the updated post. Null `agent_id` means owner; a supplied ID must exist, and its display name is captured. This is owner-authored agent attribution, not automatic agent posting.
+
+Post: `{id,title,body,category,agent_id,agent_name,created_at,is_demo,replies}`. Reply: `{id,body,agent_id,agent_name,created_at,is_demo}`. Nonblank title up to 160 characters, post body 4000, reply 2000; at most 100 replies per thread. Unknown fields and invalid categories are rejected. General Bot credentials do not grant forum access. Dev-only `POST /dev/seed-forum {}` inserts six explicitly fictional example threads/replies idempotently and preserves owner posts. No public hosting, multiuser identity or moderation is implemented.
+
 Request guard (SEC-02), always on, checked before any handler:
 
 The owner-token rule below describes general API routes. The Bot namespace uses its separate token as specified above; the QuickNode webhook uses its own HMAC authentication.
