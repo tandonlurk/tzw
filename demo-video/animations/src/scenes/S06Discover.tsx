@@ -48,7 +48,7 @@ export const S06Discover: React.FC = () => {
       </At>
       {/* Market stream through a filter window */}
       <At x={850} y={300}><Eyebrow style={{ fontSize: 20 }}>Gemini prediction markets · data feed</Eyebrow></At>
-      <div style={{ position: "absolute", left: 640, top: 340, width: 420, height: 380, overflow: "hidden",
+      <div style={{ position: "absolute", left: 610, top: 340, width: 480, height: 380, overflow: "hidden",
         maskImage: "linear-gradient(to bottom, transparent 0, #000 22%, #000 78%, transparent 100%)" }}>
         {TILES.map((tile, i) => {
           const y = 150 + offset + i * rowH;
@@ -56,31 +56,31 @@ export const S06Discover: React.FC = () => {
           return (
             <div key={i} style={{ position: "absolute", left: 10, right: 10, top: y, height: 72, borderRadius: 14,
               background: "var(--surface)", border: `1px solid ${tile.hit && judged > 0.5 ? "var(--blue)" : "var(--line-strong)"}`,
-              display: "flex", alignItems: "center", padding: "0 22px", fontFamily: MONO, fontSize: 24,
+              display: "flex", alignItems: "center", padding: "0 22px", fontFamily: MONO, fontSize: 22, whiteSpace: "nowrap",
               color: tile.hit && judged > 0.5 ? "var(--text)" : "var(--text-2)", opacity: (1 - dim) * (tile.hit ? 1 - fly : 1) }}>
               {tile.t}
             </div>
           );
         })}
       </div>
-      <div style={{ position: "absolute", left: 636, top: 482, width: 428, height: 96, borderRadius: 18,
+      <div style={{ position: "absolute", left: 606, top: 482, width: 488, height: 96, borderRadius: 18,
         border: "2px dashed var(--blue)", opacity: fade(f, 0.6) * 0.8 }} />
       {/* The hit tile flies to the logic chain */}
-      <At x={lerp(850, 1450, fly)} y={lerp(530, 330, fly)} opacity={fly > 0 && fly < 1 ? 1 : fly >= 1 ? 1 : 0} scale={lerp(1, 0.9, fly)}>
+      <At x={lerp(850, 1450, fly)} y={lerp(530, 280, fly)} opacity={fly > 0 && fly < 1 ? 1 : fly >= 1 ? 1 : 0} scale={lerp(1, 0.9, fly)}>
         <div style={{ padding: "18px 24px", borderRadius: 14, background: "var(--blue-a)", border: "1px solid var(--blue)",
           fontFamily: MONO, fontSize: 24, color: "var(--text)", whiteSpace: "nowrap" }}>BTC +3.0 % · contract 0.55</div>
       </At>
       {/* Logic chain */}
       <Svg>
         {[0, 1].map((i) => (
-          <line key={i} x1={1450} y1={430 + i * 110 + 34} x2={1450} y2={430 + (i + 1) * 110 - 34}
+          <line key={i} x1={1450} y1={360 + i * 100 + 34} x2={1450} y2={360 + (i + 1) * 100 - 34}
             style={{ stroke: "var(--line-strong)", strokeWidth: 3 }} />
         ))}
       </Svg>
       {BLOCKS.map((b, i) => {
         const lit = prog(f, 5.1 + i * 0.55, 0.3);
         return (
-          <div key={i} style={{ position: "absolute", left: 1450 - 34, top: 430 + i * 110 - 34, display: "flex", alignItems: "center", gap: 22,
+          <div key={i} style={{ position: "absolute", left: 1450 - 34, top: 360 + i * 100 - 34, display: "flex", alignItems: "center", gap: 22,
             opacity: fade(f, 0.4 + i * 0.1) }}>
             <BlockGlyph kind={b.kind} size={68} lit={lit} />
             <span style={{ fontSize: 26, color: lit > 0.5 ? "var(--text)" : "var(--text-3)", whiteSpace: "nowrap" }}>{b.label}</span>
@@ -88,7 +88,7 @@ export const S06Discover: React.FC = () => {
         );
       })}
       {/* Proposal with explicit terms */}
-      <At x={1520} y={830} scale={snap(f, fps, 7.0)}>
+      <At x={1520} y={700} scale={snap(f, fps, 7.0)}>
         <Card elevated accent="blue" style={{ width: 560, padding: 24 }}>
           <Eyebrow>Proposal · explicit terms</Eyebrow>
           <div style={{ marginTop: 10, fontSize: 26, color: "var(--text)", fontWeight: 500 }}>BTC contract at or above 0.55 at end</div>

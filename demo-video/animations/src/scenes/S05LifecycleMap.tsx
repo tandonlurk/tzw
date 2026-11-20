@@ -31,7 +31,7 @@ export const S05LifecycleMap: React.FC = () => {
           return (
             <div key={st.name} style={{ position: "absolute", left: X0 + DX * i, top: Y, transform: `translate(-50%, -50%) scale(${p})` }}>
               <div style={{ width: 132, height: 132, borderRadius: 32, display: "grid", placeItems: "center",
-                background: lit ? "var(--blue-a)" : "var(--surface)", border: `2px solid ${lit ? "var(--blue)" : "var(--line-strong)"}`,
+                background: lit ? "linear-gradient(var(--blue-a), var(--blue-a)), var(--surface)" : "var(--surface)", border: `2px solid ${lit ? "var(--blue)" : "var(--line-strong)"}`,
                 color: lit ? "var(--blue)" : "var(--text-2)" }}>
                 <Icon size={60} />
               </div>
