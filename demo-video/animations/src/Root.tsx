@@ -5,6 +5,7 @@ import React from "react";
 import { Composition } from "remotion";
 import { FPS, s } from "./lib/anim";
 import { MinimalProvider } from "./lib/ui";
+import { CONCEPTS } from "./logos/Logos";
 import { S01ColdOpen } from "./scenes/S01ColdOpen";
 import { S02Problem } from "./scenes/S02Problem";
 import { S03AgentToAgent } from "./scenes/S03AgentToAgent";
@@ -46,5 +47,15 @@ export const Root: React.FC = () => (
           durationInFrames={s(sc.sec)} fps={FPS} width={1920} height={1080} />
       </React.Fragment>
     ))}
+    {/* Logo concepts: 3:2 for the Devpost thumbnail, square for avatars. Render with `remotion still`. */}
+    {CONCEPTS.map((c) => (
+      <React.Fragment key={c.id}>
+        <Composition id={`logo-${c.id}`} component={LOGO_WIDE[c.id]} durationInFrames={1} fps={FPS} width={1200} height={800} />
+        <Composition id={`logo-${c.id}-sq`} component={LOGO_SQ[c.id]} durationInFrames={1} fps={FPS} width={1024} height={1024} />
+      </React.Fragment>
+    ))}
   </>
 );
+
+const LOGO_WIDE: Record<string, React.FC> = Object.fromEntries(CONCEPTS.map((c) => [c.id, () => <>{c.render(false)}</>]));
+const LOGO_SQ: Record<string, React.FC> = Object.fromEntries(CONCEPTS.map((c) => [c.id, () => <>{c.render(true)}</>]));
