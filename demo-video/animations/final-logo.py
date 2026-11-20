@@ -18,8 +18,9 @@ CX, CY = W // 2, H // 2
 # --- clean plate: an empty stretch of the same plaster (cracks included), scaled to fill ---
 scan = Image.open(scan_p).convert("RGB")
 plate = scan.crop((846, 55, 1706, 628)).resize((W, H), Image.LANCZOS)
-# the fresco's painted border shows as a dark sliver on the top rows: mirror clean plaster over it
-_p = np.asarray(plate).copy(); _p[:28] = _p[28:56][::-1]; plate = Image.fromarray(_p)
+_p = np.asarray(plate).copy()
+_p[450:492, 785:850] = _p[395:437, 785:850]      # an old oval blemish in the plaster, beside the coin
+plate = Image.fromarray(_p)
 base = np.asarray(plate).astype(float)
 
 # --- hands: scale, rotate about the fingertip, place on the diagonal ---
@@ -88,8 +89,9 @@ base = base + (np.array([255, 214, 140]) - base) * (g[..., None] * 0.24)
 # soft cast shadows on the wall: the coin and both arms (light from the upper left)
 def shadow_from(alpha, dx, dy, blur, k):
     m = Image.fromarray((alpha * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(blur))
-    m = np.roll(np.roll(np.asarray(m).astype(float) / 255, dy, axis=0), dx, axis=1)
-    return m * k
+    m = np.asarray(m).astype(float) / 255
+    out = np.zeros_like(m); out[dy:, dx:] = m[:-dy, :-dx]      # shift without wrapping around
+    return out * k
 cA = np.zeros((H, W)); cRGB = np.zeros((H, W, 3))
 ca = np.asarray(coin).astype(float)
 cRGB[cy0:cy0 + cw, cx0:cx0 + cw] = ca[..., :3]
