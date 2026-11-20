@@ -17,7 +17,9 @@ CX, CY = W // 2, H // 2
 
 # --- clean plate: an empty stretch of the same plaster (cracks included), scaled to fill ---
 scan = Image.open(scan_p).convert("RGB")
-plate = scan.crop((860, 55, 1720, 628)).resize((W, H), Image.LANCZOS)
+plate = scan.crop((846, 55, 1706, 628)).resize((W, H), Image.LANCZOS)
+# the fresco's painted border shows as a dark sliver on the top rows: mirror clean plaster over it
+_p = np.asarray(plate).copy(); _p[:28] = _p[28:56][::-1]; plate = Image.fromarray(_p)
 base = np.asarray(plate).astype(float)
 
 # --- hands: scale, rotate about the fingertip, place on the diagonal ---
