@@ -3,7 +3,7 @@
 import React from "react";
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 import { fade, lerp, prog, snap } from "../lib/anim";
-import { AgentAvatar, At, BlockGlyph, BlockKind, Caption, Card, Eyebrow, LifecycleStrip, MONO, Pill, Stage, Svg, Title } from "../lib/ui";
+import { AgentAvatar, At, BlockGlyph, BlockKind, Caption, Card, Eyebrow, LifecycleStrip, MONO, Pill, Stage, Svg, Title, MoneyChip, useMinimal } from "../lib/ui";
 
 const TILES = [
   { t: "ETH  −0.4 %", hit: false },
@@ -25,6 +25,7 @@ const BLOCKS: { kind: BlockKind; label: string }[] = [
 export const S06Discover: React.FC = () => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const minimal = useMinimal();
   // Tiles scroll upward through the filter window; the hit tile stops in the window.
   const scroll = prog(f, 0.8, 3.2, (t) => 1 - Math.pow(1 - t, 3));
   const rowH = 92;
@@ -40,9 +41,11 @@ export const S06Discover: React.FC = () => {
           <AgentAvatar name="Demo Bull" color={0} size={104} label="Demo Bull" sub="your agent" />
           <Eyebrow>Watching</Eyebrow>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center" }}>
+            {!minimal && <>
             <Pill tone="blue" size={21}>Crypto</Pill>
             <Pill tone="blue" size={21}>Move &gt; 3 %</Pill>
             <Pill tone="blue" size={21}>Horizon 60 s</Pill>
+            </>}
           </div>
         </Card>
       </At>
@@ -58,7 +61,7 @@ export const S06Discover: React.FC = () => {
               background: "var(--surface)", border: `1px solid ${tile.hit && judged > 0.5 ? "var(--blue)" : "var(--line-strong)"}`,
               display: "flex", alignItems: "center", padding: "0 22px", fontFamily: MONO, fontSize: 22, whiteSpace: "nowrap",
               color: tile.hit && judged > 0.5 ? "var(--text)" : "var(--text-2)", opacity: (1 - dim) * (tile.hit ? 1 - fly : 1) }}>
-              {tile.t}
+              {minimal ? tile.t.split(" · ")[0].replace("Rate-cut contract", "CUT") : tile.t}
             </div>
           );
         })}
@@ -68,7 +71,7 @@ export const S06Discover: React.FC = () => {
       {/* The hit tile flies to the logic chain */}
       <At x={lerp(850, 1450, fly)} y={lerp(530, 280, fly)} opacity={fly > 0 && fly < 1 ? 1 : fly >= 1 ? 1 : 0} scale={lerp(1, 0.9, fly)}>
         <div style={{ padding: "18px 24px", borderRadius: 14, background: "var(--blue-a)", border: "1px solid var(--blue)",
-          fontFamily: MONO, fontSize: 24, color: "var(--text)", whiteSpace: "nowrap" }}>BTC +3.0 % · contract 0.55</div>
+          fontFamily: MONO, fontSize: 24, color: "var(--text)", whiteSpace: "nowrap" }}>{minimal ? "BTC  +3.0 %" : "BTC +3.0 % · contract 0.55"}</div>
       </At>
       {/* Logic chain */}
       <Svg>
@@ -83,19 +86,24 @@ export const S06Discover: React.FC = () => {
           <div key={i} style={{ position: "absolute", left: 1450 - 34, top: 360 + i * 100 - 34, display: "flex", alignItems: "center", gap: 22,
             opacity: fade(f, 0.4 + i * 0.1) }}>
             <BlockGlyph kind={b.kind} size={68} lit={lit} />
-            <span style={{ fontSize: 26, color: lit > 0.5 ? "var(--text)" : "var(--text-3)", whiteSpace: "nowrap" }}>{b.label}</span>
+            {!minimal && <span style={{ fontSize: 26, color: lit > 0.5 ? "var(--text)" : "var(--text-3)", whiteSpace: "nowrap" }}>{b.label}</span>}
           </div>
         );
       })}
       {/* Proposal with explicit terms */}
       <At x={1520} y={700} scale={snap(f, fps, 7.0)}>
-        <Card elevated accent="blue" style={{ width: 560, padding: 24 }}>
+        {minimal ? (
+          <Card elevated accent="blue" style={{ padding: "22px 30px", display: "flex", gap: 22, alignItems: "center" }}>
+            <span style={{ fontFamily: MONO, fontSize: 40, color: "var(--text)", fontWeight: 600 }}>≥ 0.55</span>
+            <MoneyChip amount="5.00" size={28} />
+          </Card>
+        ) : <Card elevated accent="blue" style={{ width: 560, padding: 24 }}>
           <Eyebrow>Proposal · explicit terms</Eyebrow>
           <div style={{ marginTop: 10, fontSize: 26, color: "var(--text)", fontWeight: 500 }}>BTC contract at or above 0.55 at end</div>
           <div style={{ marginTop: 10, display: "flex", gap: 18, fontSize: 21, color: "var(--text-2)", fontFamily: MONO }}>
             <span>side YES</span><span>stake 5.00</span><span>ends +60 s</span>
           </div>
-        </Card>
+        </Card>}
       </At>
       <AbsoluteFill style={{ opacity: 1 - prog(f, 6.6, 0.3) }}>
         <Title at={0.5} y={880} size={44}>Your agent watches the markets through its own filters.</Title>
