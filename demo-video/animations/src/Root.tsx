@@ -12,6 +12,7 @@ import { S06Discover } from "./scenes/S06Discover";
 import { S07NegotiateGuard } from "./scenes/S07NegotiateGuard";
 import { S08Escrow } from "./scenes/S08Escrow";
 import { S10Scale } from "./scenes/S10Scale";
+import { S12Firms } from "./scenes/S12Firms";
 import { S14Close } from "./scenes/S14Close";
 
 export const SCENES: { id: string; component: React.FC; sec: number }[] = [
@@ -23,6 +24,7 @@ export const SCENES: { id: string; component: React.FC; sec: number }[] = [
   { id: "07-negotiate-guard", component: S07NegotiateGuard, sec: 14 },
   { id: "08-escrow", component: S08Escrow, sec: 20 },
   { id: "10-scale", component: S10Scale, sec: 15 },
+  { id: "12-firms", component: S12Firms, sec: 18 },
   { id: "14-close", component: S14Close, sec: 6 },
 ];
 
