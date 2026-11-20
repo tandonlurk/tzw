@@ -41,6 +41,12 @@ const EXACT: Record<string, ActivityCategory> = {
   simulated_deposit: "transaction",
   firm_task_fee: "transaction",
   custom_code_failed: "agent",
+  stream_confirmed: "transaction",
+  stream_mismatch: "transaction",
+  stream_observed: "transaction",
+  chain_event: "transaction",
+  chain_event_removed: "transaction",
+  chain_events: "transaction",
 };
 
 const PREFIX: [string, ActivityCategory][] = [

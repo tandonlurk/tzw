@@ -339,13 +339,19 @@ Each run is in `agent_runs` with `reasoner = "custom_code"`, the trace
 (intent count, fuel, the strategy's `console` lines) and the planned intents.
 Endpoints, the `ctx` shape and errors: `docs/api.md` "Custom code".
 
-## QuickNode Streams (local ingestion only)
+## QuickNode Streams
 
 `server::quicknode`: `POST /api/webhooks/quicknode`, mounted only with
 `QUICKNODE_STREAMS_SECRET`. HMAC-SHA256 signature and timestamp window
-(header names and signed layout UNVERIFIED, configurable), logs stored once
-per `(tx_hash, log_index)` in `chain_events`, shown as `chain_event`
-activity. No tunnel, no chain executor. Try it locally with the fixture:
+(header names and signed layout verified with real Arc testnet deliveries on
+2026-11-19, still configurable), logs stored once per `(tx_hash, log_index)`
+in `chain_events`. `server::streams` (D-74) decodes our escrow, factory and
+linked vault logs and confirms them against the transactions the server
+confirmed itself (`confirmed` / `pending` / `mismatch` / `observed` /
+`unmatched`; pending ones are rechecked at the end of every tick), with
+readable activity, `stream_events` on `GET /api/interactions/{id}` and
+`GET /api/streams`. A stream event never moves state or money. Try it
+locally with the fixture:
 
 ```sh
 QUICKNODE_STREAMS_SECRET=local-demo-secret cargo run -p aen-server &   # plus the usual env
@@ -356,9 +362,14 @@ curl -sS -X POST http://127.0.0.1:8080/api/webhooks/quicknode -H 'Content-Type: 
 # {"received":3,"inserted":3,"duplicates":0,"removed":0,"rejected":0}; again: inserted 0, duplicates 3
 ```
 
-Behind a tunnel (owner decision, not set up here): add the tunnel host to
+The real lifecycle fixture `arc_escrow_lifecycle.json` is matched only when
+the server knows the contracts (Arc mode on) and the challenge; the tests in
+`tests/quicknode.rs` set both up.
+
+Behind a tunnel (live since 2026-11-19): add the tunnel host to
 `ALLOWED_HOSTS` and set `AEN_API_TOKEN` (required then); the webhook is exempt
-from the token and authenticated by its HMAC. Details: `docs/api.md`.
+from the token and authenticated by its HMAC. Stream filter (which addresses
+to keep): `docs/setup/quicknode-streams-filter.md`. Details: `docs/api.md`.
 
 ## Arc testnet (onchain vaults and escrow)
 

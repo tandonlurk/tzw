@@ -8,6 +8,9 @@ import { outcomeText } from "@/lib/interactions";
 import { Async, Empty, EnvBadge, Money, Tile, formatTs } from "@/components/ui";
 import { EscrowTxTable, StateBadge, TermsTable } from "@/components/Interactions";
 import { LedgerTable } from "@/components/LedgerTable";
+import { StreamActivityBadge } from "@/components/StreamBadge";
+import { latencyText, streamStatusHint, streamStatusLabel, streamStatusTone } from "@/lib/streams";
+import type { StreamEvent } from "@/lib/api";
 
 export default function InteractionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -49,9 +52,11 @@ function Detail({ i }: { i: InteractionDetail }) {
         <div className="card">
           <h3 style={{ marginTop: 0 }}>Onchain escrow (Arc testnet)</h3>
           <div className="dim" style={{ marginBottom: ".4rem" }}>Testnet USDC, not real funds. The resolve transaction is sent by the backend&apos;s resolver key (backend-administered).</div>
-          <EscrowTxTable escrow={i.escrow} proposer={i.proposer_name} counterparty={i.counterparty_name} />
+          <EscrowTxTable escrow={i.escrow} proposer={i.proposer_name} counterparty={i.counterparty_name} streams={i.stream_events} />
         </div>
       )}
+
+      {i.escrow && i.stream_events && <StreamsCard events={i.stream_events} />}
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Negotiation</h3>
@@ -92,7 +97,7 @@ function Detail({ i }: { i: InteractionDetail }) {
         {i.activity.length === 0 ? <Empty>No events.</Empty> : (
           <div className="timeline">
             {i.activity.map((a) => (
-              <div key={a.id}><span className="dim">{formatTs(a.ts)}</span> {a.summary}
+              <div key={a.id}><span className="dim">{formatTs(a.ts)}</span> {a.summary} <StreamActivityBadge it={a} />
                 {a.detail && <details><summary>Details</summary><pre>{JSON.stringify(a.detail, null, 2)}</pre></details>}</div>
             ))}
           </div>
@@ -114,5 +119,34 @@ function RunView({ r, name }: { r: Run; name: string }) {
       <ul>{r.trace.map((t, k) => <li key={k}><span className="mono dim">{t.node_type}</span> {t.summary}</li>)}</ul>
       {r.intents.map((it, k) => <div key={k} className="dim">Intent {it.intent.type}: {it.summary}{it.ask_owner ? " (asks owner)" : ""}</div>)}
     </details>
+  );
+}
+
+/** Escrow events as QuickNode Streams delivered them, next to what the backend confirmed itself. */
+function StreamsCard({ events }: { events: StreamEvent[] }) {
+  return (
+    <div className="card">
+      <h3 style={{ marginTop: 0 }}>Confirmed by QuickNode Streams</h3>
+      <div className="dim" style={{ marginBottom: ".4rem" }}>
+        Escrow events pushed by a QuickNode Stream on Arc testnet, checked against the transactions the backend verified from its own receipts.
+        An independent confirmation: a stream event never moves funds or changes the challenge.
+      </div>
+      {events.length === 0 ? <Empty>No stream deliveries for this challenge yet.</Empty> : (
+        <table><thead><tr><th>Event</th><th>Status</th><th>Block</th><th>Latency</th><th>Transaction</th></tr></thead><tbody>
+          {events.map((e) => (
+            <tr key={e.id} className={e.removed ? "dim" : undefined}>
+              <td>{e.event}{e.removed && <span className="badge pend" style={{ marginLeft: 6 }}>reorged out</span>}</td>
+              <td><span className={`badge ${streamStatusTone(e.status)}`} title={streamStatusHint(e.status)}>{streamStatusLabel(e.status)}</span>
+                {e.note && e.status !== "confirmed" && <div className="dim small">{e.note}</div>}</td>
+              <td className="num">{e.block_number}</td>
+              <td className="num">{latencyText(e.latency_ms) ?? <span className="dim">n/a</span>}</td>
+              <td className="mono">{e.explorer_url
+                ? <a href={e.explorer_url} target="_blank" rel="noreferrer" title={e.tx_hash}>{e.tx_hash.slice(0, 10)}...{e.tx_hash.slice(-6)}</a>
+                : <span title={e.tx_hash}>{e.tx_hash.slice(0, 10)}...{e.tx_hash.slice(-6)}</span>}</td>
+            </tr>
+          ))}
+        </tbody></table>
+      )}
+    </div>
   );
 }

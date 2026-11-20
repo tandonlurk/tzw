@@ -700,6 +700,10 @@ pub async fn tick(state: &AppState, now: DateTime<Utc>) -> Result<TickReport, Ap
     // Arc testnet: resolve onchain, settle the ledger, release the vaults.
     crate::lifecycle_arc::resolve_phase(state, &mut report).await?;
 
+    // QuickNode Streams events that arrived before the server confirmed the
+    // same transaction (D-74). Read-only for funds and states.
+    crate::streams::recheck(state, None).await;
+
     // Last, and read-only as far as funds and interactions go: the rule-based
     // co-captain looks at what the tick left behind. No model call here.
     match crate::suggestions::generate(state, now, false).await {

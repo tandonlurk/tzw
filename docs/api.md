@@ -323,14 +323,14 @@ Activity entry:
   "detail": { "contribution": "3000000", "payout": "4800000", "net": "1800000", "env": "simulated", "resolution": "owner_declared" } }
 ```
 
-## QuickNode Streams webhook (local ingestion only)
+## QuickNode Streams webhook
 
-`POST /api/webhooks/quicknode` stores Arc testnet logs delivered by a QuickNode Stream (dataset `Logs`, webhook destination, **no compression**) and records them as activity. It is **mounted only when `QUICKNODE_STREAMS_SECRET` is set** (404 otherwise). Nothing acts on the events yet: there is no chain executor, and nothing signs or sends a transaction. No tunnel is set up by this repo; exposing the route is an owner decision.
+`POST /api/webhooks/quicknode` stores Arc testnet logs delivered by a QuickNode Stream (dataset `Logs`, webhook destination, **no compression**) and records them as activity. It is **mounted only when `QUICKNODE_STREAMS_SECRET` is set** (404 otherwise). Logs of our `ChallengeEscrow`, `VaultFactory` and linked `AgentVault`s are then decoded and checked against the server's own confirmed transactions (D-74, "Streams confirmations" below); nothing a stream delivers moves interaction state or the ledger. Live since 2026-11-19 through the owner's tunnel (stream `tzw-arc-testnet-escrow`).
 
 **Authentication: the webhook's own HMAC, not the bearer token.**
 - Signature: lowercase hex HMAC-SHA256 with the stream's security token as key, over `nonce + timestamp + raw body` (string concatenation, no separators); an optional `sha256=` prefix and upper-case hex are accepted. Missing signature or timestamp → **401** `missing_signature`; mismatch → **401** `invalid_signature`.
 - Timestamp: unix seconds (or milliseconds, if > 10^12), within `QUICKNODE_MAX_SKEW_SECS` (default 300) of the server clock, else **401** `stale_timestamp`. Checked after the signature, so it is authenticated too.
-- Header names (configurable): `QUICKNODE_SIGNATURE_HEADER` (default `x-qn-signature`), `QUICKNODE_TIMESTAMP_HEADER` (`x-qn-timestamp`), `QUICKNODE_NONCE_HEADER` (`x-qn-nonce`; a missing nonce is signed as the empty string). Headers, signed message (hex HMAC-SHA256 of nonce + timestamp + decompressed body, keyed with the stream's security token) and the `{data, metadata}` log fields **match QuickNode's docs** as read 2026-11-18 (https://www.quicknode.com/guides/quicknode-products/streams/validating-incoming-streams-webhook-messages, https://www.quicknode.com/docs/streams/data-sources/ethereum-evm.md); still not confirmed by a real delivery.
+- Header names (configurable): `QUICKNODE_SIGNATURE_HEADER` (default `x-qn-signature`), `QUICKNODE_TIMESTAMP_HEADER` (`x-qn-timestamp`), `QUICKNODE_NONCE_HEADER` (`x-qn-nonce`; a missing nonce is signed as the empty string). Headers, signed message (hex HMAC-SHA256 of nonce + timestamp + decompressed body, keyed with the stream's security token) and the `{data, metadata}` log fields **match QuickNode's docs** as read 2026-11-18 (https://www.quicknode.com/guides/quicknode-products/streams/validating-incoming-streams-webhook-messages, https://www.quicknode.com/docs/streams/data-sources/ethereum-evm.md) and are **VERIFIED by real deliveries** on 2026-11-19: about 5,400 unfiltered Arc testnet logs, then the filtered escrow lifecycle, were accepted with the default header names and signed layout (the server only stores a log after the HMAC and the 300 s window pass). QuickNode's dashboard "Check connection" button sends an **unsigned** request, which correctly gets 401 `missing_signature`; real deliveries are signed.
 - `Content-Encoding` other than `identity` (QuickNode can gzip) is **415** `unsupported_media_type` before the signature check: turn compression off on the stream's webhook destination.
 - Then: `Content-Type: application/json` (415 otherwise), JSON (400), shape (422), at most 5000 logs and the default 2 MB body limit (413).
 
@@ -338,7 +338,7 @@ Activity entry:
 
 **Idempotency.** Each log is stored once, keyed on `(tx_hash, log_index)` (`chain_events` table, unique). A duplicate, a repeated batch, a reordered batch, or concurrent deliveries change nothing. A later delivery of a known log with `removed: true` (reorg) marks it removed once.
 
-**Payload (matches the docs, no real delivery yet)**: QuickNode's documented envelope `{ data: [...], metadata: {...} }` with `data` holding logs in `eth_getLogs` format, either flat or one array per block; a bare array, and receipt-shaped `{logs: [...]}` elements, are accepted too. Per log the server reads: `transactionHash` (0x + 64 hex), `logIndex` and `blockNumber` (hex quantity or number), `address` (0x + 40 hex), `topics` (≤ 4 × 0x + 64 hex), `data` (hex), `blockHash` (optional), `removed` (optional bool). Hex is stored lower-case. A log that fails these checks is skipped and counted in `rejected`; the others are stored. `metadata.network` and `metadata.stream_id` are kept with each event. Fixture: `backend/crates/server/tests/fixtures/quicknode/logs_batch.json`.
+**Payload (verified 2026-11-19)**: QuickNode's documented envelope `{ data: [...], metadata: {...} }` with `data` holding logs in `eth_getLogs` format, either flat or one array per block; a bare array, and receipt-shaped `{logs: [...]}` elements, are accepted too. Per log the server reads: `transactionHash` (0x + 64 hex), `logIndex` and `blockNumber` (hex quantity or number), `address` (0x + 40 hex), `topics` (≤ 4 × 0x + 64 hex), `data` (hex), `blockHash` (optional), `blockTimestamp` (optional hex seconds, stored for latency; a malformed one is dropped, not rejected), `removed` (optional bool). Hex is stored lower-case. A log that fails these checks is skipped and counted in `rejected`; the others are stored. `metadata.network` and `metadata.stream_id` are kept with each event. Observed in real deliveries: `metadata.network = "arc-testnet"`, `metadata.stream_id` a UUID, and every required field above present on each log (whether QuickNode's logs carry `blockTimestamp`, as Arc's RPC does, is not confirmed yet: the server did not store unknown fields before D-74; without it the latency shows as n/a); with the owner's filter, `data` is one flat array of logs. Fixtures: `backend/crates/server/tests/fixtures/quicknode/arc_escrow_lifecycle.json` (the real lifecycle: two `VaultCreated`, `Created`, two `Deposited`, `Activated`, `Resolved`; rebuilt from the stored rows plus `transactionIndex` / `blockTimestamp` read from the Arc RPC, because the server did not store those two fields then) and the synthetic `logs_batch.json`. Delivery latency observed: about 1 s from the block's timestamp to the row being stored, for every escrow event.
 
 ```json
 { "data": [[ { "address": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
@@ -352,7 +352,25 @@ Activity entry:
 
 Response **200** (QuickNode retries anything else): `{ received, inserted, duplicates, removed, rejected }`, e.g. `{"received":3,"inserted":3,"duplicates":0,"removed":0,"rejected":0}` and, for the same batch again, `{"received":3,"inserted":0,"duplicates":3,"removed":0,"rejected":0}`.
 
-Activity kinds (`agent_id` null; `detail`: `chain_event_id`, `source: "quicknode_streams"`, `env: "arc_testnet"`, `network`, `tx_hash`, `log_index`, `block_number`, `address`, `topic0`): `chain_event` ("Arc testnet event seen via QuickNode Streams: log 0 of transaction 0x88df0164…944b from contract 0x5fbdb231…0aa3 in block 436. Recorded only; nothing acts on it yet."), `chain_event_removed`, and `chain_events` (one summary row when a delivery has more than 50 new events).
+Activity kinds for logs that are not ours (`agent_id` null; `detail`: `chain_event_id`, `source: "quicknode_streams"`, `env: "arc_testnet"`, `network`, `tx_hash`, `log_index`, `block_number`, `address`, `topic0`): `chain_event` ("Arc testnet event seen via QuickNode Streams: log 0 of transaction 0x88df0164…944b from contract 0x5fbdb231…0aa3 in block 436. Recorded only; nothing acts on it."), `chain_event_removed` (with `interaction_id` and "Its QuickNode Streams confirmation is withdrawn." when the removed log was one of ours), and `chain_events` (one summary row when a delivery has more than 50 new events).
+
+### Streams confirmations (D-74)
+
+Our contracts' logs (escrow and factory from the connected chain's config; an `AgentVault` only when an agent is linked to that address) are decoded and matched: escrow id → interaction (`challenge_id` = UUID left-padded to 32 bytes), `agentRef` → agent. Each gets a `match_status`:
+
+| Status | Meaning |
+|---|---|
+| `confirmed` | Same transaction as the step the server confirmed from its own receipt (`escrow_create_tx`, the side's `*_stake_tx`, `escrow_settle_tx`, the side's `*_release_tx`, the linked `vault_address`), and the parties, amounts and winner agree |
+| `pending` | The server has not recorded that step yet. Rechecked at the end of every tick (events up to 24 h old) |
+| `mismatch` | Different transaction, vault, amount or winner. Activity `stream_mismatch` and a warn log; nothing changes |
+| `observed` | A real event the server did not send: `Refunded` (timeout refund), `PayoutDeferred`, `Claimed`, or a `VaultCreated` for an agent linked to another vault |
+| `unmatched` | No challenge or agent on this server has that id (e.g. another server's run) |
+
+One activity row per final status (`pending` writes none), with the interaction and agent set: `stream_confirmed` ("Escrow funded on Arc: \"Demo Bull (Arc testnet)\"'s vault deposited 0.50 USDC (Arc testnet USDC), confirmed by QuickNode Streams (block 73114369, 1.0 s after the block)."), `stream_mismatch`, `stream_observed`. `detail`: `source: "quicknode_streams"`, `event`, `status`, `note`, `tx_hash`, `log_index`, `block_number`, `block_timestamp`, `received_at`, `latency_ms`, `explorer_url`, `address`, `chain_event_id`.
+
+`GET /api/interactions/{id}` adds `stream_events: [{id, event, status, note, tx_hash, log_index, block_number, block_timestamp, received_at, latency_ms, removed, explorer_url}]` (block order; empty for simulated challenges).
+
+`GET /api/streams` → `{ webhook_enabled, matching_enabled, events_total, last_delivery_at, last_block_number, median_latency_ms, confirmed, pending, mismatch, observed, unmatched, watch_addresses }`. `median_latency_ms` is over the last 50 events with a block timestamp; the counts skip reorged rows; `watch_addresses` is the escrow, the factory and every linked vault, for the stream filter (`docs/setup/quicknode-streams-filter.md`).
 
 ## Custom code (sandboxed JavaScript)
 

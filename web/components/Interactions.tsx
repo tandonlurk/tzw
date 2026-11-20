@@ -8,7 +8,9 @@ import { useChainConfig } from "@/lib/useChainConfig";
 import { formatMoney } from "@/lib/money";
 import { EnvBadge } from "./ui";
 import { shortName } from "@/lib/agentColors";
-import type { ChallengeTerms, EscrowTxs } from "@/lib/api";
+import type { ChallengeTerms, EscrowTxs, StreamEvent } from "@/lib/api";
+import { eventsForTx } from "@/lib/streams";
+import { StreamTxBadge } from "./StreamBadge";
 
 export function StateBadge({ state }: { state: InteractionState }) {
   return <span className={`badge ${stateTone(state)}`}>{stateLabel(state)}</span>;
@@ -44,7 +46,7 @@ export function TermsTable({ terms, env, marketSource }: { terms: ChallengeTerms
 }
 
 /** Arc testnet escrow transactions with explorer links; steps not reached yet read "not yet". */
-export function EscrowTxTable({ escrow, proposer, counterparty }: { escrow: EscrowTxs; proposer: string; counterparty: string }) {
+export function EscrowTxTable({ escrow, proposer, counterparty, streams }: { escrow: EscrowTxs; proposer: string; counterparty: string; streams?: StreamEvent[] }) {
   const chain = useChainConfig();
   const explorer = chain.data?.enabled ? chain.data.explorer_url : null;
   return (
@@ -54,7 +56,9 @@ export function EscrowTxTable({ escrow, proposer, counterparty }: { escrow: Escr
           {hash && explorer ? <a href={explorerTxUrl(explorer, hash)} target="_blank" rel="noreferrer" title={hash}>{hash.slice(0, 10)}...{hash.slice(-6)}</a>
             : hash ? <span title={hash}>{hash.slice(0, 10)}...{hash.slice(-6)}</span>
             : <span className="dim">not yet</span>}
-        </td></tr>
+        </td>
+        {streams && <td>{hash && <StreamTxBadge events={eventsForTx(streams, hash)} />}</td>}
+        </tr>
       ))}
     </tbody></table>
   );
