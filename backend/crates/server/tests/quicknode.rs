@@ -7,6 +7,7 @@ mod common;
 use aen_server::guard::ApiToken;
 use aen_server::quicknode::{QuickNodeConfig, StreamSecret, sign};
 use aen_server::state::AppState;
+use aen_server::streams::{self, StreamContracts};
 use aen_server::{DEFAULT_CORS_ORIGIN, MIGRATOR, app_with_state};
 use axum::Router;
 use axum::body::Body;
@@ -27,6 +28,7 @@ const FIXTURE: &str = include_str!("fixtures/quicknode/logs_batch.json");
 struct Ctx {
     app: Router,
     pool: PgPool,
+    state: AppState,
     _guard: MutexGuard<'static, ()>,
 }
 
@@ -43,8 +45,9 @@ async fn setup_with(adjust: impl FnOnce(&mut AppState)) -> Ctx {
     state.settings.quicknode = Some(QuickNodeConfig::new(StreamSecret::new(SECRET).unwrap()));
     adjust(&mut state);
     Ctx {
-        app: app_with_state(state, DEFAULT_CORS_ORIGIN.parse().unwrap()),
+        app: app_with_state(state.clone(), DEFAULT_CORS_ORIGIN.parse().unwrap()),
         pool,
+        state,
         _guard: guard,
     }
 }
@@ -407,4 +410,372 @@ async fn the_guard_lets_signed_deliveries_through_a_tunnel_host() {
     )
     .await;
     assert_eq!(s, StatusCode::FORBIDDEN);
+}
+
+// ---------------------------------------------------------------------------
+// Streams as a confirmation of the Arc testnet lifecycle (D-74). The fixture
+// is the real delivery of one challenge's lifecycle on Arc testnet
+// (2026-11-19): two VaultCreated, Created, two Deposited, Activated,
+// Resolved; the interaction fixture is that challenge's row on the server
+// that ran it.
+// ---------------------------------------------------------------------------
+
+const ARC: &str = include_str!("fixtures/quicknode/arc_escrow_lifecycle.json");
+const ARC_ROW: &str = include_str!("fixtures/quicknode/arc_lifecycle_interaction.json");
+const CHALLENGE: &str = "838ca4b6-2e3b-46f3-9cad-6b81b1fb760c";
+const BULL: &str = "00000000-0000-4000-8000-0000000000d1";
+const BULL_VAULT: &str = "0xf78499779bcc48f4e96d34a06d6ae4869cc5b37f";
+const SKEPTIC_VAULT: &str = "0xcac9240abc5563bbf7a8fb32be8c5fd3b1c3d0b6";
+const OWNER: &str = "0x1f0eb73c714ae0bd1a97c1c8e0f34513073393fb";
+
+fn arc_contracts() -> StreamContracts {
+    StreamContracts {
+        escrow: "0x4179f2e314410d10c2906b1914baae8dd93b5698".into(),
+        factory: "0x4ea6ac6a9f7b8fcf01ba04b177f0a098d9664c45".into(),
+        explorer_url: Some("https://explorer.testnet.arc.io".into()),
+    }
+}
+
+async fn arc_setup() -> Ctx {
+    setup_with(|s| s.settings.quicknode.as_mut().unwrap().contracts = Some(arc_contracts())).await
+}
+
+fn fixture_arc() -> Value {
+    serde_json::from_str(ARC).unwrap()
+}
+
+/// The two demo agents with the vaults they had, and (optionally) the
+/// challenge row exactly as the server that ran it stored it.
+async fn seed_arc(c: &Ctx, with_challenge: bool) {
+    let (s, out) = call(
+        &c.app,
+        Request::post("/api/dev/seed-demo")
+            .header("content-type", "application/json")
+            .body(Body::from("{}"))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "{out}");
+    for (suffix, vault) in [("d1", BULL_VAULT), ("d2", SKEPTIC_VAULT)] {
+        sqlx::query(
+            "UPDATE agents SET env = 'arc_testnet', vault_address = $2, vault_owner = $3 \
+             WHERE id = $1::uuid",
+        )
+        .bind(format!("00000000-0000-4000-8000-0000000000{suffix}"))
+        .bind(vault)
+        .bind(OWNER)
+        .execute(&c.pool)
+        .await
+        .unwrap();
+    }
+    if with_challenge {
+        sqlx::query(
+            "INSERT INTO interactions SELECT * FROM jsonb_populate_record(NULL::interactions, $1)",
+        )
+        .bind(serde_json::from_str::<Value>(ARC_ROW).unwrap())
+        .execute(&c.pool)
+        .await
+        .unwrap();
+    }
+}
+
+async fn statuses(pool: &PgPool) -> Vec<(String, String)> {
+    sqlx::query_as(
+        "SELECT event_name, match_status FROM chain_events WHERE event_name IS NOT NULL \
+         ORDER BY block_number, log_index",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+async fn stream_activity(pool: &PgPool) -> Vec<(String, String, Option<String>)> {
+    sqlx::query_as(
+        "SELECT kind, summary, interaction_id::text FROM activity \
+         WHERE detail->>'source' = 'quicknode_streams' ORDER BY seq",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+fn pairs(v: &[(&str, &str)]) -> Vec<(String, String)> {
+    v.iter()
+        .map(|(a, b)| ((*a).to_owned(), (*b).to_owned()))
+        .collect()
+}
+
+async fn get_json(app: &Router, uri: &str) -> Value {
+    let (s, v) = call(app, Request::get(uri).body(Body::empty()).unwrap()).await;
+    assert_eq!(s, StatusCode::OK, "{uri}: {v}");
+    v
+}
+
+#[tokio::test]
+async fn the_real_arc_delivery_confirms_the_whole_lifecycle() {
+    let c = arc_setup().await;
+    seed_arc(&c, true).await;
+    let (s, out) = call(&c.app, delivery(ARC, SECRET, &now(), &[])).await;
+    assert_eq!(s, StatusCode::OK, "{out}");
+    assert_eq!(
+        out,
+        json!({"received": 7, "inserted": 7, "duplicates": 0, "removed": 0, "rejected": 0})
+    );
+    assert_eq!(
+        statuses(&c.pool).await,
+        pairs(&[
+            ("VaultCreated", "confirmed"),
+            ("VaultCreated", "confirmed"),
+            ("Created", "confirmed"),
+            ("Deposited", "confirmed"),
+            ("Deposited", "confirmed"),
+            ("Activated", "confirmed"),
+            ("Resolved", "confirmed"),
+        ])
+    );
+    // blockTimestamp is kept, so the block-to-delivery latency is known.
+    let stamped: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM chain_events WHERE block_timestamp = to_timestamp(1795139565)",
+    )
+    .fetch_one(&c.pool)
+    .await
+    .unwrap();
+    assert_eq!(stamped, 1);
+
+    let acts = stream_activity(&c.pool).await;
+    assert_eq!(acts.len(), 7);
+    assert!(acts.iter().all(|a| a.0 == "stream_confirmed"), "{acts:?}");
+    let funded = &acts[3];
+    assert!(
+        funded.1.starts_with(
+            "Escrow funded on Arc: \"Demo Bull (simulated)\"'s vault deposited 1.50 USDC \
+             (Arc testnet USDC), confirmed by QuickNode Streams (block 73112834, "
+        ),
+        "{}",
+        funded.1
+    );
+    assert_eq!(funded.2.as_deref(), Some(CHALLENGE));
+    assert!(
+        acts[6]
+            .1
+            .contains("Escrow paid 3.00 USDC (Arc testnet USDC) to \"Demo Bull"),
+        "{}",
+        acts[6].1
+    );
+    assert!(
+        acts[0].1.starts_with("Vault 0xf78499…b37f for \"Demo Bull"),
+        "{}",
+        acts[0].1
+    );
+
+    // The challenge page shows them with explorer links.
+    let detail = get_json(&c.app, &format!("/api/interactions/{CHALLENGE}")).await;
+    let evs = detail["stream_events"].as_array().unwrap();
+    assert_eq!(evs.len(), 5);
+    assert_eq!(evs[1]["event"], "Deposited");
+    assert_eq!(evs[1]["status"], "confirmed");
+    assert_eq!(evs[1]["block_number"], 73112834);
+    assert!(evs[1]["latency_ms"].is_i64());
+    assert_eq!(
+        evs[1]["explorer_url"],
+        "https://explorer.testnet.arc.io/tx/0x792b93c846b895f583082956e78853cb0ec71c444907e9a3e1e9e713c83f840f"
+    );
+    // A stream event never touches the challenge or the ledger.
+    let (state, winner): (String, String) =
+        sqlx::query_as("SELECT state, winner_id::text FROM interactions WHERE id = $1::uuid")
+            .bind(CHALLENGE)
+            .fetch_one(&c.pool)
+            .await
+            .unwrap();
+    assert_eq!((state.as_str(), winner.as_str()), ("settled", BULL));
+    let ledger: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM ledger_entries WHERE env = 'arc_testnet'")
+            .fetch_one(&c.pool)
+            .await
+            .unwrap();
+    assert_eq!(ledger, 0);
+
+    let st = get_json(&c.app, "/api/streams").await;
+    assert_eq!(
+        (
+            st["events_total"].clone(),
+            st["confirmed"].clone(),
+            st["webhook_enabled"].clone(),
+            st["matching_enabled"].clone(),
+            st["last_block_number"].clone()
+        ),
+        (
+            json!(7),
+            json!(7),
+            json!(true),
+            json!(true),
+            json!(73113135)
+        )
+    );
+
+    // The same delivery again: nothing new, no second activity.
+    let (_, out) = call(&c.app, delivery(ARC, SECRET, &now(), &[])).await;
+    assert_eq!(out["duplicates"], 7);
+    assert_eq!(stream_activity(&c.pool).await.len(), 7);
+}
+
+#[tokio::test]
+async fn events_ahead_of_the_server_wait_and_are_confirmed_once() {
+    let c = arc_setup().await;
+    seed_arc(&c, true).await;
+    // As if the stream delivered before the server stored its receipts.
+    sqlx::query(
+        "UPDATE interactions SET escrow_create_tx = NULL, proposer_stake_tx = NULL, \
+         counterparty_stake_tx = NULL, escrow_settle_tx = NULL, winner_id = NULL, outcome = NULL \
+         WHERE id = $1::uuid",
+    )
+    .bind(CHALLENGE)
+    .execute(&c.pool)
+    .await
+    .unwrap();
+    let row: Value = serde_json::from_str(ARC_ROW).unwrap();
+    let saved = |k: &str| row[k].as_str().map(str::to_owned);
+    call(&c.app, delivery(ARC, SECRET, &now(), &[])).await;
+    let st = statuses(&c.pool).await;
+    assert_eq!(
+        st.iter().filter(|(_, s)| s == "pending").count(),
+        5,
+        "{st:?}"
+    );
+    // Only the two vault confirmations are in activity so far.
+    assert_eq!(stream_activity(&c.pool).await.len(), 2);
+
+    // The server confirms its funding transactions; a recheck picks them up.
+    sqlx::query(
+        "UPDATE interactions SET escrow_create_tx = $2, proposer_stake_tx = $3, \
+         counterparty_stake_tx = $4 WHERE id = $1::uuid",
+    )
+    .bind(CHALLENGE)
+    .bind(saved("escrow_create_tx"))
+    .bind(saved("proposer_stake_tx"))
+    .bind(saved("counterparty_stake_tx"))
+    .execute(&c.pool)
+    .await
+    .unwrap();
+    // Concurrent rechecks still record each confirmation once.
+    let (a, b) = (c.state.clone(), c.state.clone());
+    tokio::join!(streams::recheck(&a, None), streams::recheck(&b, None));
+    let st = statuses(&c.pool).await;
+    assert_eq!(st[6], ("Resolved".into(), "pending".into()));
+    assert_eq!(
+        st.iter().filter(|(_, s)| s == "confirmed").count(),
+        6,
+        "{st:?}"
+    );
+    assert_eq!(stream_activity(&c.pool).await.len(), 6);
+
+    // Settled: the resolve transaction and the winner.
+    sqlx::query(
+        "UPDATE interactions SET escrow_settle_tx = $2, winner_id = $3::uuid, outcome = 'a' \
+         WHERE id = $1::uuid",
+    )
+    .bind(CHALLENGE)
+    .bind(saved("escrow_settle_tx"))
+    .bind(BULL)
+    .execute(&c.pool)
+    .await
+    .unwrap();
+    streams::recheck(&c.state, Some(CHALLENGE.parse().unwrap())).await;
+    streams::recheck(&c.state, None).await;
+    assert!(
+        statuses(&c.pool)
+            .await
+            .iter()
+            .all(|(_, s)| s == "confirmed")
+    );
+    assert_eq!(stream_activity(&c.pool).await.len(), 7);
+}
+
+#[tokio::test]
+async fn a_disagreeing_event_is_flagged_and_moves_nothing() {
+    let c = arc_setup().await;
+    seed_arc(&c, true).await;
+    // The server believes the skeptic won, with another resolve transaction.
+    let other_tx = format!("0x{}", "ab".repeat(32));
+    sqlx::query(
+        "UPDATE interactions SET escrow_settle_tx = $2, \
+         winner_id = '00000000-0000-4000-8000-0000000000d2', outcome = 'b' WHERE id = $1::uuid",
+    )
+    .bind(CHALLENGE)
+    .bind(&other_tx)
+    .execute(&c.pool)
+    .await
+    .unwrap();
+    call(&c.app, delivery(ARC, SECRET, &now(), &[])).await;
+    let st = statuses(&c.pool).await;
+    assert_eq!(st[6], ("Resolved".into(), "mismatch".into()));
+    let acts = stream_activity(&c.pool).await;
+    let flagged: Vec<_> = acts.iter().filter(|a| a.0 == "stream_mismatch").collect();
+    assert_eq!(flagged.len(), 1);
+    assert!(
+        flagged[0]
+            .1
+            .contains("does not match what the server confirmed")
+            && flagged[0].1.contains(&other_tx)
+            && flagged[0].1.contains("Nothing was changed"),
+        "{}",
+        flagged[0].1
+    );
+    // Interaction unchanged; a recheck does not flip a final status.
+    streams::recheck(&c.state, None).await;
+    let (winner, settle): (String, String) = sqlx::query_as(
+        "SELECT winner_id::text, escrow_settle_tx FROM interactions WHERE id = $1::uuid",
+    )
+    .bind(CHALLENGE)
+    .fetch_one(&c.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (winner.as_str(), settle),
+        ("00000000-0000-4000-8000-0000000000d2", other_tx)
+    );
+    assert_eq!(stream_activity(&c.pool).await.len(), acts.len());
+}
+
+#[tokio::test]
+async fn a_reorg_withdraws_a_confirmation_and_unknown_ids_stay_unmatched() {
+    let c = arc_setup().await;
+    // Agents linked, but this server never ran the challenge.
+    seed_arc(&c, false).await;
+    call(&c.app, delivery(ARC, SECRET, &now(), &[])).await;
+    let st = statuses(&c.pool).await;
+    assert_eq!(&st[0].1, "confirmed");
+    assert!(st[2..].iter().all(|(_, s)| s == "unmatched"), "{st:?}");
+    let acts = stream_activity(&c.pool).await;
+    assert_eq!(acts.iter().filter(|a| a.0 == "chain_event").count(), 5);
+    assert!(
+        acts[2]
+            .1
+            .contains("for a challenge this server does not know"),
+        "{}",
+        acts[2].1
+    );
+
+    // The first VaultCreated is reorged out.
+    let mut gone = fixture_arc()["data"][0].clone();
+    gone["removed"] = json!(true);
+    let body = json!({ "data": [gone] }).to_string();
+    let (_, out) = call(&c.app, delivery(&body, SECRET, &now(), &[])).await;
+    assert_eq!(out["removed"], 1);
+    let st = get_json(&c.app, "/api/streams").await;
+    assert_eq!(
+        (st["confirmed"].clone(), st["unmatched"].clone()),
+        (json!(1), json!(5))
+    );
+    let removed: Vec<(String,)> =
+        sqlx::query_as("SELECT summary FROM activity WHERE kind = 'chain_event_removed'")
+            .fetch_all(&c.pool)
+            .await
+            .unwrap();
+    assert_eq!(removed.len(), 1);
+    assert!(
+        removed[0].0.contains("VaultCreated event removed") && removed[0].0.contains("withdrawn"),
+        "{}",
+        removed[0].0
+    );
 }

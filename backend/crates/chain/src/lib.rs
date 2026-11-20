@@ -26,6 +26,8 @@ use uuid::Uuid;
 
 pub use alloy::primitives::{Address as EvmAddress, TxHash};
 
+pub mod events;
+
 pub const ARC_TESTNET_CHAIN_ID: u64 = 5_042_002;
 pub const LOCAL_CHAIN_ID: u64 = 31_337;
 /// Arc testnet USDC (ERC-20 interface, 6 decimals). Source: docs/research/sponsors.md.

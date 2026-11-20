@@ -288,6 +288,10 @@ pub struct InteractionDetail {
     pub approvals: Vec<Approval>,
     pub ledger: Vec<LedgerEntry>,
     pub activity: Vec<ActivityItem>,
+    /// Escrow events delivered by QuickNode Streams and how they compare
+    /// with the server's own confirmed transactions (D-74). Empty for
+    /// simulated challenges.
+    pub stream_events: Vec<crate::streams::StreamEvent>,
 }
 
 pub async fn get(
@@ -324,6 +328,7 @@ pub async fn get(
     .bind(id)
     .fetch_all(pool)
     .await?;
+    let stream_events = crate::streams::for_interaction(&state, pool, id).await?;
     Ok(Json(InteractionDetail {
         interaction,
         negotiation,
@@ -331,6 +336,7 @@ pub async fn get(
         approvals,
         ledger,
         activity,
+        stream_events,
     }))
 }
 

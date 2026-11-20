@@ -25,6 +25,7 @@ pub mod models;
 pub mod quicknode;
 pub mod reasoner;
 pub mod state;
+pub mod streams;
 pub mod suggestions;
 
 use axum::Router;
@@ -96,6 +97,7 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
         .route("/suggestions/{id}/accept", post(suggestions::accept))
         .route("/suggestions/{id}/dismiss", post(suggestions::dismiss))
         .route("/chain", get(chain::info))
+        .route("/streams", get(streams::status))
         .route(
             "/agents/{id}/vault",
             get(chain::get_vault).post(chain::link_vault),

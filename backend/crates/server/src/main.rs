@@ -84,6 +84,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     nonce_header: name("QUICKNODE_NONCE_HEADER", d.nonce_header),
                     max_skew_secs: var("QUICKNODE_MAX_SKEW_SECS", d.max_skew_secs)?,
                     secret: d.secret,
+                    contracts: None,
                 })
             }
             None => None,
