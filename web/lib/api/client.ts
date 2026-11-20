@@ -40,6 +40,7 @@ import type {
   MarketCategories,
   MarketPreview,
 } from "./types";
+import type { SparringSession } from "../sparring";
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api").replace(/\/+$/, "");
 
@@ -123,6 +124,11 @@ export const api = {
   allocate: (id: string, amount: Money) => post<Agent>(`/agents/${encodeURIComponent(id)}/allocate`, { amount }),
   deallocate: (id: string, amount: Money) => post<Agent>(`/agents/${encodeURIComponent(id)}/deallocate`, { amount }),
   multiplyAgent: (id: string, input: MultiplyInput) => post<MultiplyReport>(`/agents/${encodeURIComponent(id)}/multiply`, input),
+  listSparring: (id: string) => get<SparringSession[]>(`/agents/${encodeURIComponent(id)}/sparring`),
+  createSparring: (id: string, thesis: string) => post<SparringSession>(`/agents/${encodeURIComponent(id)}/sparring`, { thesis }),
+  getSparring: (id: string) => get<SparringSession>(`/sparring/${encodeURIComponent(id)}`),
+  replySparring: (id: string, argument: string, proposedRevision: string | null) =>
+    post<SparringSession>(`/sparring/${encodeURIComponent(id)}/rounds`, { role: "owner", argument, evidence_urls: [], proposed_revision: proposedRevision }),
 
   listTemplates: () => get<Template[]>("/templates"),
   listBlocks: () => get<BlockDef[]>("/graph/blocks"),

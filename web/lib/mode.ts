@@ -18,12 +18,13 @@ export function modeOfPath(path: string): Mode | null {
   return null;
 }
 
-const BASIC_TO_ADV_TAB: Record<string, string> = { "": "", "/logic": "/logic", "/activity": "/activity", "/edit": "/settings" };
+const BASIC_TO_ADV_TAB: Record<string, string> = { "": "", "/logic": "/logic", "/sparring": "/sparring", "/activity": "/activity", "/edit": "/settings" };
 const ADV_TO_BASIC_TAB: Record<string, string> = {
   "": "",
   "/performance": "",
   "/logic": "/logic",
   "/code": "/logic",
+  "/sparring": "/sparring",
   "/activity": "/activity",
   "/settings": "/edit",
 };
