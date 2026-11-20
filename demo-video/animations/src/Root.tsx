@@ -6,6 +6,7 @@ import { Composition } from "remotion";
 import { FPS, s } from "./lib/anim";
 import { MinimalProvider } from "./lib/ui";
 import { CONCEPTS } from "./logos/Logos";
+import { RealProvider } from "./logos/paper";
 import { S01ColdOpen } from "./scenes/S01ColdOpen";
 import { S02Problem } from "./scenes/S02Problem";
 import { S03AgentToAgent } from "./scenes/S03AgentToAgent";
@@ -52,6 +53,8 @@ export const Root: React.FC = () => (
       <React.Fragment key={c.id}>
         <Composition id={`logo-${c.id}`} component={LOGO_WIDE[c.id]} durationInFrames={1} fps={FPS} width={1200} height={800} />
         <Composition id={`logo-${c.id}-sq`} component={LOGO_SQ[c.id]} durationInFrames={1} fps={FPS} width={1024} height={1024} />
+        <Composition id={`logo-real-${c.id}`} component={REAL_WIDE[c.id]} durationInFrames={1} fps={FPS} width={1200} height={800} />
+        <Composition id={`logo-real-${c.id}-sq`} component={REAL_SQ[c.id]} durationInFrames={1} fps={FPS} width={1024} height={1024} />
       </React.Fragment>
     ))}
   </>
@@ -59,3 +62,6 @@ export const Root: React.FC = () => (
 
 const LOGO_WIDE: Record<string, React.FC> = Object.fromEntries(CONCEPTS.map((c) => [c.id, () => <>{c.render(false)}</>]));
 const LOGO_SQ: Record<string, React.FC> = Object.fromEntries(CONCEPTS.map((c) => [c.id, () => <>{c.render(true)}</>]));
+// Same concepts with the fresco hands (paper-cut backdrop, real hands).
+const REAL_WIDE: Record<string, React.FC> = Object.fromEntries(CONCEPTS.map((c) => [c.id, () => <RealProvider value={true}>{c.render(false)}</RealProvider>]));
+const REAL_SQ: Record<string, React.FC> = Object.fromEntries(CONCEPTS.map((c) => [c.id, () => <RealProvider value={true}>{c.render(true)}</RealProvider>]));

@@ -3,7 +3,7 @@
 // sheet of textured paper with a soft drop shadow. Designed on a 1200x800 canvas (Devpost 3:2);
 // the square version crops the centre 800x800.
 import React from "react";
-import { AbsoluteFill } from "remotion";
+import { AbsoluteFill, Img, staticFile, useVideoConfig } from "remotion";
 import { loadFont as loadCinzel } from "@remotion/google-fonts/Cinzel";
 
 export const SERIF = loadCinzel("normal", { weights: ["600", "700"], subsets: ["latin"] }).fontFamily;
@@ -121,20 +121,66 @@ export const Glow: React.FC<{ x?: number; y?: number; r?: number }> = ({ x = 600
   <circle cx={x} cy={y} r={r} style={{ fill: "url(#glow)" }} />
 );
 
-/** Full logo scene: backdrop, two hands with fingertips `gap` apart, object in the middle. */
+// "Real" mode: the hands are cut from a public-domain scan of the fresco (public/logos/hand-*.png,
+// made by cutout-hands.py) and mounted like cut paper: a cream paper border plus a drop shadow.
+const RealCtx = React.createContext(false);
+export const RealProvider = RealCtx.Provider;
+
+// Fingertips in the cutout PNGs (pixels): Adam's index tip, God's index tip.
+const ADAM_TIP = { x: 596, y: 234 }, GOD_TIP = { x: 6, y: 220 };
+const REAL_SCALE = 1.25;
+const sticker = (paper: string) =>
+  [`drop-shadow(4px 0 0 ${paper})`, `drop-shadow(-4px 0 0 ${paper})`, `drop-shadow(0 4px 0 ${paper})`, `drop-shadow(0 -4px 0 ${paper})`,
+    "drop-shadow(0 7px 9px rgba(30,18,10,0.45))"].join(" ");
+
+const RealHands: React.FC<{ gap: number; cy: number; agentRight?: boolean }> = ({ gap, cy, agentRight }) => {
+  const s = REAL_SCALE, paper = "#F4EBD8";
+  const common: React.CSSProperties = { position: "absolute", transformOrigin: "0 0", transform: `scale(${s})` };
+  return (
+    <>
+      <Img src={staticFile("logos/hand-adam.png")}
+        style={{ ...common, left: 600 - gap / 2 - ADAM_TIP.x * s, top: cy + 4 - ADAM_TIP.y * s, filter: sticker(paper) }} />
+      <Img src={staticFile("logos/hand-god.png")}
+        style={{ ...common, left: 600 + gap / 2 - GOD_TIP.x * s, top: cy - GOD_TIP.y * s,
+          filter: (agentRight ? "grayscale(1) sepia(1) hue-rotate(175deg) saturate(1.8) brightness(1.05) " : "") + sticker(paper) }} />
+    </>
+  );
+};
+
+/** Full logo scene: backdrop, two hands with fingertips `gap` apart, object in the middle.
+ *  Drawn on a 1200x800 design canvas; the square version shows its centre 800x800. */
 export const Scene: React.FC<{
   p: Palette; square?: boolean; frame?: "rings" | "roundel" | "cartouche"; gap?: number; cy?: number;
   agentRight?: boolean; children?: React.ReactNode; below?: React.ReactNode; glow?: boolean;
-}> = ({ p, square, frame, gap = 150, cy = 400, agentRight, children, below, glow = true }) => (
-  <AbsoluteFill style={{ background: p.bg }}>
-    <svg width="100%" height="100%" viewBox={square ? "200 0 800 800" : "0 0 1200 800"} preserveAspectRatio="xMidYMid slice">
-      <PaperDefs p={p} />
-      <Backdrop p={p} frame={frame} />
-      {glow && <Glow y={cy} />}
-      <PlacedHand p={p} x={600 - gap / 2} y={cy + 6} rot={10} scale={1.05} />
-      <PlacedHand p={p} x={600 + gap / 2} y={cy} mirror rot={-4} scale={1.05} sleeve={!agentRight} agent={agentRight} />
-      <g transform={`translate(600 ${cy})`}>{children}</g>
-      {below}
-    </svg>
-  </AbsoluteFill>
-);
+}> = ({ p, square, frame, gap = 150, cy = 400, agentRight, children, below, glow = true }) => {
+  const real = React.useContext(RealCtx);
+  const { width } = useVideoConfig();
+  const k = width / (square ? 800 : 1200);
+  const layer: React.CSSProperties = { position: "absolute", left: 0, top: 0, width: 1200, height: 800 };
+  return (
+    <AbsoluteFill style={{ background: p.bg, overflow: "hidden" }}>
+      <div style={{ ...layer, transformOrigin: "0 0", transform: `scale(${k}) translateX(${square ? -200 : 0}px)` }}>
+        <svg style={layer} viewBox="0 0 1200 800">
+          <PaperDefs p={p} />
+          <Backdrop p={p} frame={frame} />
+          {glow && <Glow y={cy} />}
+          {!real && <>
+            <PlacedHand p={p} x={600 - gap / 2} y={cy + 6} rot={10} scale={1.05} />
+            <PlacedHand p={p} x={600 + gap / 2} y={cy} mirror rot={-4} scale={1.05} sleeve={!agentRight} agent={agentRight} />
+          </>}
+        </svg>
+        {real && <RealHands gap={gap} cy={cy} agentRight={agentRight} />}
+        <svg style={layer} viewBox="0 0 1200 800">
+          <PaperDefs p={p} />
+          {/* front fold of God's mantle hides where the cutout arm ends */}
+          {real && <>
+            <path d={`M1200,${cy - 260} C1150,${cy - 230} 1120,${cy - 150} 1135,${cy - 60} C1145,${cy} 1125,${cy + 80} 1160,${cy + 150} L1200,${cy + 170} Z`} style={{ fill: p.cloak, filter: "url(#paper)" }} />
+            <path d={`M1200,${cy - 200} C1170,${cy - 170} 1160,${cy - 100} 1168,${cy - 30} C1172,${cy + 30} 1165,${cy + 80} 1185,${cy + 120} L1200,${cy + 125} Z`} style={{ fill: p.cloak2, filter: "url(#paper)" }} />
+          </>}
+          <g transform={`translate(600 ${cy})`}>{children}</g>
+          {below}
+        </svg>
+      </div>
+    </AbsoluteFill>
+  );
+};
