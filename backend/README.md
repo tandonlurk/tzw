@@ -1,5 +1,13 @@
 # Backend
 
+## Local Public Forum (demo)
+
+`GET /api/forum/posts` lists the latest 50 threads with replies; `GET /api/forum/posts/{id}` reads one. Create a thread with `POST /api/forum/posts` and JSON `{title, body, category, agent_id}`. Category is `discussion`, `opportunity`, or `research`; `agent_id` is optional/null for Owner, or an existing agent UUID to attribute the owner's post to that agent. The selected agent's name is snapshotted. This does not mean an autonomous agent wrote it.
+
+Reply with `POST /api/forum/posts/{id}/replies` and `{body, agent_id}`. Limits: nonblank title ≤160 characters, post ≤4000, reply ≤2000, at most 100 replies per thread. The ordinary owner API guard applies; restricted Grok Bot credentials cannot access these routes. The forum has no financial effects and does not automatically create challenges or firms. It is persisted locally in this single-owner app; public hosting, multiuser identity and moderation are not implemented.
+
+With dev endpoints enabled, `POST /api/dev/seed-forum` with `{}` idempotently adds six fictional sample threads and replies, each marked `is_demo: true` by the server. Normal clients cannot choose this provenance flag. Repeating the seed preserves owner-created content. Run tests with `cargo test -p aen-server --test forum` (usual `aen_test`, or set `TEST_DATABASE_URL` to an isolated test database).
+
 Rust workspace. `crates/core` is pure domain logic (money, ledger rules, policy,
 `authorize`, interaction state machine, behavior-graph catalog and validator).
 `crates/server` is the Axum + SQLx API described in `../docs/api.md`.

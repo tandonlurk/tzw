@@ -10,6 +10,7 @@ pub mod demo_firm;
 pub mod error;
 pub mod extract;
 pub mod firms;
+pub mod forum;
 pub mod graph_exec;
 pub mod grok;
 pub mod grok_cocaptain;
@@ -76,6 +77,9 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
         .route("/wallet", get(misc::wallet))
         .route("/wallet/simulated-deposit", post(misc::simulated_deposit))
         .route("/activity", get(misc::activity))
+        .route("/forum/posts", get(forum::list).post(forum::create))
+        .route("/forum/posts/{id}", get(forum::get))
+        .route("/forum/posts/{id}/replies", post(forum::reply))
         .route("/interactions", get(interactions::list))
         .route("/interactions/{id}", get(interactions::get))
         .route("/approvals", get(interactions::approvals))
@@ -122,7 +126,8 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
             .route("/dev/tick", post(interactions::dev_tick))
             .route("/dev/fake-market", post(interactions::dev_fake_market))
             .route("/dev/seed-demo", post(demo::seed_demo))
-            .route("/dev/seed-firm-demo", post(demo_firm::seed_firm_demo));
+            .route("/dev/seed-firm-demo", post(demo_firm::seed_firm_demo))
+            .route("/dev/seed-forum", post(forum::seed));
         // Signs with the test-owner key: only when explicitly enabled.
         if state.chain.as_ref().is_some_and(|c| c.dev_owner.is_some()) {
             api = api.route(
