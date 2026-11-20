@@ -5,7 +5,7 @@
 #
 # Usage: python3 -I final-logo.py <scan.jpg> <hand-adam.png> <hand-god.png> <out.jpg>
 #   scan: Wikimedia "Michelangelo - Creation of Adam (cropped).jpg" (3524 x 1599)
-#   hands: public/logos/hand-*.png (made by cutout-hands.py)
+#   hands: public/logos/hand-adam.png and hand-god-long.png (made by cutout-hands.py)
 # v1 (hands as painted, coin under the fingertips): final-logo-v1.py
 import sys, math
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -17,7 +17,7 @@ CX, CY = W // 2, H // 2
 
 # --- clean plate: an empty stretch of the same plaster (cracks included), scaled to fill ---
 scan = Image.open(scan_p).convert("RGB")
-plate = scan.crop((860, 40, 1720, 613)).resize((W, H), Image.LANCZOS)
+plate = scan.crop((860, 55, 1720, 628)).resize((W, H), Image.LANCZOS)
 base = np.asarray(plate).astype(float)
 
 # --- hands: scale, rotate about the fingertip, place on the diagonal ---
@@ -27,7 +27,7 @@ GAP = 16                     # spark gap between each fingertip and the coin rim
 HANDS = [
     # file, fingertip in the cutout, rotation (deg, counter-clockwise), direction from coin centre to tip
     (adam_p, (596, 234), 40, 225),   # lower left, reaching up
-    (god_p, (6, 220), 22, 32),       # upper right, reaching down
+    (god_p, (20, 289), 31, 40),      # upper right, reaching down (hand-god-long.png, arm to the sleeve)
 ]
 
 def place(path, tip, rot, dir_deg):
