@@ -6,7 +6,18 @@ Legend: `[ ]` not started · `[~]` in progress · `[!]` blocked · `[x]` done an
 
 Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, see D-18). Demo flow working by end of Wed Nov 18. Details and dates: `tasks/project.md`.
 
-## ⚠ Start here (owner action, open next session)
+## ⚠ Start here (2026-11-19 evening, read first)
+
+Handoff: `reports/handoffs/2026-11-19-evening.md`.
+
+- [ ] **You:** merge PR #10 (it contains #8 and #9 with the `docs/decisions.md` conflict already resolved; merging it closes all three). Then `git checkout main && git pull`
+- [ ] **You:** get an xAI key (console.x.ai → API Keys) into `backend/.env` as `XAI_API_KEY`, so Grok does real work (bounty). Then the agent runs one live Grok check
+- [ ] **You:** answer the demo plan's questions (`demo-video/animation-plan.md`, end) and record voiceover + screen recordings; then an agent builds the animations (Remotion) and the assembly script
+- [ ] Optional: add vault addresses to the QuickNode filter (`docs/setup/quicknode-streams-filter.md`; addresses from `GET /api/streams`)
+- [ ] Optional: delete the terminated QuickNode stream "dry-abandoned-plateau"; withdraw ~6 testnet USDC from the two Streams-test demo vaults
+- [ ] ElevenLabs only if everything else is done
+
+## Earlier start-here items (owner action)
 
 - [x] Fund the Arc testnet addresses (done 2026-11-17: idx 0-2 have 20 USDC each; confirm MetaMask account too)
 - [ ] Confirm MetaMask is set up: Arc Testnet added (`docs/setup/arc-testnet-funding.md` section 3), and the account you funded is the one you will connect. Needed for the browser wallet UI
@@ -32,8 +43,8 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 - [?] D-17 main track "Agentic Payments & AI" + Arc award + all bounties
 - [?] Ask at sponsor office hours (Nov 16-19): what "Grok Bot" means for the xAI bounty
 - [?] Branch `afternoon-1118` (2026-11-18 evening, **uncommitted**: the agent was not allowed to commit): D-71 stale spot guard, xAI/QuickNode docs re-check. Review, then commit/merge. Handoff: `reports/handoffs/2026-11-18-afternoon.md`
-- [?] **New UI (2026-11-19 overnight)**: branch `ui-1119`, local only. Open http://localhost:3000, toggle Basic/Advanced (top-right icon or ⌘\\), try the Terminal and an agent's Logic and Code tabs. Review D-72, then merge. Handoff: `reports/handoffs/2026-11-19-ui-overnight.md`
-- [?] Streams: create a QuickNode stream and expose the webhook through a tunnel (needs `AEN_API_TOKEN` + `ALLOWED_HOSTS`); capture one real delivery to confirm the header names and payload (all UNVERIFIED today)
+- [x] **New UI (2026-11-19 overnight)**: merged as PR #7. Open http://localhost:3000, toggle Basic/Advanced (top-right icon or ⌘\\), try the Terminal and an agent's Logic and Code tabs. Review D-72, then merge. Handoff: `reports/handoffs/2026-11-19-ui-overnight.md`
+- [x] Streams: stream "tzw-arc-testnet-escrow" live (Arc Testnet, Logs, escrow + factory filter) via a cloudflared tunnel; real deliveries verified 2026-11-19, confirmations in the UI (D-74, PR #10). Agent multiplier: D-73, PR #9
 - [x] Pushed to GitHub `tandonlurk/tzw`; `main` = `recovery` as of 2026-11-16 (consider making `main` the default branch). Repo is PUBLIC: make it private if you do not want the docs visible
 
 ## M0 — Planning and research (Sat Nov 14)
