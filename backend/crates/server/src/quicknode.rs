@@ -10,10 +10,11 @@
 //! Header names (`X-QN-Signature`, `X-QN-Timestamp`, `X-QN-Nonce`), the
 //! signed message (hex HMAC-SHA256 of nonce + timestamp + decompressed body,
 //! keyed with the stream's security token) and the `{data, metadata}` log
-//! fields match QuickNode's docs as read 2026-11-18 (docs/research/sponsors.md).
-//! Still UNVERIFIED until one real delivery is captured. Header names stay
-//! configurable; the assumptions are documented in docs/api.md. Nothing here
-//! acts on an event: there is no chain executor, and nothing signs or sends.
+//! fields match QuickNode's docs as read 2026-11-18 and were VERIFIED with
+//! real Arc testnet deliveries on 2026-11-19 (docs/research/sponsors.md).
+//! Header names stay configurable (docs/api.md). Logs of our escrow and vault
+//! factory are then decoded and matched against the server's own confirmed
+//! transactions by `streams` (D-74); no stream event moves state or money.
 
 use std::fmt;
 
@@ -31,6 +32,7 @@ use uuid::Uuid;
 use crate::error::{ApiError, Detail};
 use crate::extract::is_json;
 use crate::state::AppState;
+use crate::streams::{self, StreamContracts};
 
 pub const PATH: &str = "/api/webhooks/quicknode";
 pub const DEFAULT_SIGNATURE_HEADER: &str = "x-qn-signature";
@@ -68,6 +70,9 @@ pub struct QuickNodeConfig {
     pub timestamp_header: String,
     pub nonce_header: String,
     pub max_skew_secs: i64,
+    /// Contracts whose logs are decoded and matched. `None` = the connected
+    /// chain's escrow and factory (`streams::contracts`); set by tests.
+    pub contracts: Option<StreamContracts>,
 }
 
 impl QuickNodeConfig {
@@ -78,6 +83,7 @@ impl QuickNodeConfig {
             timestamp_header: DEFAULT_TIMESTAMP_HEADER.into(),
             nonce_header: DEFAULT_NONCE_HEADER.into(),
             max_skew_secs: DEFAULT_MAX_SKEW_SECS,
+            contracts: None,
         }
     }
 }
@@ -140,7 +146,7 @@ fn header<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
 }
 
 // ---------------------------------------------------------------------------
-// Payload (UNVERIFIED shape, see docs/api.md)
+// Payload (verified with real deliveries 2026-11-19, see docs/api.md)
 // ---------------------------------------------------------------------------
 
 /// One validated log.
@@ -150,6 +156,8 @@ pub struct Log {
     pub log_index: i64,
     pub block_number: i64,
     pub block_hash: Option<String>,
+    /// `blockTimestamp` (seconds) when present; a malformed one is dropped.
+    pub block_timestamp: Option<i64>,
     pub address: String,
     pub topics: Vec<String>,
     pub data: String,
@@ -210,6 +218,7 @@ fn parse_log(v: &Value) -> Option<Log> {
             None | Some(Value::Null) => None,
             v => Some(hex_id(v, 64)?),
         },
+        block_timestamp: quantity(o.get("blockTimestamp")),
         address: hex_id(o.get("address"), 40)?,
         topics,
         data: hex_data(o.get("data"))?,
@@ -373,13 +382,16 @@ pub async fn webhook(
         removed: 0,
         rejected: batch.rejected,
     };
+    let contracts = streams::contracts(&state);
     let mut activity_rows = 0usize;
     let mut unlogged = 0usize;
     for log in &batch.logs {
         let inserted: Option<Uuid> = sqlx::query_scalar(
             "INSERT INTO chain_events (source, network, stream_id, tx_hash, log_index, \
-             block_number, block_hash, address, topics, data, removed, received_at) \
-             VALUES ('quicknode_streams', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
+             block_number, block_hash, block_timestamp, address, topics, data, removed, \
+             received_at) \
+             VALUES ('quicknode_streams', $1, $2, $3, $4, $5, $6, to_timestamp($7), $8, $9, \
+             $10, $11, $12) \
              ON CONFLICT (tx_hash, log_index) DO NOTHING RETURNING id",
         )
         .bind(&batch.network)
@@ -388,6 +400,7 @@ pub async fn webhook(
         .bind(log.log_index)
         .bind(log.block_number)
         .bind(&log.block_hash)
+        .bind(log.block_timestamp.map(|t| t as f64))
         .bind(&log.address)
         .bind(json!(log.topics))
         .bind(&log.data)
@@ -395,15 +408,23 @@ pub async fn webhook(
         .bind(received_at)
         .fetch_optional(&mut *tx)
         .await?;
-        let (id, kind, summary) = match inserted {
+        let (id, kind, summary, interaction) = match inserted {
             Some(id) => {
                 receipt.inserted += 1;
+                // Our escrow / factory: decoded and matched, with its own
+                // activity once the server's receipts agree (or disagree).
+                if !log.removed
+                    && let Some(c) = &contracts
+                    && streams::check_event(&mut tx, c, id).await?.is_some()
+                {
+                    continue;
+                }
                 (
                     id,
                     "chain_event",
                     format!(
                         "Arc testnet event seen via QuickNode Streams: log {} of transaction {} \
-                         from contract {} in block {}{}. Recorded only; nothing acts on it yet.",
+                         from contract {} in block {}{}. Recorded only; nothing acts on it.",
                         log.log_index,
                         short(&log.tx_hash),
                         short(&log.address),
@@ -414,19 +435,24 @@ pub async fn webhook(
                             ""
                         }
                     ),
+                    None,
                 )
             }
             None if log.removed => {
-                // A known log reported as removed (reorg): mark it once.
-                let marked: Option<Uuid> = sqlx::query_scalar(
+                // A known log reported as removed (reorg): mark it once. A
+                // confirmation it carried no longer counts (the UI and the
+                // status counts skip removed rows); the server's own receipts
+                // are unaffected.
+                let marked: Option<(Uuid, Option<Uuid>, Option<String>)> = sqlx::query_as(
                     "UPDATE chain_events SET removed = true \
-                     WHERE tx_hash = $1 AND log_index = $2 AND NOT removed RETURNING id",
+                     WHERE tx_hash = $1 AND log_index = $2 AND NOT removed \
+                     RETURNING id, interaction_id, event_name",
                 )
                 .bind(&log.tx_hash)
                 .bind(log.log_index)
                 .fetch_optional(&mut *tx)
                 .await?;
-                let Some(id) = marked else {
+                let Some((id, interaction, event)) = marked else {
                     receipt.duplicates += 1;
                     continue;
                 };
@@ -435,11 +461,21 @@ pub async fn webhook(
                     id,
                     "chain_event_removed",
                     format!(
-                        "Arc testnet event removed by a chain reorganization: log {} of \
-                         transaction {}.",
+                        "Arc testnet {}event removed by a chain reorganization: log {} of \
+                         transaction {}.{}",
+                        event
+                            .as_deref()
+                            .map(|e| format!("{e} "))
+                            .unwrap_or_default(),
                         log.log_index,
-                        short(&log.tx_hash)
+                        short(&log.tx_hash),
+                        if event.is_some() {
+                            " Its QuickNode Streams confirmation is withdrawn."
+                        } else {
+                            ""
+                        }
                     ),
+                    interaction,
                 )
             }
             None => {
@@ -449,17 +485,21 @@ pub async fn webhook(
         };
         if activity_rows < MAX_ACTIVITY_PER_DELIVERY {
             activity_rows += 1;
-            sqlx::query("INSERT INTO activity (kind, summary, detail) VALUES ($1, $2, $3)")
-                .bind(kind)
-                .bind(summary)
-                .bind(json!({
-                    "chain_event_id": id, "source": "quicknode_streams", "env": "arc_testnet",
-                    "network": batch.network, "tx_hash": log.tx_hash, "log_index": log.log_index,
-                    "block_number": log.block_number, "address": log.address,
-                    "topic0": log.topics.first(),
-                }))
-                .execute(&mut *tx)
-                .await?;
+            sqlx::query(
+                "INSERT INTO activity (interaction_id, kind, summary, detail) \
+                 VALUES ($1, $2, $3, $4)",
+            )
+            .bind(interaction)
+            .bind(kind)
+            .bind(summary)
+            .bind(json!({
+                "chain_event_id": id, "source": "quicknode_streams", "env": "arc_testnet",
+                "network": batch.network, "tx_hash": log.tx_hash, "log_index": log.log_index,
+                "block_number": log.block_number, "address": log.address,
+                "topic0": log.topics.first(),
+            }))
+            .execute(&mut *tx)
+            .await?;
         } else {
             unlogged += 1;
         }

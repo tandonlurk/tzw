@@ -115,6 +115,12 @@ const KIND: Record<string, { label: string; tone: Tone }> = {
   firm_fee_denied: { label: "task fee denied", tone: "neg" },
   firm_payout: { label: "firm payout", tone: "pos" },
   approach_filtered: { label: "outside approach", tone: "dim" },
+  // QuickNode Streams (D-74)
+  stream_confirmed: { label: "confirmed onchain", tone: "pos" },
+  stream_mismatch: { label: "stream mismatch", tone: "neg" },
+  stream_observed: { label: "escrow event", tone: "info" },
+  chain_event: { label: "chain event", tone: "dim" },
+  chain_event_removed: { label: "reorged out", tone: "pend" },
 };
 
 export function activityKindLabel(kind: string): string {

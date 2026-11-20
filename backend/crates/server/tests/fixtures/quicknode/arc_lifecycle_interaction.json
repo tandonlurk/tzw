@@ -1,0 +1,85 @@
+{
+ "id": "838ca4b6-2e3b-46f3-9cad-6b81b1fb760c",
+ "kind": "challenge",
+ "env": "arc_testnet",
+ "state": "settled",
+ "proposer_id": "00000000-0000-4000-8000-0000000000d1",
+ "counterparty_id": "00000000-0000-4000-8000-0000000000d2",
+ "proposer_version": 3,
+ "counterparty_version": 2,
+ "terms": {
+  "stake": "1500000",
+  "end_ts": 1795139707,
+  "market": {
+   "kind": "gemini_prediction_contract",
+   "event_ticker": "BTC-FAKE-1H",
+   "instrument_symbol": "FAKE-BTC-1H-UP"
+  },
+  "formula": "pm_yes_price_bps_v1",
+  "start_ts": 1795139677,
+  "direction": "above",
+  "threshold": 5500,
+  "resolution_source": "gemini_prediction_markets"
+ },
+ "stake": 1500000,
+ "market_key": "gemini_pm:FAKE-BTC-1H-UP",
+ "market_title": "[fake] BTC price in one hour: Up",
+ "market_view": {
+  "meta": {
+   "tags": [
+    "BTC",
+    "Hourly"
+   ],
+   "expiry_ts": null,
+   "structure": "binary_up_down",
+   "subcategories": [
+    "bitcoin",
+    "Bitcoin"
+   ],
+   "volume_delta_24h_bps": null
+  },
+  "title": "[fake] BTC price in one hour: Up",
+  "value": 5500,
+  "market": {
+   "kind": "gemini_prediction_contract",
+   "event_ticker": "BTC-FAKE-1H",
+   "instrument_symbol": "FAKE-BTC-1H-UP"
+  },
+  "source": "fake",
+  "category": "crypto",
+  "move_bps": 300,
+  "spot_symbol": "btcusd",
+  "window_secs": 3600,
+  "fallback_reason": null
+ },
+ "start_ts": "2026-11-19T20:54:37-05:00",
+ "end_ts": "2026-11-19T20:55:07-05:00",
+ "turn": null,
+ "rounds": 2,
+ "proposer_ask_owner": false,
+ "counterparty_ask_owner": false,
+ "outcome": "a",
+ "winner_id": "00000000-0000-4000-8000-0000000000d1",
+ "observed": 7000,
+ "observed_at": "2026-11-19T20:55:18.556797-05:00",
+ "resolve_attempts": 0,
+ "status_reason": "Observed 0.70 (YES price) from fake (last trade price of the open contract); resolution is backend-administered.",
+ "created_at": "2026-11-19T20:52:37.761009-05:00",
+ "updated_at": "2026-11-19T20:55:18.556797-05:00",
+ "settled_at": "2026-11-19T20:55:18.556797-05:00",
+ "escrow_create_tx": "0x820d9af0e659f486a25c8580b4f5ed7722f5608d25b869a29342ff74be19436f",
+ "proposer_stake_tx": "0x792b93c846b895f583082956e78853cb0ec71c444907e9a3e1e9e713c83f840f",
+ "counterparty_stake_tx": "0x6f087c7b1c925365f9148506e2612f006d13d06049645ccb8a648dfc0b8ef2b0",
+ "escrow_settle_tx": "0xa2b19f89a89db14e3721362ce16c78773f01c05c3d4eb763d3e37cffbf550b16",
+ "pending_outcome": {
+  "detail": "last trade price of the open contract",
+  "source": "fake",
+  "outcome": "a",
+  "observed": 7000,
+  "void_reason": ""
+ },
+ "vaults_released_at": "2026-11-19T20:55:21.049764-05:00",
+ "firm_id": null,
+ "proposer_release_tx": "0x7bbedcb9d850a254d2c9e0da524ebdcda65b268ee84769191fa9d171a9defe6c",
+ "counterparty_release_tx": "0xb61d10dcb742779622cc66fdf14cee9f77f4a53686aae397d31dd3c3afb9ebfe"
+}
