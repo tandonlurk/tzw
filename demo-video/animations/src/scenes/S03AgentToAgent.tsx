@@ -4,7 +4,8 @@ import React from "react";
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 import { fade, lerp, prog, snap } from "../lib/anim";
 import { RING, RING_C, RING_NAMES } from "../lib/ring";
-import { AgentAvatar, At, DrawLine, MoneyChip, Pill, Stage, Svg, Title } from "../lib/ui";
+import { ICONS } from "../lib/icons";
+import { AgentAvatar, At, DrawLine, MoneyChip, Pill, Stage, Svg, Title, useMinimal } from "../lib/ui";
 
 const PAIRS: { a: number; b: number; text: string }[] = [
   { a: 0, b: 1, text: "BTC contract ≥ 0.55 at end?" },
@@ -22,6 +23,7 @@ const Lock: React.FC<{ size?: number }> = ({ size = 44 }) => (
 export const S03AgentToAgent: React.FC = () => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const minimal = useMinimal();
   const shrink = prog(f, 0.3, 1.2);
   const mx = RING_C.x, my = lerp(RING_C.y, 118, shrink);
   return (
@@ -39,7 +41,7 @@ export const S03AgentToAgent: React.FC = () => {
         <div style={{ padding: `${lerp(26, 12, shrink)}px ${lerp(44, 22, shrink)}px`, borderRadius: lerp(18, 999, shrink),
           background: "var(--surface-2)", border: "1px solid var(--steel)", color: "var(--steel)",
           fontSize: lerp(36, 24, shrink), fontWeight: 600, whiteSpace: "nowrap" }}>
-          {shrink < 0.5 ? "Market" : "Gemini prediction markets · data"}
+          {minimal ? <ICONS.Market size={lerp(64, 40, shrink)} /> : shrink < 0.5 ? "Market" : "Gemini prediction markets · data"}
         </div>
       </At>
       {PAIRS.map((pr, i) => {
@@ -53,7 +55,7 @@ export const S03AgentToAgent: React.FC = () => {
         return (
           <React.Fragment key={i}>
             <At x={px} y={py} scale={snap(f, fps, 2.5 + i * 0.5)}>
-              <Pill tone="blue" size={21}>{pr.text}</Pill>
+              {!minimal && <Pill tone="blue" size={21}>{pr.text}</Pill>}
             </At>
             {!locked && <>
               <At x={lerp(A.x, cx, flow)} y={lerp(A.y, cy, flow)} opacity={fade(f, 6 + i * 0.2, undefined, 0.15)}><MoneyChip amount="●" size={14} /></At>

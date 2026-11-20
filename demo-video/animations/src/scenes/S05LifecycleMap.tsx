@@ -4,13 +4,14 @@ import React from "react";
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 import { fade, lerp, prog, snap } from "../lib/anim";
 import { ICONS } from "../lib/icons";
-import { LifecycleStrip, MoneyChip, STATIONS, Stage, Svg, Title } from "../lib/ui";
+import { LifecycleStrip, MoneyChip, STATIONS, Stage, Svg, Title, useMinimal } from "../lib/ui";
 
 const X0 = 210, DX = 300, Y = 470;
 
 export const S05LifecycleMap: React.FC = () => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const minimal = useMinimal();
   const collapse = prog(f, 6.6, 0.8);
   // A stake token walks the path once all stations are drawn.
   const walk = prog(f, 3.6, 2.4, (t) => t);
@@ -35,17 +36,17 @@ export const S05LifecycleMap: React.FC = () => {
                 color: lit ? "var(--blue)" : "var(--text-2)" }}>
                 <Icon size={60} />
               </div>
-              <div style={{ position: "absolute", top: 156, left: "50%", transform: "translateX(-50%)", textAlign: "center", whiteSpace: "nowrap" }}>
+              {!minimal && <div style={{ position: "absolute", top: 156, left: "50%", transform: "translateX(-50%)", textAlign: "center", whiteSpace: "nowrap" }}>
                 <div style={{ fontSize: 32, fontWeight: 500, color: "var(--text)" }}>{st.name}</div>
                 <div style={{ fontSize: 23, color: "var(--text-3)", marginTop: 4, opacity: fade(f, 0.6 + i * 0.45) }}>{st.sub}</div>
-              </div>
-              <div style={{ position: "absolute", top: -112, left: "50%", transform: "translateX(-50%)", fontSize: 22,
-                color: "var(--text-3)", fontFamily: "inherit" }}>{i + 1}</div>
+              </div>}
+              {!minimal && <div style={{ position: "absolute", top: -112, left: "50%", transform: "translateX(-50%)", fontSize: 22,
+                color: "var(--text-3)", fontFamily: "inherit" }}>{i + 1}</div>}
             </div>
           );
         })}
         <div style={{ position: "absolute", left: tokenX, top: Y - 128, transform: "translate(-50%, -50%)", opacity: fade(f, 3.5) * (1 - prog(f, 6.1, 0.3)) }}>
-          <MoneyChip amount="stake" size={22} />
+          {minimal ? <div style={{ width: 26, height: 26, borderRadius: 26, background: "var(--yellow)" }} /> : <MoneyChip amount="stake" size={22} />}
         </div>
         <Title at={1.4} y={150} size={50}>Every challenge takes the same six steps.</Title>
       </AbsoluteFill>

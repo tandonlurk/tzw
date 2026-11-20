@@ -3,7 +3,8 @@ import React from "react";
 import { AbsoluteFill, Sequence, useCurrentFrame } from "remotion";
 import { fade, lerp, prog, s, typed } from "../lib/anim";
 import { RING, RING_C, RING_NAMES } from "../lib/ring";
-import { AgentAvatar, At, DrawLine, Eyebrow, MoneyChip, Stage, Svg, Title, agentColor, MONO } from "../lib/ui";
+import { ICONS } from "../lib/icons";
+import { AgentAvatar, At, DrawLine, Eyebrow, MoneyChip, Stage, Svg, Title, agentColor, MONO, useMinimal } from "../lib/ui";
 
 const BEAT = 7;
 
@@ -14,6 +15,7 @@ const Trust: React.FC = () => {
   const ring = prog(f, 2.4, 0.8);
   const ringFail = prog(f, 4.3, 0.5);
   const out = 1 - prog(f, BEAT - 0.35, 0.35);
+  const minimal = useMinimal();
   const lx = lerp(lerp(470, 880, meet), 640, apart);
   const rx = lerp(lerp(1450, 1040, meet), 1280, apart);
   return (
@@ -31,12 +33,15 @@ const Trust: React.FC = () => {
           style={{ fill: "none", stroke: "var(--text-3)", strokeWidth: 3, strokeDasharray: "10 12",
             strokeDashoffset: (1 - ring) * 1200, opacity: ring * (1 - ringFail) }} />
       </Svg>
-      <At x={960} y={250} opacity={fade(f, 2.6) * (1 - prog(f, 4.6, 0.4))}>
+      {minimal && <At x={960} y={250} opacity={fade(f, 2.8)} scale={0.8 + 0.2 * prog(f, 2.8, 0.5)}>
+        <span style={{ fontSize: 150, fontWeight: 300, color: "var(--text-3)" }}>?</span>
+      </At>}
+      {!minimal && <At x={960} y={250} opacity={fade(f, 2.6) * (1 - prog(f, 4.6, 0.4))}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center", fontSize: 38, color: "var(--text)" }}>
           <div>{typed(f, "Who holds the money?", 2.6, 30)}</div>
           <div>{typed(f, "Who decides who won?", 3.4, 30)}</div>
         </div>
-      </At>
+      </At>}
       <Title at={4.9} size={84} y={700}>Is it fair?</Title>
     </AbsoluteFill>
   );
@@ -90,6 +95,7 @@ const SpeedGap: React.FC = () => {
 
 export const Isolation: React.FC<{ hold?: boolean }> = ({ hold }) => {
   const f = useCurrentFrame();
+  const minimal = useMinimal();
   const tries: [number, number][] = [[0, 2], [1, 3], [4, 1], [3, 0]];
   return (
     <AbsoluteFill style={{ opacity: hold ? 1 : fade(f, 0, undefined, 0.35) }}>
@@ -113,7 +119,7 @@ export const Isolation: React.FC<{ hold?: boolean }> = ({ hold }) => {
       })}
       <At x={RING_C.x} y={RING_C.y} scale={0.9 + 0.1 * prog(f, 0, 0.5)}>
         <div style={{ padding: "26px 44px", borderRadius: 18, background: "var(--surface-2)", border: "1px solid var(--steel)",
-          color: "var(--steel)", fontSize: 36, fontWeight: 600 }}>Market</div>
+          color: "var(--steel)", fontSize: 36, fontWeight: 600 }}>{minimal ? <ICONS.Market size={64} /> : "Market"}</div>
       </At>
       {RING.map((p, i) => (
         <At key={i} x={p.x} y={p.y} opacity={fade(f, 0.1 + i * 0.08)}>
