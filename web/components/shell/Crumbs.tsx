@@ -8,8 +8,7 @@ import { ADV, agentIdOfPath } from "@/lib/mode";
 import { Icon } from "./icons";
 
 const LABEL: Record<string, string> = {
-  agents: "Agents", wallet: "Wallet", activity: "Activity", interactions: "Challenges", firms: "Firms",
-  forum: "Public Forum",
+  dashboard: "Overview", agents: "Agents", wallet: "Wallet", activity: "Activity", forum: "Public Forum",
   collaborations: "Collaborations", approvals: "Approvals", cocaptain: "Co-captain", settings: "Settings",
   new: "New", edit: "Configuration", logic: "Logic", code: "Code", performance: "Performance", logic_: "Logic",
 };
@@ -48,8 +47,8 @@ export function Crumbs({ path }: { path: string }) {
   });
   if (adv && segs[0] === "agents" && segs.length === 3 && segs[2] === "settings") parts[2].label = "Settings";
 
-  const home = adv ? { href: ADV, label: "Terminal" } : { href: "/", label: "Overview" };
-  const all = parts.length ? [home, ...parts] : [home];
+  const home = adv ? { href: ADV, label: "Terminal" } : { href: "/dashboard", label: "Overview" };
+  const all = parts.length && path !== home.href ? [home, ...parts] : [home];
 
   return (
     <nav className="crumb" aria-label="Breadcrumb">

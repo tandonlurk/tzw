@@ -105,3 +105,9 @@ Interfaces between specialists: the REST API in `docs/architecture.md` §9, the 
 - 2026-11-15: Merged qa-web, security-tests, backend-m2 into `recovery` (backend 211, contracts 80, web 15 tests). Simulated challenge lifecycle works. Spawning frontend-m2.
 - 2026-11-15: Merged frontend-m2 (web 21 tests). All worktrees removed. Next actions in `reports/handoffs/2026-11-15-m2-orchestration.md`.
 - 2026-11-16: Lead ran backend-m3 (5 items), web-m3 (5 stages), sandbox-spike (D-11 GO), sandbox-host (crate + custom.code). All merged into `recovery`, all worktrees, target dirs and specialist dbs removed. Submission drafts in `docs/submission/`, root README added.
+
+## 2026-11-20 — owner-requested landing page and submission copy
+- Devpost paragraphs saved separately beside narration: `demo-video/devpost-responses.md`; existing voiceover script preserved.
+- Default `/` now introduces TZW with owner's logo rendered in white ASCII on black, stationary hands and a rotating coin. Get started opens the preserved overview at `/dashboard`; shell links and presentation-mode mapping updated.
+- Frontend tests (168), TypeScript, targeted lint, production build pass; desktop/mobile browser checks verify no overflow, stationary hands/animated coin, reduced-motion support, and direct dashboard rendering. Detail: `tasks/frontend.md`.
+- No sponsor, custody, financial, deployment or API changes. Existing `demo-video/.gitignore` changes belong to other work and are preserved.

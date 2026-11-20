@@ -1,28 +1,28 @@
 # Populated simulated portfolio for recording
 
-`scripts/seed-video-demo.py` builds a synthetic demo scenario through the normal HTTP API. It does not insert ledger rows, performance points, or financial outcomes directly. All balances, challenges, charts, and transaction history remain labeled simulated. The scenario is not investment performance or real network activity.
+`scripts/seed-video-demo.py` builds a synthetic demo scenario through the normal HTTP API. It does not insert ledger rows, performance points, or financial outcomes directly. Balances and transaction history are labeled simulated. The scenario is not investment performance or real network activity.
 
 ## Dataset
 
-- 6,000 simulated USDC total, funded as twelve 500-USDC simulated deposits.
-- 1,500 unallocated; 4,500 distributed across three strategy families.
-- Atlas Momentum: 2 instances total, 750 USDC initial allocation each.
-- Vega Contrarian: 3 instances total, 500 USDC initial allocation each.
-- Lumen Cautious: 5 instances total, 300 USDC initial allocation each.
+- 6,187.43 simulated USDC total, funded through twelve uneven simulated deposits.
+- 1,576.75 unallocated; remaining capital distributed across three strategy families.
+- Atlas Momentum: 3 clones, 4 instances total.
+- Vega Contrarian: 17 clones, 18 instances total.
+- Lumen Cautious: 67 clones, 68 instances total.
 - The multipliers are actual clones with stored family/variance metadata, not leverage. Members of a family cannot challenge each other.
-- Twelve historical batches over the preceding two days generate actual discovery, negotiation, authorization, commitment and settlement against deterministic fake-market observations. The goal is at least 30 settled challenges and a populated two-day P&L chart.
-- A final current-time batch leaves active challenges for the recording. Keep the automatic scheduler paused while seeding; the current review server subsequently runs simulated ticks every 15 seconds.
+- Twelve historical batches over the preceding two days generate actual discovery, negotiation, authorization, commitment and settlement against deterministic fake-market observations, with a populated two-day P&L chart.
+- A final current-time batch leaves active positions for the recording. Keep the automatic scheduler paused while recording and trigger ticks manually.
 
-Three strategies plus their clones appear as ten ordinary agents. They retain their strategy differences: momentum discovery, contrarian incoming-challenge responses, and cautious scheduled discovery with smaller stakes. The single-trigger graph constraint is preserved. All history stakes fit independently enforced automatic permissions.
+The three roots and 87 clones retain their strategy differences: 90 agents total. The single-trigger graph constraint is preserved. All history stakes fit independently enforced permissions.
 
 ## Run on a fresh isolated backend
 
-Keep the owner's existing database unchanged. Create a new database such as `aen_video_demo_20261120`, and start the API on a separate local port using:
+Keep the owner's existing database unchanged. The current isolated recording database is `aen_video_irregular_20261120`; start its API on port 8091 using:
 
 ```sh
-export DATABASE_URL="postgres://$USER@localhost/aen_video_demo_20261120"
+export DATABASE_URL="postgres://$USER@localhost/aen_video_irregular_20261120"
 export MARKET_DATA=fake TICK_INTERVAL_SECS=0 PROPOSAL_COOLDOWN_SECS=0
-export FUNDING_WINDOW_SECS=300 BIND_ADDR=127.0.0.1 PORT=8090
+export FUNDING_WINDOW_SECS=300 BIND_ADDR=127.0.0.1 PORT=8091
 unset AEN_TESTNET_MNEMONIC XAI_API_KEY
 # Start the current backend binary/build with the normal request-guard token.
 ```
@@ -30,7 +30,7 @@ unset AEN_TESTNET_MNEMONIC XAI_API_KEY
 In another shell, load the general API token from the local environment without printing it, then:
 
 ```sh
-export DEMO_API_URL=http://127.0.0.1:8090/api
+export DEMO_API_URL=http://127.0.0.1:8091/api
 python3 scripts/seed-video-demo.py
 ```
 
@@ -42,7 +42,7 @@ Before modifying anything, the script refuses preexisting agents, financial bala
 
 A successful rerun recognizes the scenario marker, validates the wallet/family sizes/history, prints the existing summary, and makes no mutations. A partially completed run is deliberately refused: use another fresh isolated database rather than rerunning financial or clone creation on uncertain state. No reset/delete operation is included.
 
-The summary checks that `unallocated + allocated = 6000 USDC`, gives family sizes, settled/open challenge counts, and transaction counts. Allocations and withdrawals are transfers, not P&L. Aggregate realized P&L remains zero for the closed simulated challenges because the same owner owns both sides and no fees are charged.
+The summary checks that `unallocated + allocated = 6187.43 USDC`, family sizes, settled/open counts, and transaction counts. Clone counts represent strategy copies, not leverage. Allocations and withdrawals are transfers, not P&L.
 
 ## Recording timing
 
@@ -50,10 +50,10 @@ History is seeded using past simulated timestamps and deterministic fake observa
 
 ## Verification
 
-Executed successfully against the isolated backend on 2026-11-20: 6,000 simulated USDC, 1,500 unallocated, 218 committed at capture, 36 settled challenges, three active challenges, 22 wallet entries and 274 agent-ledger entries. Family balances after history: Atlas 1,900; Vega 1,064; Lumen 1,536. These are a synthetic scenario generated by actual simulated lifecycle executions, not investment performance. Aggregate wallet balance remains 6,000.
+Executed successfully against the isolated backend on 2026-11-20: 6,187.43 simulated USDC, 1,576.75 unallocated, 87.747006 committed at capture, 216 settled challenges, 18 open challenges, 102 wallet entries and 1,674 agent-ledger entries. Family sizes are Atlas 4 total, Vega 18 total, Lumen 68 total. These are a synthetic scenario generated by actual simulated lifecycle executions, not investment performance.
 
-The current review web server at `http://127.0.0.1:3000` proxies to backend `http://127.0.0.1:8090/api`, database `aen_video_demo_20261120`. Backend uses `MARKET_DATA=fake`, `TICK_INTERVAL_SECS=15`, `PROPOSAL_COOLDOWN_SECS=600`, and no Arc signer or xAI model key. Activity may continue after the captured counts. The original `aen_dev` records were preserved. The older backend on port 8080 was stopped to avoid confusion.
+The current review web server proxies to backend `http://127.0.0.1:8091/api`, database `aen_video_irregular_20261120`. Keep fake market enabled and automatic ticking paused while recording, then trigger ticks manually. The original `aen_dev` and earlier `aen_video_demo_20261120` datasets were preserved.
 
 The latest running backend binary is `/private/tmp/tzw-forum-target/debug/aen-server` (includes forum migration 0016). Its sandbox module is explicitly set via `AEN_SANDBOX_MODULE` to the repository's `backend/crates/sandbox/guest/runner.wasm`. Restart/build from current sources rather than relying on an older copied binary in `backend/target/debug`.
 
-Six fictional forum threads/replies were seeded through `POST /api/dev/seed-forum`. Verified through the frontend proxy: wallet total, three roots/ten total agents, six demo threads; HTTP 200 for Wallet, My Agents, Public Forum, Challenges and Firms pages. Public Forum is a local persistent prototype, not a hosted multiuser service.
+Six fictional forum threads/replies were seeded through `POST /api/dev/seed-forum`. The irregular portfolio has three roots and 87 clones (90 agents total). Public Forum is a local persistent prototype, not a hosted multiuser service.

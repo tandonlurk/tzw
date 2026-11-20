@@ -46,7 +46,7 @@ export default function WalletPage() {
 
   return (
     <div>
-      <PageHead title="Wallet" sub="Your funds by state. Committed funds are locked in challenges and are not available until they settle." />
+      <PageHead title="Wallet" />
       <Async state={wallet} what="wallet" stale>
         {(w) => {
           const free = (BigInt(w.allocated) - BigInt(w.committed)).toString();
@@ -62,7 +62,7 @@ export default function WalletPage() {
                   <div className="kpi-row">
                     <Kpi label="Available to you" note="unallocated">{formatMoney(w.unallocated)}</Kpi>
                     <Kpi label="Allocated to agents" note="free + committed">{formatMoney(w.allocated)}</Kpi>
-                    <Kpi label="Committed" tone={BigInt(w.committed) > BigInt(0) ? "pend" : undefined} note="locked in challenges">{formatMoney(w.committed)}</Kpi>
+                    <Kpi label="Committed" tone={BigInt(w.committed) > BigInt(0) ? "pend" : undefined}>{formatMoney(w.committed)}</Kpi>
                   </div>
                 </div>
                 <div style={{ marginTop: "var(--s-6)" }}>
@@ -72,13 +72,13 @@ export default function WalletPage() {
                     { key: "c", label: "Committed", value: BigInt(w.committed), tone: "commit", display: formatMoney(w.committed) },
                   ]} />
                 </div>
-                {w.env === "simulated" && <div className="notice dim small" style={{ marginTop: "var(--s-5)" }}>These balances are simulated play money. They are not real funds.</div>}
+                {w.env === "simulated" && <div className="dim xs" style={{ marginTop: "var(--s-3)" }}>Simulated funds</div>}
               </div>
 
               <div className="grid-3" style={{ alignItems: "start" }}>
                 <div className="card">
-                  <div className="card-head"><h3>Add simulated funds</h3></div>
-                  <div className="dim small" style={{ marginBottom: 12 }}>Credits play money to your unallocated balance. No real assets move.</div>
+                  <div className="card-head"><h3>Add funds</h3><span className="badge sim">Simulated</span></div>
+                  <div className="dim small" style={{ marginBottom: 12 }}>Add to your unallocated balance.</div>
                   <ErrorBanner error={error} />
                   <div className="input-affix" style={{ marginBottom: 10 }}>
                     <input value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Amount in USDC" inputMode="decimal" />
@@ -87,7 +87,7 @@ export default function WalletPage() {
                   <div className="row" style={{ gap: 6, marginBottom: 10 }}>
                     {["50", "100", "500"].map((v) => <button key={v} type="button" className={`chip${amount === v ? " on" : ""}`} onClick={() => setAmount(v)}>{v}</button>)}
                   </div>
-                  <button className="primary" style={{ width: "100%" }} onClick={deposit} disabled={busy}>{busy ? "Adding..." : "Add simulated funds"}</button>
+                  <button className="primary" style={{ width: "100%" }} onClick={deposit} disabled={busy}>{busy ? "Adding..." : "Add funds"}</button>
                   {localErr && <div className="field-error">{localErr}</div>}
                   {done && <div className="pos small" style={{ marginTop: 8 }} role="status"><Icon name="check" size={13} /> {done}</div>}
                 </div>

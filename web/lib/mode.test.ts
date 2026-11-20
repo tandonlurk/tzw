@@ -8,25 +8,25 @@ describe("modeOfPath", () => {
     expect(modeOfPath("/advancedx")).toBe(null);
   });
   it("forces basic on basic-only pages", () => {
-    expect(modeOfPath("/")).toBe("basic");
+    expect(modeOfPath("/dashboard")).toBe("basic");
     expect(modeOfPath("/agents")).toBe("basic");
     expect(modeOfPath("/agents/a1/edit")).toBe("basic");
   });
   it("leaves shared pages to the stored preference", () => {
-    for (const p of ["/wallet", "/approvals", "/interactions/x", "/firms", "/forum", "/settings", "/agents/new"]) expect(modeOfPath(p)).toBe(null);
+    for (const p of ["/", "/wallet", "/approvals", "/interactions/x", "/firms", "/forum", "/settings", "/agents/new"]) expect(modeOfPath(p)).toBe(null);
   });
 });
 
 describe("counterpartPath", () => {
   it("maps basic pages to their advanced workspace and keeps the agent", () => {
-    expect(counterpartPath("/", "advanced")).toBe("/advanced");
+    expect(counterpartPath("/dashboard", "advanced")).toBe("/advanced");
     expect(counterpartPath("/agents/a1", "advanced")).toBe("/advanced/agents/a1");
     expect(counterpartPath("/agents/a1/logic", "advanced")).toBe("/advanced/agents/a1/logic");
     expect(counterpartPath("/agents/a1/edit", "advanced")).toBe("/advanced/agents/a1/settings");
     expect(counterpartPath("/activity", "advanced")).toBe("/advanced/activity");
   });
   it("maps advanced pages back", () => {
-    expect(counterpartPath("/advanced", "basic")).toBe("/");
+    expect(counterpartPath("/advanced", "basic")).toBe("/dashboard");
     expect(counterpartPath("/advanced/agents/a1/performance", "basic")).toBe("/agents/a1");
     expect(counterpartPath("/advanced/agents/a1/code", "basic")).toBe("/agents/a1/logic");
     expect(counterpartPath("/advanced/agents/a1/settings", "basic")).toBe("/agents/a1/edit");

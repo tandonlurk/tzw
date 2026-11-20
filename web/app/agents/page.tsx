@@ -31,7 +31,7 @@ export default function AgentsPage() {
 
   return (
     <div>
-      <PageHead title="My Agents" sub="Each agent works for you inside the limits you set. Open one to see what it is doing.">
+      <PageHead title="My Agents">
         <Link className="btn primary" href="/agents/new"><Icon name="plus" size={15} />New agent</Link>
       </PageHead>
       <Async state={agents} what="agents">
@@ -66,7 +66,7 @@ export default function AgentsPage() {
               </div>
               {fams.length > 0 && (
                 <section style={{ marginTop: "var(--s-6)" }} aria-labelledby="families-h">
-                  <div className="card-head"><h3 id="families-h">Families</h3><span className="dim small">Multiplied agents and their clones (simulated funds)</span></div>
+                  <div className="card-head"><h3 id="families-h">Families</h3><span className="badge sim">Simulated</span></div>
                   <div className="stack">
                     {fams.map((f) => <FamilyCard key={f.id} f={f} filter={filter} />)}
                   </div>
@@ -151,7 +151,7 @@ function AgentCard({ a, color, series, last, clones = 0 }: { a: Agent; color: st
       </div>
       <div className="spark">
         <TimeChart compact controls={false} area height={44} ariaLabel={`${a.name} cumulative P&L`} formatValue={(v) => String(v)}
-          lines={series ? [{ id: a.id, name: a.name, color, points: series.points }] : []} emptyText="No settled challenges yet" />
+          lines={series ? [{ id: a.id, name: a.name, color, points: series.points }] : []} emptyText="No settled positions yet" />
       </div>
       <div className="foot">
         <span className="last">{last ? last.summary : "No activity yet"}</span>

@@ -44,3 +44,7 @@ NN-slug[-part][.overlay].ext
 Follow the "Screen-recording shot list" in `animation-plan.md`. It says which database state each
 segment needs and which commands from `docs/demo.md` / `backend/README.md` produce it. Keep the
 sidebar footer ("Simulated and Arc testnet funds only…") and the env badges in frame.
+
+## Intro narration sync
+
+The owner-provided animation audios and their requested visual order are mapped in `intro-audio-sync.md`. The audios remain in `intro animation audios/`; integrate them with the later screen-capture walkthrough after its UI edits are ready. In particular, the lifecycle-map recording carries the escrow narration beginning at 4.5 seconds, while the scale recording starts at audio time 2 seconds. The current intro estimate is about 1:23; end the final video after the screen capture, without scene 14.

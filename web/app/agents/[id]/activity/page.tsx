@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
@@ -8,11 +7,10 @@ import { CATEGORIES, categoryOf, type ActivityCategory } from "@/lib/activityKin
 import { Async, Empty } from "@/components/ui";
 import { useWorkspace } from "@/components/agent/AgentWorkspace";
 import { Feed } from "@/components/activity/Feed";
-import { PastChallenges, VersionHistory } from "@/components/agent/sections";
+import { VersionHistory } from "@/components/agent/sections";
 import { LedgerTable } from "@/components/LedgerTable";
-import { CollabCard } from "@/components/CollabCard";
 
-type View = "events" | "challenges" | "ledger" | "versions";
+type View = "events" | "ledger" | "versions";
 
 export default function AgentActivityPage() {
   const { agent, bump } = useWorkspace();
@@ -20,8 +18,6 @@ export default function AgentActivityPage() {
   const [view, setView] = useState<View>("events");
   const [cat, setCat] = useState<ActivityCategory | "all">("all");
   const activity = useAsync(() => api.listActivity({ agent_id: a.id, limit: 200 }), `activity:${a.id}:200:${bump}`);
-  const interactions = useAsync(() => api.listInteractions({ agent_id: a.id }), `interactions:${a.id}:${bump}`);
-  const collabs = useAsync(() => api.listCollaborations({ agent_id: a.id }), `collabs:${a.id}:${bump}`);
   const ledger = useAsync(() => api.getAgentLedger(a.id), `ledger:${a.id}:${bump}`);
   const names = useMemo(() => new Map([[a.id, a.name]]), [a.id, a.name]);
   const present = useMemo(() => new Set((activity.data ?? []).map((it) => categoryOf(it.kind))), [activity.data]);
@@ -30,11 +26,11 @@ export default function AgentActivityPage() {
     <div>
       <div className="row spread" style={{ marginBottom: "var(--s-5)" }}>
         <div className="seg" role="tablist" aria-label="History view">
-          {([["events", "Events"], ["challenges", "Challenges"], ["ledger", "Transactions"], ["versions", "Versions"]] as [View, string][]).map(([k, l]) => (
+          {([["events", "Events"], ["ledger", "Transactions"], ["versions", "Versions"]] as [View, string][]).map(([k, l]) => (
             <button key={k} type="button" role="tab" aria-selected={view === k} className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>
           ))}
         </div>
-        <button type="button" className="sm ghost" onClick={() => { activity.reload(); interactions.reload(); ledger.reload(); collabs.reload(); }}>Refresh</button>
+        <button type="button" className="sm ghost" onClick={() => { activity.reload(); ledger.reload(); }}>Refresh</button>
       </div>
 
       {view === "events" && (
@@ -52,16 +48,6 @@ export default function AgentActivityPage() {
             }}
           </Async>
         </>
-      )}
-
-      {view === "challenges" && (
-        <div className="stack">
-          <Async state={interactions} what="challenges">{(list) => <PastChallenges list={list} />}</Async>
-          <h2>Collaborations</h2>
-          <Async state={collabs} what="collaborations">
-            {(list) => list.length === 0 ? <Empty>No collaborations yet. <Link href="/collaborations">Propose one</Link>.</Empty> : <div className="stack">{list.map((c) => <CollabCard key={c.id} c={c} />)}</div>}
-          </Async>
-        </div>
       )}
 
       {view === "ledger" && (

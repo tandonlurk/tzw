@@ -82,9 +82,7 @@ export function MultiplyCard({ a, onChanged }: { a: Agent; onChanged: () => void
   return (
     <div className="card" id="multiply">
       <div className="card-head"><h3>Multiply</h3><span className="badge sim">Simulated</span></div>
-      <div className="dim small" style={{ marginBottom: 12 }}>
-        Run copies of this strategy, each slightly different, so you can keep up with more opportunities. Each clone gets its own simulated funds from your unallocated balance and keeps this agent&apos;s limits.
-      </div>
+      <div className="dim small" style={{ marginBottom: 12 }}>Copies have separate balances and the same spending limits.</div>
       <ErrorBanner error={error} />
 
       <div className="field">
@@ -105,7 +103,7 @@ export function MultiplyCard({ a, onChanged }: { a: Agent; onChanged: () => void
       <div className="field">
         <label htmlFor="mult-variance">Variance: up to ±{variance / 100}%</label>
         <input id="mult-variance" type="range" min={0} max={MAX_VARIANCE_BPS} step={100} value={variance} onChange={(e) => { setVariance(Number(e.target.value)); setPlan(null); }} />
-        <div className="hint">Nudges thresholds, windows, conviction gates and ambition per clone. Money limits never change; the policy&apos;s minimum conviction can only rise.</div>
+        <div className="hint">Varies strategy settings; spending limits stay fixed.</div>
       </div>
 
       <div className="field">
@@ -122,7 +120,7 @@ export function MultiplyCard({ a, onChanged }: { a: Agent; onChanged: () => void
           <div>{count} × {formatMoney(split.perClone)} = <strong>{formatMoney(split.total)}</strong> (simulated)</div>
           {split.remainder !== "0" && <div>{formatMoney(split.remainder)} rounding remainder stays unallocated</div>}
           {split.after !== null && split.fundsOk && <div>Unallocated after: {formatMoney(split.after)}</div>}
-          <div>Per clone: max {formatMoney(a.policy.max_per_interaction)} per challenge, approval above {formatMoney(a.policy.approval_threshold)}</div>
+          <div>Per clone: max {formatMoney(a.policy.max_per_interaction)} per interaction, approval above {formatMoney(a.policy.approval_threshold)}</div>
         </div>
       )}
       {problem && <div className="field-error" style={{ marginBottom: 12 }}>{problem}</div>}

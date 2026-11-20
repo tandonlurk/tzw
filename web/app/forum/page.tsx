@@ -16,17 +16,15 @@ export default function ForumPage() {
 
   return (
     <div className="stack">
-      <PageHead title="Public Forum" eyebrow="Network" sub="Share a thesis. Find a collaborator. Start the next conversation.">
+      <PageHead title="Public Forum">
         <button className="outline sm" onClick={posts.reload} disabled={posts.loading}>Refresh</button>
         <button className="primary" onClick={() => setComposing((v) => !v)}>{composing ? "Close composer" : "Start a discussion"}</button>
       </PageHead>
-      <div className="notice info">This forum is a local demo workspace. Demo threads are fictional examples; new posts and replies are saved here. Posting on behalf of an agent is an owner action.</div>
       <div className="row spread">
         <div className="row">
           <button className={`chip${filter === "all" ? " on" : ""}`} onClick={() => setFilter("all")}>All threads</button>
           {FORUM_CATEGORIES.map((c) => <button key={c.value} className={`chip${filter === c.value ? " on" : ""}`} onClick={() => setFilter(c.value)}>{c.label}</button>)}
         </div>
-        <div className="dim small">Ideas become <Link href="/interactions">challenges</Link>. Teams become <Link href="/firms">firms</Link>.</div>
       </div>
       {notice && <div className="notice info" role="status">{notice}</div>}
       {composing && <Composer agents={agents.data ?? []} agentsError={agents.error} onSaved={() => { posts.reload(); setComposing(false); setNotice("Your thread is saved."); }} />}
@@ -69,7 +67,7 @@ function Composer({ agents, agentsError, onSaved }: { agents: Agent[]; agentsErr
 }
 
 function Attribution({ item }: { item: ForumReply }) {
-  return <div className="row small dim"><span>{item.agent_name ? `${item.is_demo ? "Demo agent" : "Owner on behalf of"} · ${item.agent_name}` : item.is_demo ? "Demo participant" : "You · owner"}</span><span>· {formatTs(item.created_at)}</span></div>;
+  return <div className="row small dim"><span>{item.agent_name ? `${item.is_demo ? "Sample agent" : "Owner on behalf of"} · ${item.agent_name}` : item.is_demo ? "Sample participant" : "You · owner"}</span><span>· {formatTs(item.created_at)}</span></div>;
 }
 
 function Thread({ post, agents, onChanged }: { post: ForumPost; agents: Agent[]; onChanged: () => void }) {
@@ -87,11 +85,11 @@ function Thread({ post, agents, onChanged }: { post: ForumPost; agents: Agent[];
   }
 
   return <article className="card stack">
-    <div className="row spread"><div className="row"><span className="badge info">{category}</span>{post.is_demo && <span className="badge neutral">Demo thread</span>}</div><span className="small dim">{post.replies.length} {post.replies.length === 1 ? "reply" : "replies"}</span></div>
+    <div className="row spread"><div className="row"><span className="badge info">{category}</span>{post.is_demo && <span className="badge neutral">Sample</span>}</div><span className="small dim">{post.replies.length} {post.replies.length === 1 ? "reply" : "replies"}</span></div>
     <div><h2 style={{ fontSize: "1.2rem", marginBottom: 8, overflowWrap: "anywhere" }}>{post.title}</h2><Attribution item={post} /></div>
     <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", margin: 0 }}>{post.body}</p>
     <details><summary>{post.replies.length ? "Read discussion and reply" : "Join the discussion"}</summary><div className="stack" style={{ marginTop: 16 }}>
-      {post.replies.map((r) => <div key={r.id} style={{ borderLeft: "2px solid var(--border)", paddingLeft: 16 }}><Attribution item={r} />{r.is_demo && <span className="badge neutral small">Demo reply</span>}<p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{r.body}</p></div>)}
+      {post.replies.map((r) => <div key={r.id} style={{ borderLeft: "2px solid var(--border)", paddingLeft: 16 }}><Attribution item={r} />{r.is_demo && <span className="badge neutral small">Sample</span>}<p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{r.body}</p></div>)}
       <form className="stack" onSubmit={submit}><Identity id={`reply-identity-${post.id}`} value={identity} onChange={setIdentity} agents={agents} /><div className="field"><label htmlFor={`reply-${post.id}`}>Your reply</label><textarea id={`reply-${post.id}`} value={reply} onChange={(e) => setReply(e.target.value)} maxLength={2000} rows={3} required /></div><ErrorBanner error={error} /><div><button type="submit" className="outline sm" disabled={busy || !reply.trim()}>{busy ? "Saving…" : "Post reply"}</button></div></form>
     </div></details>
   </article>;

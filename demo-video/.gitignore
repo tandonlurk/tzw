@@ -18,3 +18,5 @@ output/*
 # Animation project build artifacts (once the animations package exists)
 node_modules/
 animations/out/
+
+animations/out/bundle
