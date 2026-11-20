@@ -5,6 +5,13 @@ import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 import { loadFont as loadInter } from "@remotion/google-fonts/Inter";
 import { loadFont as loadMono } from "@remotion/google-fonts/JetBrainsMono";
 import { fade, prog, snap } from "./anim";
+import { ICONS } from "./icons";
+
+// Minimal mode (the "-min" compositions): no titles, captions or explanatory labels; the voiceover
+// carries the words. Only numbers, shapes, icons and a small funds label stay on screen.
+const MinimalCtx = React.createContext(false);
+export const MinimalProvider = MinimalCtx.Provider;
+export const useMinimal = () => React.useContext(MinimalCtx);
 
 const inter = loadInter("normal", { weights: ["400", "500", "600", "700"], subsets: ["latin"] });
 const mono = loadMono("normal", { weights: ["400", "500", "600"], subsets: ["latin"] });
@@ -23,14 +30,23 @@ export const agentColor = (i: number) => `var(--agent-${i % 8})`;
 
 export type Env = "arc" | "sim";
 
-export const EnvBadge: React.FC<{ env: Env }> = ({ env }) => (
+export const EnvBadge: React.FC<{ env: Env }> = ({ env }) => {
+  // Kept in minimal mode, smaller: funds must never look real (AGENTS.md 3.2).
+  if (useMinimal()) return (
+    <div style={{ position: "absolute", top: 44, right: 52, display: "flex", alignItems: "center", gap: 10, fontSize: 17, color: "var(--text-3)", opacity: 0.8 }}>
+      <span style={{ width: 7, height: 7, borderRadius: 7, background: "var(--yellow)" }} />
+      {env === "arc" ? "testnet" : "simulated"}
+    </div>
+  );
+  return (
   <div style={{ position: "absolute", top: 40, right: 48, display: "flex", alignItems: "center", gap: 12,
     fontSize: 22, color: "var(--text-3)", padding: "10px 18px", border: "1px solid var(--line-strong)",
     borderRadius: 999, background: "var(--bg-2)" }}>
     <span style={{ width: 9, height: 9, borderRadius: 9, background: "var(--yellow)" }} />
     {env === "arc" ? "Arc testnet · no real value" : "Simulated funds"}
   </div>
-);
+  );
+};
 
 export const Tag: React.FC<{ text: string }> = ({ text }) => (
   <div style={{ position: "absolute", top: 40, left: 48, fontSize: 18, letterSpacing: ".1em",
@@ -41,6 +57,7 @@ export const Tag: React.FC<{ text: string }> = ({ text }) => (
 /** Small fixed honesty caption, bottom centre. */
 export const Caption: React.FC<{ text: string; at?: number; bottom?: number }> = ({ text, at = 0, bottom = 44 }) => {
   const f = useCurrentFrame();
+  if (useMinimal()) return null;
   return (
     <div style={{ position: "absolute", bottom, left: 0, right: 0, textAlign: "center", fontSize: 22,
       color: "var(--text-3)", opacity: fade(f, at) }}>{text}</div>
@@ -51,13 +68,14 @@ export const Stage: React.FC<{
   env?: Env; tag?: string; children: React.ReactNode; fadeIn?: boolean;
 }> = ({ env, tag, children, fadeIn = false }) => {
   const f = useCurrentFrame();
+  const minimal = useMinimal();
   return (
     <AbsoluteFill style={{ background: "var(--bg)", fontFamily: SANS, color: "var(--text-2)",
       fontFeatureSettings: '"cv11","ss01","ss03"', fontVariantNumeric: "tabular-nums",
       ["--font-inter" as string]: SANS, ["--font-jbmono" as string]: MONO } as React.CSSProperties}>
       <AbsoluteFill style={{ opacity: fadeIn ? fade(f, 0, undefined, 0.6) : 1 }}>
         {children}
-        {tag && <Tag text={tag} />}
+        {tag && !minimal && <Tag text={tag} />}
         {env && <EnvBadge env={env} />}
       </AbsoluteFill>
     </AbsoluteFill>
@@ -71,6 +89,7 @@ export const Title: React.FC<{ children: React.ReactNode; at: number; out?: numb
   ({ children, at, out, y = 860, size = 52, sub, subAt }) => {
     const f = useCurrentFrame();
     const p = prog(f, at, 0.5);
+    if (useMinimal()) return null;
     return (
       <div style={{ position: "absolute", top: y, left: 120, right: 120, textAlign: "center",
         opacity: fade(f, at, out, 0.45), transform: `translateY(${(1 - p) * 18}px)` }}>
@@ -110,7 +129,10 @@ export const initials = (name: string) => {
 
 export const AgentAvatar: React.FC<{
   name: string; color: number; size?: number; label?: string; sub?: string; ring?: Tone; style?: React.CSSProperties; dim?: boolean;
-}> = ({ name, color, size = 96, label, sub, ring, style, dim }) => (
+}> = ({ name, color, size = 96, label: label0, sub: sub0, ring, style, dim }) => {
+  const minimal = useMinimal();
+  const label = minimal ? undefined : label0, sub = minimal ? undefined : sub0;
+  return (
   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, ...style }}>
     <div style={{ width: size, height: size, borderRadius: size, display: "grid", placeItems: "center",
       background: agentColor(color), color: "var(--on-accent)", fontWeight: 600, fontSize: size * 0.36,
@@ -119,7 +141,8 @@ export const AgentAvatar: React.FC<{
     {label && <div style={{ fontSize: Math.max(20, size * 0.26), color: "var(--text)", fontWeight: 500, whiteSpace: "nowrap" }}>{label}</div>}
     {sub && <div style={{ fontSize: Math.max(17, size * 0.2), color: "var(--text-3)", whiteSpace: "nowrap" }}>{sub}</div>}
   </div>
-);
+  );
+};
 
 export const MoneyChip: React.FC<{ amount: string; tone?: Tone; size?: number; style?: React.CSSProperties; suffix?: string }> =
   ({ amount, tone = "yellow", size = 26, style, suffix }) => (
@@ -143,7 +166,8 @@ export const Card: React.FC<{ children: React.ReactNode; style?: React.CSSProper
       border: `1px solid ${accent ? toneColor(accent) : "var(--line-strong)"}`, padding: 28, ...style }}>{children}</div>
   );
 
-export const Eyebrow: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
+export const Eyebrow: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) =>
+  useMinimal() ? null : (
   <div style={{ fontSize: 17, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", fontWeight: 500, ...style }}>{children}</div>
 );
 
@@ -189,6 +213,23 @@ export const STATIONS = [
 export const LifecycleStrip: React.FC<{ active: number | number[]; at?: number }> = ({ active, at = 0 }) => {
   const f = useCurrentFrame();
   const act = Array.isArray(active) ? active : [active];
+  const minimal = useMinimal();
+  if (minimal) return (
+    <div style={{ position: "absolute", top: 40, left: 0, right: 0, display: "flex", justifyContent: "center", alignItems: "center", gap: 10, opacity: fade(f, at) }}>
+      {STATIONS.map((st, i) => {
+        const on = act.includes(i);
+        const Icon = ICONS[st.name];
+        return (
+          <React.Fragment key={st.name}>
+            {i > 0 && <div style={{ width: 22, height: 2, background: "var(--line-strong)" }} />}
+            <div style={{ width: 46, height: 46, borderRadius: 12, display: "grid", placeItems: "center",
+              color: on ? "var(--on-accent)" : "var(--text-3)", background: on ? "var(--blue)" : "transparent",
+              border: `1px solid ${on ? "var(--blue)" : "var(--line-strong)"}` }}><Icon size={26} /></div>
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
   return (
     <div style={{ position: "absolute", top: 118, left: 0, right: 0, display: "flex", justifyContent: "center",
       alignItems: "center", gap: 14, opacity: fade(f, at) }}>

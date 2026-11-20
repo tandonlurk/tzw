@@ -4,6 +4,7 @@ import "../../../web/app/globals.css";
 import React from "react";
 import { Composition } from "remotion";
 import { FPS, s } from "./lib/anim";
+import { MinimalProvider } from "./lib/ui";
 import { S01ColdOpen } from "./scenes/S01ColdOpen";
 import { S02Problem } from "./scenes/S02Problem";
 import { S03AgentToAgent } from "./scenes/S03AgentToAgent";
@@ -28,10 +29,22 @@ export const SCENES: { id: string; component: React.FC; sec: number }[] = [
   { id: "14-close", component: S14Close, sec: 6 },
 ];
 
+// Every scene also renders as `<id>-min`: same timing, no on-screen words (the voiceover carries them).
+// (Props must be serializable in Remotion, so wrap each scene once instead of passing it as a prop.)
+const MIN = SCENES.map((sc) => {
+  const C = sc.component;
+  const W: React.FC = () => <MinimalProvider value={true}><C /></MinimalProvider>;
+  return W;
+});
+
 export const Root: React.FC = () => (
   <>
-    {SCENES.map((sc) => (
-      <Composition key={sc.id} id={sc.id} component={sc.component} durationInFrames={s(sc.sec)} fps={FPS} width={1920} height={1080} />
+    {SCENES.map((sc, i) => (
+      <React.Fragment key={sc.id}>
+        <Composition id={sc.id} component={sc.component} durationInFrames={s(sc.sec)} fps={FPS} width={1920} height={1080} />
+        <Composition id={`${sc.id}-min`} component={MIN[i]}
+          durationInFrames={s(sc.sec)} fps={FPS} width={1920} height={1080} />
+      </React.Fragment>
     ))}
   </>
 );
