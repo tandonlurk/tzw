@@ -24,9 +24,9 @@ export const S12Firms: React.FC = () => {
   const pour = prog(f, 10.6, 0.9);
   const loss = prog(f, 15.2, 0.5);
   const LockIcon = ICONS.Lock;
-  const scoutEarned = t < 5.6 ? null : t < 11.5 ? "+0.10" : tick(f, 0.1, 0.7, 11.5, 0.5);
-  const analystEarned = t < 5.6 ? null : t < 11.5 ? "+0.10" : tick(f, 0.1, 0.5, 11.5, 0.5);
-  const leadVal = t < 8.4 ? null : t < 12.4 ? "+5.00" : tick(f, 5.0, 3.8, 12.4, 0.6);
+  const scoutEarned = t < 5.6 ? null : t < 11.5 ? "+0.10" : "+" + tick(f, 0.1, 0.7, 11.5, 0.5);
+  const analystEarned = t < 5.6 ? null : t < 11.5 ? "+0.10" : "+" + tick(f, 0.1, 0.5, 11.5, 0.5);
+  const leadVal = t < 8.4 ? null : t < 12.4 ? "+5.00" : "+" + tick(f, 5.0, 3.8, 12.4, 0.6);
   return (
     <Stage env="sim" tag="Replay · simulated firm demo">
       <AbsoluteFill style={{ opacity: 1 - loss * 0.75 }}>
@@ -98,8 +98,8 @@ export const S12Firms: React.FC = () => {
           </div>
         </At>
         {pour > 0 && pour < 1 && <>
-          <At x={lerp(LEAD.x + 210, SCOUT.x + 60, pour)} y={lerp(LEAD.y + 275, SCOUT.y + 40, pour)}><MoneyChip amount="0.60" tone="mint" size={20} /></At>
-          <At x={lerp(LEAD.x + 210, ANALYST.x + 60, pour)} y={lerp(LEAD.y + 275, ANALYST.y + 40, pour)}><MoneyChip amount="0.40" tone="mint" size={20} /></At>
+          <At x={lerp(LEAD.x + 210, SCOUT.x + 170, pour)} y={lerp(LEAD.y + 275, SCOUT.y - 20, pour)}><MoneyChip amount="0.60" tone="mint" size={20} /></At>
+          <At x={lerp(LEAD.x + 210, ANALYST.x + 170, pour)} y={lerp(LEAD.y + 275, ANALYST.y - 20, pour)}><MoneyChip amount="0.40" tone="mint" size={20} /></At>
         </>}
         <At x={LEAD.x} y={LEAD.y + 290} opacity={fade(f, 13.8)}>
           <div style={{ fontFamily: MONO, fontSize: 21, color: "var(--text-3)", textAlign: "center" }}>5.00 − 1.00 pool − 0.20 fees = 3.80</div>
