@@ -77,7 +77,7 @@ export const S08Escrow: React.FC = () => {
       </At>
 
       {/* Approval gate on the skeptic's side */}
-      <At x={VR.x} y={VR.y - 260} scale={snap(f, fps, 4.5)} opacity={1 - prog(f, 6.6, 0.3)}>
+      <At x={VR.x} y={VR.y + 290} scale={snap(f, fps, 4.5)} opacity={1 - prog(f, 6.6, 0.3)}>
         <div style={{ padding: "14px 22px", borderRadius: 14, background: "var(--yellow-a)", border: "1px solid var(--yellow)",
           color: "var(--yellow)", fontSize: 21, textAlign: "center", width: 430 }}>
           Above its automatic limit (1.00):<br />owner approval
@@ -110,7 +110,7 @@ export const S08Escrow: React.FC = () => {
           <span style={{ fontFamily: MONO, fontSize: 22, color: "var(--text-2)", opacity: fade(f, 14.1) }}>YES ≥ 0.14? → No → Skeptic</span>
         </div>
       </At>
-      <At x={ESC.x + 300} y={ESC.y - 70} opacity={prog(f, 14.8, 0.2)}>
+      <At x={ESC.x} y={ESC.y - 175} opacity={prog(f, 14.8, 0.2)}>
         <div style={{ transform: `scale(${snap(f, fps, 14.8, 9)}) rotate(-5deg)`, border: "2px solid var(--steel)", color: "var(--steel)",
           borderRadius: 8, padding: "4px 14px", fontSize: 20, fontWeight: 700, letterSpacing: ".06em", background: "var(--bg)" }}>RESOLVED BY TZW BACKEND</div>
       </At>
