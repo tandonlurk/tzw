@@ -4,12 +4,22 @@ import React from "react";
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 import { fade, lerp, prog, snap, tick } from "../lib/anim";
 import { ICONS } from "../lib/icons";
-import { AgentAvatar, At, Caption, Eyebrow, LifecycleStrip, MONO, MoneyChip, Pill, Stage, Svg, TxChip } from "../lib/ui";
+import { AgentAvatar, At, Caption, Eyebrow, LifecycleStrip, MONO, MoneyChip, Pill, Stage, Svg, TxChip, useMinimal } from "../lib/ui";
 
 const VL = { x: 330, y: 430 }, VR = { x: 1590, y: 430 }, ESC = { x: 960, y: 735 };
 
 const Vault: React.FC<{ name: string; color: number; addr: string; bal: string; delta?: { text: string; tone: "mint" | "rose"; o: number }; drift: number; tx: number }> =
-  ({ name, color, addr, bal, delta, drift, tx }) => (
+  ({ name, color, addr, bal, delta, drift, tx }) => useMinimal() ? (
+    <div style={{ width: 300, borderRadius: 18, background: "var(--surface)", border: "1px solid var(--line-strong)", padding: 26,
+      display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+      <AgentAvatar name={name} color={color} size={84} />
+      <span style={{ fontFamily: MONO, fontSize: 52, fontWeight: 600, color: "var(--yellow)" }}>{bal}</span>
+      <div style={{ height: 36, display: "flex", alignItems: "center", gap: 14 }}>
+        {delta && <span style={{ fontFamily: MONO, fontSize: 30, fontWeight: 600, color: `var(--${delta.tone})`, opacity: delta.o }}>{delta.text}</span>}
+        <span style={{ color: "var(--mint)", opacity: Math.max(tx * (1 - delta!.o), drift) }}><ICONS.Check size={32} /></span>
+      </div>
+    </div>
+  ) : (
     <div style={{ width: 430, borderRadius: 18, background: "var(--surface)", border: "1px solid var(--line-strong)", padding: 26 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
         <AgentAvatar name={name} color={color} size={60} />
@@ -36,6 +46,7 @@ export const S08Escrow: React.FC = () => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const t = f / fps;
+  const minimal = useMinimal();
   const station = t < 6.5 ? 2 : t < 12.5 ? 3 : t < 18.4 ? 4 : 5;
   const stakeIn = prog(f, 6.9, 1.1);
   const payout = prog(f, 16.0, 1.2);
@@ -59,7 +70,17 @@ export const S08Escrow: React.FC = () => {
 
       {/* Term sheet */}
       <At x={960} y={lerp(240, 330, prog(f, 1.8, 0.6))} opacity={fade(f, 1.8)}>
-        <div style={{ width: 600, borderRadius: 18, background: "var(--surface-2)", border: "1px solid var(--blue)", padding: 24 }}>
+        {minimal ? (
+          <div style={{ width: 380, borderRadius: 18, background: "var(--surface-2)", border: "1px solid var(--blue)", padding: 24, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+            <div style={{ display: "flex", gap: 22, alignItems: "center" }}>
+              <span style={{ fontFamily: MONO, fontSize: 42, color: "var(--text)", fontWeight: 600 }}>≥ 0.14</span>
+              <MoneyChip amount="1.25" size={26} />
+            </div>
+            <div style={{ width: "100%", height: 6, borderRadius: 6, background: "var(--bg-2)", overflow: "hidden", opacity: fade(f, 12.4) }}>
+              <div style={{ width: `${clock * 100}%`, height: "100%", background: clock >= 1 ? "var(--text-3)" : "var(--blue)" }} />
+            </div>
+          </div>
+        ) : <div style={{ width: 600, borderRadius: 18, background: "var(--surface-2)", border: "1px solid var(--blue)", padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <Eyebrow>Term sheet</Eyebrow>
             <span style={{ fontSize: 17, color: "var(--blue)", opacity: fade(f, 3.2) }}>negotiated 2.50 → 1.25</span>
@@ -73,18 +94,26 @@ export const S08Escrow: React.FC = () => {
           <div style={{ marginTop: 12, height: 6, borderRadius: 6, background: "var(--bg-2)", overflow: "hidden", opacity: fade(f, 12.4) }}>
             <div style={{ width: `${clock * 100}%`, height: "100%", background: clock >= 1 ? "var(--text-3)" : "var(--blue)" }} />
           </div>
-        </div>
+        </div>}
       </At>
 
       {/* Approval gate on the skeptic's side */}
-      <At x={VR.x} y={VR.y + 290} scale={snap(f, fps, 4.5)} opacity={1 - prog(f, 6.6, 0.3)}>
+      {minimal && <At x={VR.x} y={VR.y + 250} scale={snap(f, fps, 4.5)} opacity={1 - prog(f, 6.6, 0.3)}>
+        <div style={{ width: 120, height: 120, borderRadius: 28, display: "grid", placeItems: "center", position: "relative",
+          background: "var(--yellow-a)", border: "2px solid var(--yellow)", color: "var(--yellow)" }}>
+          <ICONS.Person size={64} />
+          <div style={{ position: "absolute", top: -18, right: -18, width: 46, height: 46, borderRadius: 46, display: "grid", placeItems: "center",
+            background: "var(--bg)", border: "2px solid var(--mint)", color: "var(--mint)", transform: `scale(${snap(f, fps, 5.6, 9)})` }}><ICONS.Check size={26} /></div>
+        </div>
+      </At>}
+      {!minimal && <At x={VR.x} y={VR.y + 290} scale={snap(f, fps, 4.5)} opacity={1 - prog(f, 6.6, 0.3)}>
         <div style={{ padding: "14px 22px", borderRadius: 14, background: "var(--yellow-a)", border: "1px solid var(--yellow)",
           color: "var(--yellow)", fontSize: 21, textAlign: "center", width: 430 }}>
           Above its automatic limit (1.00):<br />owner approval
           <div style={{ marginTop: 8, display: "inline-block", transform: `scale(${snap(f, fps, 5.6, 9)}) rotate(-4deg)`, border: "2px solid var(--mint)",
             color: "var(--mint)", borderRadius: 8, padding: "2px 12px", fontWeight: 700, letterSpacing: ".08em" }}>APPROVED</div>
         </div>
-      </At>
+      </At>}
 
       {/* Escrow */}
       <At x={ESC.x} y={lerp(ESC.y + 60, ESC.y, escIn)} opacity={escIn}>
@@ -92,25 +121,29 @@ export const S08Escrow: React.FC = () => {
           border: `2px solid ${locked ? "var(--yellow)" : payout > 0 ? "var(--mint)" : "var(--line-strong)"}` }}>
           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, color: locked ? "var(--yellow)" : "var(--text-2)" }}>
             <LockIcon size={34} />
+            {!minimal && <>
             <span style={{ fontSize: 26, color: "var(--text)", fontWeight: 500 }}>ChallengeEscrow</span>
             <span style={{ fontFamily: MONO, fontSize: 19, color: "var(--text-3)" }}>0x4179…5698</span>
+            </>}
           </div>
           <div style={{ fontFamily: MONO, fontSize: 34, fontWeight: 600, marginTop: 10,
             color: payout > 0 ? "var(--mint)" : "var(--yellow)" }}>
-            {t < 8 ? "Funding open" : payout > 0.5 ? "Paid out 2.50" : "Locked 2.50"}
+            {minimal ? (t < 8 ? "0.00" : "2.50") : t < 8 ? "Funding open" : payout > 0.5 ? "Paid out 2.50" : "Locked 2.50"}
           </div>
+          {!minimal && <>
           <div style={{ fontSize: 20, color: "var(--text-2)", marginTop: 10, opacity: fade(f, 10, 12.5) }}>Pays one of these two, or refunds both.</div>
           <div style={{ fontSize: 20, color: "var(--text-3)", marginTop: 4, opacity: fade(f, 10.8, 12.5) }}>If no one resolves: anyone can refund after the deadline + 1 h.</div>
+          </>}
         </div>
       </At>
       {/* Resolution: source, formula, who applied it */}
       <At x={ESC.x} y={ESC.y + 150} opacity={fade(f, 13.4)}>
         <div style={{ display: "flex", gap: 18, alignItems: "center" }}>
-          <Pill tone="steel" size={21}>Gemini: event settled NO</Pill>
-          <span style={{ fontFamily: MONO, fontSize: 22, color: "var(--text-2)", opacity: fade(f, 14.1) }}>YES ≥ 0.14? → No → Skeptic</span>
+          <Pill tone="steel" size={minimal ? 30 : 21}>{minimal ? "NO" : "Gemini: event settled NO"}</Pill>
+          {!minimal && <span style={{ fontFamily: MONO, fontSize: 22, color: "var(--text-2)", opacity: fade(f, 14.1) }}>YES ≥ 0.14? → No → Skeptic</span>}
         </div>
       </At>
-      <At x={ESC.x} y={ESC.y - 175} opacity={prog(f, 14.8, 0.2)}>
+      <At x={ESC.x} y={ESC.y - 175} opacity={minimal ? 0 : prog(f, 14.8, 0.2)}>
         <div style={{ transform: `scale(${snap(f, fps, 14.8, 9)}) rotate(-5deg)`, border: "2px solid var(--steel)", color: "var(--steel)",
           borderRadius: 8, padding: "4px 14px", fontSize: 20, fontWeight: 700, letterSpacing: ".06em", background: "var(--bg)" }}>RESOLVED BY TZW BACKEND</div>
       </At>
