@@ -8,7 +8,7 @@ const PF = { filter: "url(#paper)" } as const;
 const Word: React.FC<{ p: Palette; y?: number; size?: number }> = ({ p, y = 650, size = 96 }) => (
   <g>
     <text x={600} y={y} textAnchor="middle" style={{ fontFamily: SERIF, fontWeight: 700, fontSize: size, letterSpacing: "0.22em", fill: p.ink, ...PF }}>TZW</text>
-    <rect x={600 + size * 1.02} y={y - size * 0.26} width={size * 0.16} height={size * 0.16} rx={2} style={{ fill: p.gold, ...PF }} />
+    <rect x={600 + size * 1.08} y={y - size * 0.17} width={size * 0.16} height={size * 0.16} rx={2} style={{ fill: p.gold, ...PF }} />
   </g>
 );
 
@@ -73,7 +73,7 @@ export const CONCEPTS: Concept[] = [
     id: "06-z-spark", name: "Z Spark (roundel)", idea: "The letter Z is the lightning between the fingers, inside a fresco roundel.",
     render: (sq) => (
       <Scene p={FRESCO} square={sq} frame="roundel" gap={130}>
-        <path d="M-26,-34 H26 L-14,14 H22 L-26,40 L-6,4 H-30 Z" style={{ fill: FRESCO.gold, stroke: FRESCO.goldDark, strokeWidth: 2, ...PF }} />
+        <path d="M-30,-38 H30 V-26 L-10,26 H30 V38 H-30 V26 L10,-26 H-30 Z" style={{ fill: FRESCO.gold, stroke: FRESCO.goldDark, strokeWidth: 2, ...PF }} />
       </Scene>
     ),
   },
