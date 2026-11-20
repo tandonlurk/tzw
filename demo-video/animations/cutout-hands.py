@@ -16,8 +16,11 @@ def cut(poly, name, x0, x1):
     col = np.asarray(Image.fromarray((col * 255).astype(np.uint8)).filter(ImageFilter.MedianFilter(5)).filter(ImageFilter.MinFilter(5)).filter(ImageFilter.MaxFilter(5))).astype(float) / 255
     alpha = poly_a * col
     # keep only the arm itself: flood-fill from a seed inside it and drop every other island
-    binm = Image.fromarray(((alpha > 0.15) * 255).astype(np.uint8))
-    ImageDraw.floodfill(binm, SEEDS[name], 128)
+    binm = Image.fromarray(((alpha > 0.15) * 255).astype(np.uint8)).copy()  # copy: arrays come in read-only
+    ys, xs = np.nonzero(np.asarray(binm) == 255)
+    hx, hy = SEEDS[name]
+    i = int(np.argmin((xs - hx) ** 2 + (ys - hy) ** 2))   # snap the hint to the nearest solid pixel
+    ImageDraw.floodfill(binm, (int(xs[i]), int(ys[i])), 128)
     keep = Image.fromarray(((np.asarray(binm) == 128) * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(5))
     alpha = alpha * (np.asarray(keep).astype(float) / 255)
     alpha = np.asarray(Image.fromarray((alpha * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.8)))
