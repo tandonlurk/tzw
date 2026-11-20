@@ -1,5 +1,14 @@
 # Backend / Agent Runtime
 
+## Grok Bot mock adversary (2026-11-20)
+
+- Objective/scope: practice-only external Bot integration; assigned backend specialist in isolated worktree, lead reviewed and integrated as `8c38667` on `integration-1119`. Status: locally implemented and tested; live Bot round pending owner setup.
+- Files: migration `0015_sparring.sql`, `src/sparring.rs`, guard/state/router/startup configuration, `tests/sparring.rs`, shared test wipe list, README and `.env.example`.
+- Completed: immutable agent-version snapshots, append-only rounds, owner-only replies and restricted Bot-only adversary submissions; distinct token fails closed, Host/Origin retained, strict text/URL validation and concurrent 12-round cap. No ledger/configuration/live lifecycle effects.
+- Tests: `cargo check -p aen-server --offline` passed; four PostgreSQL integration tests passed on isolated `aen_sparring_test`; `cargo test -p aen-server --lib --offline` 84 passed, 0 failed, 1 ignored (live Gemini). Format/diff clean. Sandbox initially denied local PostgreSQL and mock HTTP bindings; approved unrestricted reruns passed. Owner demo DB untouched.
+- Decision/assumptions: D-75; single-owner API model retained, Bot source label identifies credential use rather than verified model authorship. No automatic rebuttal, RL training, backtest or strategy activation.
+- Next/blocker: owner must sign into actual Grok Bot, configure public HTTPS endpoint and separate restricted token through secure handoff, then record a real critique. Setup: `docs/setup/grok-bot-sparring.md`; full handoff: `reports/handoffs/2026-11-20-grok-adversary.md`.
+
 - **Objective:** Rust core, API, runtime, integrations.
 - **Scope:** backend/, schemas/. See docs/architecture.md §2-6, §8-9.
 - **Dependencies:** Rust + Postgres installed; crate versions in docs/research/runtime-and-sandbox.md.

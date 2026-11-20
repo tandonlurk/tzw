@@ -28,6 +28,8 @@ Bounds: nonblank trimmed thesis 1–4000 characters, argument 1–6000, optional
 ## General request conventions
 
 Request guard (SEC-02), always on, checked before any handler:
+
+The owner-token rule below describes general API routes. The Bot namespace uses its separate token as specified above; the QuickNode webhook uses its own HMAC authentication.
 - **Host**: only `localhost`, `127.0.0.1`, `[::1]` (any port) plus `ALLOWED_HOSTS` are served; anything else is **403** `host_not_allowed` (DNS rebinding). A request without a Host header (not a browser) passes.
 - **Origin**: a request carrying an `Origin` other than `CORS_ORIGIN` (default `http://localhost:3000`) is **403** `origin_not_allowed`, whatever the method (CSRF). No `Origin` (curl, server-side code) passes.
 - **Token**: when `AEN_API_TOKEN` is set, every request except `GET /health` and `OPTIONS` needs `Authorization: Bearer <token>`, else **401** `unauthorized` (`WWW-Authenticate: Bearer`). The server refuses to start on a non-loopback `BIND_ADDR` without a token. The default local setup (no token, loopback, web app on `localhost:3000`) is unchanged. With a token, the web app calls the backend through its own same-origin proxy (`NEXT_PUBLIC_API_URL=/backend`, server-only `AEN_API_TOKEN`; `web/README.md`, D-70), so the token never reaches the browser.

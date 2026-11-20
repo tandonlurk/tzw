@@ -1,5 +1,15 @@
 # Frontend / UI
 
+## Grok Bot adversarial practice (2026-11-20)
+
+- Objective/scope: persistent mock-adversary practice UI against the agreed backend contract; assigned frontend specialist, integrated by lead on `integration-1119` as `84a5058`.
+- Status: implementation complete; live Bot submission pending owner setup. Depends on D-75 backend endpoints and restricted credential.
+- Files: Basic/Advanced agent Sparring routes, `components/agent/SparringWorkspace.tsx`, workspace tabs, `lib/sparring.ts` and tests, API client, mode mapping.
+- Completed: create/list sessions, frozen strategy/version display, critique/source links, owner replies/revisions, safe prompt copy and 10-second visible-page refresh. Drafts survive reloads/errors; per-agent state is isolated. No live configuration or financial edits.
+- Validation: 168 web tests passed, TypeScript passed, targeted lint clean, production webpack build passed. Read-only integration/security review found and verified fix for polling that erased drafts; no unresolved high/medium findings.
+- Assumptions/limits: source records identify the submission connection, not verified model identity; evidence claims remain unverified. No canned Bot replies, RL training, backtests, automatic rebuttal or activation.
+- Next: configure Grok Bot access/tunnel/restricted token and record a real critique. Setup: `docs/setup/grok-bot-sparring.md`. Another agent owns `demo-video/`; none of its files were edited.
+
 - **Objective:** Next.js app: dashboard, agents, creation, builder, wallet, activity.
 - **Scope:** web/ only. No financial logic. Palette in AGENTS.md 4.4 as CSS variables.
 - **Dependencies:** `docs/api.md` (v0).

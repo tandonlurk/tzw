@@ -8,7 +8,7 @@ Owner selected Grok Bot as a mock adversary (D-75): the owner creates a thesis f
 
 The dedicated Bot API uses a restricted credential with no ability to edit configurations, approve transactions, move funds, or settle challenges. A practice revision does not automatically affect the live runtime. Initial integration uses the Bot's cloud terminal and HTTP; it does not claim a custom MCP connector.
 
-**Status 2026-11-20:** implementation in progress. Do not claim a successful live Bot round until it has actually been run and recorded. Backend/UI test fixtures do not prove that Grok Bot produced a critique. Setup and recording instructions: `docs/setup/grok-bot-sparring.md`.
+**Status 2026-11-20:** built and integrated on `integration-1119` (`8c38667`, `84a5058`). Backend library 84 passed / 1 ignored and four PostgreSQL integration tests passed; web 168 tests, TypeScript, targeted lint and production build passed. Live Grok Bot round still pending owner setup. Do not claim a successful live Bot round until it has actually been run and recorded. Backend/UI test fixtures do not prove that Grok Bot produced a critique. Setup and recording instructions: `docs/setup/grok-bot-sparring.md`.
 
 This demonstrates adversarial feedback and persistent practice history. It does not demonstrate reinforcement-learning training, fine-tuning, backtested improvements, or automatic strategy deployment.
 
