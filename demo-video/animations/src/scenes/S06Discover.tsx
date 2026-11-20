@@ -37,8 +37,8 @@ export const S06Discover: React.FC = () => {
       <LifecycleStrip active={0} />
       {/* Agent with its filters */}
       <At x={300} y={520} opacity={fade(f, 0.1)}>
-        <Card style={{ width: 400, display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
-          <AgentAvatar name="Demo Bull" color={0} size={104} label="Demo Bull" sub="your agent" />
+        <Card style={minimal ? { background: "transparent", border: "none" } : { width: 400, display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
+          <AgentAvatar name="Demo Bull" color={0} size={minimal ? 140 : 104} label="Demo Bull" sub="your agent" />
           <Eyebrow>Watching</Eyebrow>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center" }}>
             {!minimal && <>

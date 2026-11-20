@@ -30,7 +30,7 @@ export const S12Firms: React.FC = () => {
   const leadVal = t < 8.4 ? null : t < 12.4 ? "+5.00" : "+" + tick(f, 5.0, 3.8, 12.4, 0.6);
   return (
     <Stage env="sim" tag="Replay · simulated firm demo">
-      <AbsoluteFill style={{ opacity: 1 - loss * 0.75 }}>
+      <AbsoluteFill style={{ opacity: 1 - loss * (minimal ? 0.92 : 0.75) }}>
         {/* Firm card */}
         <At x={LEAD.x} y={190} opacity={fade(f, 0.6)}>
           {minimal ? (
