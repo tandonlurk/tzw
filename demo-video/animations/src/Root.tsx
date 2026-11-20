@@ -5,10 +5,14 @@ import React from "react";
 import { Composition } from "remotion";
 import { FPS, s } from "./lib/anim";
 import { S01ColdOpen } from "./scenes/S01ColdOpen";
+import { S02Problem } from "./scenes/S02Problem";
+import { S03AgentToAgent } from "./scenes/S03AgentToAgent";
 import { S14Close } from "./scenes/S14Close";
 
 export const SCENES: { id: string; component: React.FC; sec: number }[] = [
   { id: "01-cold-open", component: S01ColdOpen, sec: 4 },
+  { id: "02-problem", component: S02Problem, sec: 21 },
+  { id: "03-agent-to-agent", component: S03AgentToAgent, sec: 10 },
   { id: "14-close", component: S14Close, sec: 6 },
 ];
 
