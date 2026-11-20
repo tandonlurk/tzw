@@ -26,6 +26,8 @@ import type {
   Template,
   TestRun,
   Wallet,
+  MultiplyInput,
+  MultiplyReport,
   ChainConfig,
   VaultView,
   VaultSyncResult,
@@ -119,6 +121,7 @@ export const api = {
   getAgentLedger: (id: string) => get<LedgerEntry[]>(`/agents/${encodeURIComponent(id)}/ledger`),
   allocate: (id: string, amount: Money) => post<Agent>(`/agents/${encodeURIComponent(id)}/allocate`, { amount }),
   deallocate: (id: string, amount: Money) => post<Agent>(`/agents/${encodeURIComponent(id)}/deallocate`, { amount }),
+  multiplyAgent: (id: string, input: MultiplyInput) => post<MultiplyReport>(`/agents/${encodeURIComponent(id)}/multiply`, input),
 
   listTemplates: () => get<Template[]>("/templates"),
   listBlocks: () => get<BlockDef[]>("/graph/blocks"),

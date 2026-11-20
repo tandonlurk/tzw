@@ -106,6 +106,7 @@ function Header({ a, color, advanced, compact, onChanged }: { a: Agent; color: s
       <EnvBadge env={a.env} />
       <span className="dim">Version {a.version}</span>
       {usesCustomCode(a.graph) && <span className="badge info plain" title="This agent's logic contains a custom code block.">Custom code</span>}
+      {a.clone && <span className="badge info plain" title={`Clone #${a.clone.index}, seed ${a.clone.seed}, up to ±${a.clone.variance_bps / 100}% variance`}>Clone #{a.clone.index}</span>}
     </>
   );
   const pause = (
@@ -150,6 +151,7 @@ function Header({ a, color, advanced, compact, onChanged }: { a: Agent; color: s
           </div>
         </div>
         <div className="row">
+          {a.env === "simulated" && <Link className="btn outline" href={`/agents/${a.id}#multiply`} title="Run several slightly different copies of this agent"><Icon name="plus" size={15} />Multiply</Link>}
           {pause}
           <Link className="btn ghost" href={`${ADV}/agents/${a.id}`} title="Open this agent in the Advanced workspace"><Icon name="advanced-mode" size={15} />Advanced</Link>
         </div>

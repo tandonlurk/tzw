@@ -12,6 +12,7 @@ import { Async, Avatar, EnvBadge, PageHead } from "@/components/ui";
 import { TimeChart } from "@/components/charts/TimeChart";
 import { Icon } from "@/components/shell/icons";
 import { timeOf } from "@/components/activity/Feed";
+import { families, type Family } from "@/lib/multiply";
 
 type Filter = "all" | "active" | "paused";
 
@@ -36,7 +37,10 @@ export default function AgentsPage() {
       <Async state={agents} what="agents">
         {(list) => {
           const styles = agentStyles(list.map((a) => a.id));
-          const shown = list.filter((a) => filter === "all" || a.status === filter);
+          const fams = families(list);
+          const cloneCount = new Map(fams.map((f) => [f.id, f.clones.length]));
+          // Clones are listed under their family, not as cards (a 100x family would bury everything else).
+          const shown = list.filter((a) => !a.clone && (filter === "all" || a.status === filter));
           return (
             <>
               {list.length > 0 && (
@@ -52,7 +56,7 @@ export default function AgentsPage() {
               )}
               <div className="agent-grid">
                 {shown.map((a) => (
-                  <AgentCard key={a.id} a={a} color={styles.get(a.id)!.color} series={series.get(a.id)} last={latest.get(a.id)} />
+                  <AgentCard key={a.id} a={a} color={styles.get(a.id)!.color} series={series.get(a.id)} last={latest.get(a.id)} clones={cloneCount.get(a.id) ?? 0} />
                 ))}
                 <Link href="/agents/new" className="agent-card new">
                   <span className="plus"><Icon name="plus" size={20} /></span>
@@ -60,6 +64,14 @@ export default function AgentsPage() {
                   <span className="small" style={{ textAlign: "center", maxWidth: 220 }}>Start from a template, set its limits, and let it look for opportunities.</span>
                 </Link>
               </div>
+              {fams.length > 0 && (
+                <section style={{ marginTop: "var(--s-6)" }} aria-labelledby="families-h">
+                  <div className="card-head"><h3 id="families-h">Families</h3><span className="dim small">Multiplied agents and their clones (simulated funds)</span></div>
+                  <div className="stack">
+                    {fams.map((f) => <FamilyCard key={f.id} f={f} filter={filter} />)}
+                  </div>
+                </section>
+              )}
             </>
           );
         }}
@@ -68,7 +80,55 @@ export default function AgentsPage() {
   );
 }
 
-function AgentCard({ a, color, series, last }: { a: Agent; color: string; series?: Series; last?: ActivityItem }) {
+function FamilyCard({ f, filter }: { f: Family; filter: Filter }) {
+  const [open, setOpen] = useState(false);
+  const pnl = signOf(f.realizedPnl);
+  const clones = f.clones.filter((a) => filter === "all" || a.status === filter);
+  const name = f.root ? shortName(f.root.name) : "Family";
+  return (
+    <div className="card">
+      <div className="row spread">
+        <div className="row" style={{ gap: 10 }}>
+          <strong>{name}</strong>
+          <span className="badge info plain">{f.clones.length} {f.clones.length === 1 ? "clone" : "clones"}</span>
+          <span className="badge sim">Simulated</span>
+        </div>
+        <div className="row" style={{ gap: "var(--s-6)" }}>
+          <div className="kpi"><div className="kpi-label">Family P&amp;L</div><div className={`kpi-value ${pnl > 0 ? "pos" : pnl < 0 ? "neg" : ""}`} style={{ fontSize: "1rem" }}>{formatMoney(f.realizedPnl, { signed: true, unit: false })}</div></div>
+          <div className="kpi"><div className="kpi-label">Available</div><div className="kpi-value" style={{ fontSize: "1rem" }}>{formatMoney(f.available, { unit: false })}</div></div>
+          <div className="kpi"><div className="kpi-label">Committed</div><div className={`kpi-value${BigInt(f.committed) > BigInt(0) ? " pend" : ""}`} style={{ fontSize: "1rem" }}>{formatMoney(f.committed, { unit: false })}</div></div>
+          <div className="kpi"><div className="kpi-label">Record</div><div className="kpi-value" style={{ fontSize: "1rem" }}>{f.wins}W / {f.settled - f.wins}L</div></div>
+          <button type="button" className="sm outline" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide clones" : "Show clones"}</button>
+        </div>
+      </div>
+      {open && (
+        <div className="table-wrap" style={{ marginTop: "var(--s-3)" }}>
+          <table className="dense">
+            <thead><tr><th>Clone</th><th>Status</th><th className="num">Available</th><th className="num">Committed</th><th className="num">P&amp;L</th><th>Record</th></tr></thead>
+            <tbody>
+              {clones.map((a) => {
+                const s = signOf(a.stats.realized_pnl);
+                return (
+                  <tr key={a.id}>
+                    <td><Link href={`/agents/${a.id}`}>{shortName(a.name)}</Link></td>
+                    <td><span className={`status-dot ${a.status}`} title={a.status} /> {a.status}</td>
+                    <td className="num">{formatMoney(a.balances.available, { unit: false })}</td>
+                    <td className="num">{formatMoney(a.balances.committed, { unit: false })}</td>
+                    <td className={`num ${s > 0 ? "pos" : s < 0 ? "neg" : ""}`}>{formatMoney(a.stats.realized_pnl, { signed: true, unit: false })}</td>
+                    <td>{a.stats.wins}W / {a.stats.settled - a.stats.wins}L</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {clones.length === 0 && <div className="dim small" style={{ padding: 8 }}>No clones match this filter.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgentCard({ a, color, series, last, clones = 0 }: { a: Agent; color: string; series?: Series; last?: ActivityItem; clones?: number }) {
   const s = signOf(a.stats.realized_pnl);
   return (
     <Link href={`/agents/${a.id}`} className="agent-card">
@@ -79,7 +139,7 @@ function AgentCard({ a, color, series, last }: { a: Agent; color: string; series
             <span className="name">{shortName(a.name)}</span>
             <span className={`status-dot ${a.status}`} title={a.status} />
           </div>
-          <div className="row" style={{ gap: 6, marginTop: 4 }}><EnvBadge env={a.env} /><span className="dim xs">v{a.version}</span></div>
+          <div className="row" style={{ gap: 6, marginTop: 4 }}><EnvBadge env={a.env} /><span className="dim xs">v{a.version}</span>{clones > 0 && <span className="badge info plain" title="This agent was multiplied; see Families below">+{clones} clones</span>}</div>
         </div>
         <Icon name="arrow-up-right" size={16} className="dim" />
       </div>

@@ -22,6 +22,7 @@ pub mod market;
 pub mod markets;
 pub mod misc;
 pub mod models;
+pub mod multiply;
 pub mod quicknode;
 pub mod reasoner;
 pub mod state;
@@ -57,6 +58,7 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
         .route("/agents/{id}/ledger", get(agents::ledger_entries))
         .route("/agents/{id}/allocate", post(agents::allocate))
         .route("/agents/{id}/deallocate", post(agents::deallocate))
+        .route("/agents/{id}/multiply", post(multiply::multiply))
         .route("/agents/{id}/code/test-run", post(custom_code::test_run))
         .route("/templates", get(misc::templates))
         .route("/graph/blocks", get(misc::blocks))

@@ -194,6 +194,34 @@ accepts the lead's stake instead of countering lower, and it asks its owner
 above 1.00 USDC (hence the approval). Simulated funds only: nothing here is a
 real or testnet asset, and the resolution is backend-administered.
 
+### Multiplier demo (offline, simulated funds)
+
+Multiply both demo agents 10x (D-73) and run one round. Fresh database, same
+server flags and `post` helper as the demo script above.
+
+```sh
+BULL=00000000-0000-4000-8000-0000000000d1; SKEPTIC=00000000-0000-4000-8000-0000000000d2
+post /dev/seed-demo '{}'
+post /wallet/simulated-deposit '{"amount":"300000000"}'      # 300 simulated USDC unallocated
+post /agents/$BULL/multiply '{"count":10,"variance_bps":1000,"budget":"100000000","dry_run":true}' | jq -c '{seed, per_clone, total, funds_ok}'
+post /agents/$BULL/multiply '{"count":10,"variance_bps":1000,"budget":"100000000","seed":4242}' | jq -c '{per_clone, total}'   # 10.00 each, 100.00
+post /agents/$SKEPTIC/multiply '{"count":10,"variance_bps":1000,"budget":"100000000","seed":99}' | jq -c '{per_clone, total}'
+post /dev/fake-market '{"move_bps":300,"yes_price_bps":5500,"resolution_side":"open"}'
+post /dev/tick '{}' | jq -c '{proposed, countered, accepted, approvals_requested}'   # {"proposed":10,"countered":9,"accepted":1,"approvals_requested":1}
+post /dev/tick '{}' | jq -c '{accepted, approvals_requested}'                         # {"accepted":5,"approvals_requested":5}
+for id in $(curl -sS $API/approvals | jq -r '.[].id'); do post /approvals/$id/approve '{}' >/dev/null; done   # 6 active
+post /dev/fake-market '{"yes_price_bps":7000}'
+END=$(curl -sS "$API/interactions?state=active" | jq -r '[.[].end_at] | max | fromdateiso8601 + 5 | todateiso8601')
+post /dev/tick "{\"now\":\"$END\"}" | jq -c '{settled}'                              # {"settled":6}
+curl -sS $API/wallet | jq -c '{unallocated, allocated}'                              # 100 / 400 USDC: nothing created
+```
+
+Every challenge pairs a bull-family agent with a skeptic-family agent
+(siblings never challenge each other). Bull family +17.50, skeptic family
+-17.50, portfolio net 0. Four bull clones whose varied conviction floor rose
+above the skeptic's counter reject it: that is the variance at work. The same
+resolve tick also lets bulls whose cooldown has passed propose again.
+
 ## Co-captain suggestions
 
 `server::cocaptain` (`CoCaptain` trait, the six deterministic rules and their

@@ -10,6 +10,8 @@ import { Async, Kpi } from "@/components/ui";
 import { useWorkspace } from "@/components/agent/AgentWorkspace";
 import { FundingCard, LinkToLogic, OpenChallenges, RecentDecisions, RiskCard, SavedNotice } from "@/components/agent/sections";
 import { ApproachCard } from "@/components/approach/ApproachCard";
+import { MultiplyCard } from "@/components/agent/MultiplyCard";
+import { FamilyNote } from "@/components/agent/FamilyNote";
 import { VaultPanel } from "@/components/wallet/VaultPanel";
 
 export default function AgentOverviewPage() {
@@ -48,6 +50,8 @@ export default function AgentOverviewPage() {
         <div className="stack" style={{ minWidth: 0 }}>
           <RiskCard a={a} />
           <FundingCard a={a} onChanged={refresh} />
+          {a.status === "active" ? <MultiplyCard a={a} onChanged={refresh} /> : <div className="card" id="multiply"><div className="card-head"><h3>Multiply</h3></div><div className="dim small">Resume this agent to multiply it.</div></div>}
+          <FamilyNote a={a} />
           <LinkToLogic a={a} href={`/agents/${a.id}/logic`} />
         </div>
       </div>
