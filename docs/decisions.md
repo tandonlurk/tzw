@@ -2,6 +2,12 @@
 
 Format: ID, date, status (`proposed` = awaiting owner, `default` = proceeding on testnet per AGENTS.md 7.6, owner may overturn, `accepted`), decision, why.
 
+## Grok Bot mock adversary (2026-11-20)
+
+| ID | Date | Status | Decision | Why |
+|---|---|---|---|---|
+| D-75 | 2026-11-20 | owner direction; implementation default | Use the separate Grok Bot product as a mock adversary in persistent, agent-version-linked practice sessions. The Bot reads a sanitized brief and appends critiques using a separate restricted credential; the owner records replies and proposed revisions. These endpoints have no financial or configuration effects. Practice is independent of the live negotiation scheduler. Existing Grok model-API reasoning remains optional and separate. No RL training, backtesting, automatic agent rebuttal, or performance improvement is claimed. | Owner chose mock adversary over the advisory summary and strategy-coach alternatives. An isolated practice workflow is reversible, demonstrates real Bot work, and keeps market research and argumentative feedback separate from settlement authority. Setup and official sources: `docs/setup/grok-bot-sparring.md`. |
+
 | ID | Date | Status | Decision | Why |
 |---|---|---|---|---|
 | D-1 | 2026-11-14 | accepted (kickoff) | Rust backend (Axum, Tokio, SQLx, Alloy), Next.js frontend, Solidity + Foundry, PostgreSQL | Mandated by the kickoff prompt; supersedes the TypeScript-backend suggestion in AGENTS.md 3.4 |

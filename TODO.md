@@ -116,6 +116,7 @@ Handoff: `reports/handoffs/2026-11-19-evening.md`.
 
 ## M6 — Co-captain, voice, demo (Wed Nov 18)
 
+- [~] Grok Bot mock adversary (owner choice 2026-11-20, D-75): persistent practice sessions, restricted Bot API, owner replies/revisions and Sparring UI. Separate from optional `XAI_API_KEY` reasoning; no funds or config changes. Backend + UI implementation in parallel; live Grok Bot round still requires owner sign-in and restricted credential setup (`docs/setup/grok-bot-sparring.md`).
 - [x] Co-captain text suggestions: backend (6 rules, list/generate/accept/dismiss, D-36/D-37) and "Co-captain" page (accept, dismiss, loosens-control warning); 254 backend + 30 web tests. Grok variant mock-tested only; suggestions with a proposed change were browser-tested from inserted rows, not rule-generated ones (backend/frontend, P2)
 - [ ] ElevenLabs voice for co-captain (P3, last)
 - [x] Demo script, seeded demo agents, README run instructions, AGENTS.md 9.4 filled in: simulated run hand-verified; testnet video script (setup, 15-shot list, fallbacks) rehearsed live on Arc 2026-11-18, bull +1.25 / skeptic -1.25, drift 0 (`docs/demo.md` "Testnet video script") (lead, P0)

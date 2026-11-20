@@ -10,6 +10,13 @@ Lead-owned. `TODO.md` is the user-facing list; this file holds status detail, ri
 4. After each meaningful unit of work: update the task file, tick `TODO.md` (edit lines, never rewrite the file), commit on the specialist branch.
 5. Before stopping: write `reports/handoffs/YYYY-MM-DD-<topic>.md` with exact next actions.
 
+## Active work (2026-11-20) — Grok Bot mock adversary
+
+- Owner confirms PR #10 merged; another agent owns `demo-video/` and is actively committing there. Do not edit its files or switch this shared checkout away from `integration-1119`.
+- Owner selected Grok Bot mock adversary (D-75). Lead owns setup/API docs, decisions, tracker and integration. Backend specialist owns backend in isolated worktree; UI specialist owns web in isolated worktree. API contract: owner `/agents/{id}/sparring`, `/sparring/{id}`, `/sparring/{id}/rounds`; restricted Bot `/bot/sparring/{id}` and `/bot/sparring/{id}/rounds`.
+- Practice session and rounds only: no financial effects, no automatic configuration changes, no live negotiation gate. Bot uses a separate token; live Bot use remains unverified until owner signs in and runs a real critique.
+- Remaining: implement and test, review credential isolation and UI, merge specialist commits, record actual live-verification limits. Setup: `docs/setup/grok-bot-sparring.md`.
+
 Token discipline: read sections, not whole files; delegate web research and bulk implementation to subagents (cheaper model for routine work) with reports capped at ~200 words; keep facts in `docs/`, not in conversation.
 
 ## Status (2026-11-17, Tue evening) — current

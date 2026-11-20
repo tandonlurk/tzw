@@ -10,7 +10,7 @@ Every file states what is real, what is simulated, what is unverified and what i
 | `arc.md` | Best use of Arc | Escrow, vault factory and vaults deployed and verified on Arc testnet; three live lifecycle runs through the server, drift 0 each time (tx links in the file); owner browser-wallet path not yet exercised with a real signature |
 | `gemini.md` | Gemini Prediction Markets | Built on the public PM read API; one full challenge discovered and resolved on live Gemini PM data (2026-11-17/18). The PM API answered HTTP 500 from about 05:44 to at least 06:32 UTC on 2026-11-18, so the newer bid/ask-mid pricing is not verified live |
 | `quicknode.md` | QuickNode Streams | Webhook ingestion built and tested locally; no stream configured (no QuickNode key), nothing exposed, payload shape unverified |
-| `grok.md` | Grok Bot | Wired, mock-tested only; not called against the live API (no `XAI_API_KEY` as of 2026-11-18) |
+| `grok.md` | Grok Bot | Mock-adversary practice integration in progress (2026-11-20); real Grok Bot round pending. Existing model-API reasoner remains separately mock-tested only |
 | `elevenlabs.md` | ElevenLabs | Not built (no key) |
 
 Last refreshed 2026-11-18 01:35 EST (overnight item 7) against `TODO.md`, `docs/demo.md` and `reports/handoffs/2026-11-18-*`.
