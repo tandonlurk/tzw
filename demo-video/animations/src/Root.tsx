@@ -9,6 +9,7 @@ import { S02Problem } from "./scenes/S02Problem";
 import { S03AgentToAgent } from "./scenes/S03AgentToAgent";
 import { S05LifecycleMap } from "./scenes/S05LifecycleMap";
 import { S06Discover } from "./scenes/S06Discover";
+import { S07NegotiateGuard } from "./scenes/S07NegotiateGuard";
 import { S14Close } from "./scenes/S14Close";
 
 export const SCENES: { id: string; component: React.FC; sec: number }[] = [
@@ -17,6 +18,7 @@ export const SCENES: { id: string; component: React.FC; sec: number }[] = [
   { id: "03-agent-to-agent", component: S03AgentToAgent, sec: 10 },
   { id: "05-lifecycle-map", component: S05LifecycleMap, sec: 8 },
   { id: "06-discover", component: S06Discover, sec: 10 },
+  { id: "07-negotiate-guard", component: S07NegotiateGuard, sec: 14 },
   { id: "14-close", component: S14Close, sec: 6 },
 ];
 
