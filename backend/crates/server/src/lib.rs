@@ -10,6 +10,7 @@ pub mod demo_firm;
 pub mod error;
 pub mod extract;
 pub mod firms;
+pub mod forum;
 pub mod graph_exec;
 pub mod grok;
 pub mod grok_cocaptain;
@@ -25,6 +26,7 @@ pub mod models;
 pub mod multiply;
 pub mod quicknode;
 pub mod reasoner;
+pub mod sparring;
 pub mod state;
 pub mod streams;
 pub mod suggestions;
@@ -61,12 +63,23 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
         .route("/agents/{id}/deallocate", post(agents::deallocate))
         .route("/agents/{id}/multiply", post(multiply::multiply))
         .route("/agents/{id}/code/test-run", post(custom_code::test_run))
+        .route(
+            "/agents/{id}/sparring",
+            get(sparring::list).post(sparring::create),
+        )
+        .route("/sparring/{id}", get(sparring::get))
+        .route("/sparring/{id}/rounds", post(sparring::owner_round))
+        .route("/bot/sparring/{id}", get(sparring::get))
+        .route("/bot/sparring/{id}/rounds", post(sparring::bot_round))
         .route("/templates", get(misc::templates))
         .route("/graph/blocks", get(misc::blocks))
         .route("/graph/validate", post(misc::validate_graph))
         .route("/wallet", get(misc::wallet))
         .route("/wallet/simulated-deposit", post(misc::simulated_deposit))
         .route("/activity", get(misc::activity))
+        .route("/forum/posts", get(forum::list).post(forum::create))
+        .route("/forum/posts/{id}", get(forum::get))
+        .route("/forum/posts/{id}/replies", post(forum::reply))
         .route("/interactions", get(interactions::list))
         .route("/interactions/{id}", get(interactions::get))
         .route("/approvals", get(interactions::approvals))
@@ -113,7 +126,8 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
             .route("/dev/tick", post(interactions::dev_tick))
             .route("/dev/fake-market", post(interactions::dev_fake_market))
             .route("/dev/seed-demo", post(demo::seed_demo))
-            .route("/dev/seed-firm-demo", post(demo_firm::seed_firm_demo));
+            .route("/dev/seed-firm-demo", post(demo_firm::seed_firm_demo))
+            .route("/dev/seed-forum", post(forum::seed));
         // Signs with the test-owner key: only when explicitly enabled.
         if state.chain.as_ref().is_some_and(|c| c.dev_owner.is_some()) {
             api = api.route(
@@ -125,6 +139,7 @@ pub fn app_with_state(state: AppState, cors_origin: HeaderValue) -> Router {
 
     let guard = guard::Guard {
         config: state.settings.guard.clone(),
+        sparring_bot_token: state.settings.sparring_bot_token.clone(),
         origin: cors_origin.clone(),
     };
     Router::new()

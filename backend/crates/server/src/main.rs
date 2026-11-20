@@ -64,6 +64,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
             ..GuardConfig::default()
         }
         .with_extra_hosts(&env::var("ALLOWED_HOSTS").unwrap_or_default()),
+        sparring_bot_token: match env::var("SPARRING_BOT_TOKEN") {
+            Ok(t) if !t.trim().is_empty() => Some(ApiToken::new(&t).ok_or_else(|| {
+                format!("SPARRING_BOT_TOKEN must be at least {MIN_TOKEN_LEN} characters")
+            })?),
+            _ => None,
+        },
         // Local ingestion only: mounted when the stream's secret is set.
         quicknode: match env::var("QUICKNODE_STREAMS_SECRET")
             .ok()
@@ -90,6 +96,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
             None => None,
         },
     };
+    if settings.sparring_bot_token.is_some()
+        && settings.sparring_bot_token == settings.guard.api_token
+    {
+        return Err("SPARRING_BOT_TOKEN must differ from AEN_API_TOKEN".into());
+    }
     if settings
         .quicknode
         .as_ref()

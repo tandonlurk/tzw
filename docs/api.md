@@ -4,7 +4,38 @@ Backend owns this file. Frontend builds against it. Change it in the same commit
 
 Conventions: base `http://localhost:8080/api`; JSON; ids are UUID strings; timestamps RFC 3339; **money is a string of integer USDC minor units** (6 decimals, `"1500000"` = 1.5 USDC); `env` is `"arc_testnet"` or `"simulated"`; ratios are integer basis points (0–10000). Errors: HTTP 4xx/5xx with `{"error":{"code":"...","message":"...","details":[...]}}`. Single demo user (D-9).
 
+## Mock adversary practice (D-75)
+
+Practice records only; no intents, configuration edits, approvals, ledger entries, or contract calls. See `setup/grok-bot-sparring.md` for real Grok Bot setup and limitations.
+
+| Method | Path (relative to `/api`) | Body / response |
+|---|---|---|
+| GET | `/agents/{id}/sparring` | Most recent 50 sessions with rounds, newest first |
+| POST | `/agents/{id}/sparring` | `{thesis}` → session, with immutable version and snapshot |
+| GET | `/sparring/{id}` | Session with ordered rounds |
+| POST | `/sparring/{id}/rounds` | `{role:"owner",argument,evidence_urls,proposed_revision}` → updated session |
+| GET | `/bot/sparring/{id}` | Same sanitized practice record, restricted Bot credential required |
+| POST | `/bot/sparring/{id}/rounds` | `{argument,evidence_urls,proposed_revision}` → updated session; server sets role/source |
+
+Session shape: `{id,agent_id,agent_version,thesis,agent_snapshot:{name,goals,strategy,horizon_secs},created_at,rounds}`. Round shape: `{id,role,source,argument,evidence_urls,proposed_revision,created_at}`. `role` is `owner` or `adversary`; `source` is `owner` or `grok_bot`. The latter means the restricted Bot credential submitted it, not proof of model authorship. Text is untrusted; source claims and URLs are not automatically verified.
+
+Snapshot fields are explicitly selected from the current agent version at session creation; later edits do not rewrite it. Config text is owner-supplied, so keep secrets out of agent goals, strategy, and practice messages. List for an unknown agent and read/append to an unknown session return 404.
+
+Bounds: nonblank trimmed thesis 1–4000 characters, argument 1–6000, optional revision 1–4000 (use null for absent); at most 8 HTTP(S) URLs with a host, no embedded credentials, and at most 2048 bytes each. A session permits 12 rounds total, serialized under a row lock; further submissions are 409 `round_limit`. Owner role other than `owner` is 422 `invalid_role`. Unknown JSON fields are rejected; Bot requests must omit `role` and `source`.
+
+`/api/bot/` uses only `SPARRING_BOT_TOKEN` (at least 32 characters, different from `AEN_API_TOKEN`) and fails closed when missing or incorrect. The Bot token is refused on general owner routes, including when the optional owner token is unset. Host and Origin checks still apply. Ordinary owner API authentication does not grant Bot-route access. Server startup rejects equal owner/Bot credentials. No idempotency key is supported for rounds: repeated successful submissions append new rounds, so after an ambiguous network failure read the session before retrying.
+
+## General request conventions
+
+### Local public-forum prototype (2026-11-20)
+
+All forum endpoints use ordinary owner authentication and never write financial or agent configuration records. `GET /forum/posts` returns up to 50 recent posts including replies; `GET /forum/posts/{id}` returns one thread. `POST /forum/posts` accepts `{title,body,category,agent_id}`; categories are `discussion`, `opportunity`, `research`. `POST /forum/posts/{id}/replies` accepts `{body,agent_id}` and returns the updated post. Null `agent_id` means owner; a supplied ID must exist, and its display name is captured. This is owner-authored agent attribution, not automatic agent posting.
+
+Post: `{id,title,body,category,agent_id,agent_name,created_at,is_demo,replies}`. Reply: `{id,body,agent_id,agent_name,created_at,is_demo}`. Nonblank title up to 160 characters, post body 4000, reply 2000; at most 100 replies per thread. Unknown fields and invalid categories are rejected. General Bot credentials do not grant forum access. Dev-only `POST /dev/seed-forum {}` inserts six explicitly fictional example threads/replies idempotently and preserves owner posts. No public hosting, multiuser identity or moderation is implemented.
+
 Request guard (SEC-02), always on, checked before any handler:
+
+The owner-token rule below describes general API routes. The Bot namespace uses its separate token as specified above; the QuickNode webhook uses its own HMAC authentication.
 - **Host**: only `localhost`, `127.0.0.1`, `[::1]` (any port) plus `ALLOWED_HOSTS` are served; anything else is **403** `host_not_allowed` (DNS rebinding). A request without a Host header (not a browser) passes.
 - **Origin**: a request carrying an `Origin` other than `CORS_ORIGIN` (default `http://localhost:3000`) is **403** `origin_not_allowed`, whatever the method (CSRF). No `Origin` (curl, server-side code) passes.
 - **Token**: when `AEN_API_TOKEN` is set, every request except `GET /health` and `OPTIONS` needs `Authorization: Bearer <token>`, else **401** `unauthorized` (`WWW-Authenticate: Bearer`). The server refuses to start on a non-loopback `BIND_ADDR` without a token. The default local setup (no token, loopback, web app on `localhost:3000`) is unchanged. With a token, the web app calls the backend through its own same-origin proxy (`NEXT_PUBLIC_API_URL=/backend`, server-only `AEN_API_TOKEN`; `web/README.md`, D-70), so the token never reaches the browser.

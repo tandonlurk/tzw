@@ -1,5 +1,22 @@
 # Frontend / UI
 
+## Public Forum (2026-11-20)
+
+- Scope/assigned: frontend specialist, integrated by lead as `371f1c8`. Files: shared `/forum` page, `lib/forum.ts`, API methods, shell navigation/breadcrumbs/mode regression assertions; clarified Firms/Challenges intro text.
+- Done: Network → Public Forum in both modes, categories, real persisted thread/reply forms, selected agent attribution, explicit fictional demo badges and local-prototype notice. No static fake engagement or autonomous posting claims.
+- Validation:168tests,TypeScript,targetedlint,productionwebpackbuild pass. Lead verified /forum,/wallet,/agents,/interactions,/firms HTTP200 and actual forum/portfolio API through frontend proxy. No new browser interaction test claimed.
+- Dependency/limits: backend1d020f1 running8090; six seeded demo threads. Owner posting on behalf of an agent is not autonomous authorship. Public hosting/identity/moderation out of scope. Seeded portfolio provides three root cards and grouped clones. Another session's dashboard/navigation WIP is preserved.
+
+## Grok Bot adversarial practice (2026-11-20)
+
+- Objective/scope: persistent mock-adversary practice UI against the agreed backend contract; assigned frontend specialist, integrated by lead on `integration-1119` as `84a5058`.
+- Status: implementation complete; live Bot submission pending owner setup. Depends on D-75 backend endpoints and restricted credential.
+- Files: Basic/Advanced agent Sparring routes, `components/agent/SparringWorkspace.tsx`, workspace tabs, `lib/sparring.ts` and tests, API client, mode mapping.
+- Completed: create/list sessions, frozen strategy/version display, critique/source links, owner replies/revisions, safe prompt copy and 10-second visible-page refresh. Drafts survive reloads/errors; per-agent state is isolated. No live configuration or financial edits.
+- Validation: 168 web tests passed, TypeScript passed, targeted lint clean, production webpack build passed. Read-only integration/security review found and verified fix for polling that erased drafts; no unresolved high/medium findings.
+- Assumptions/limits: source records identify the submission connection, not verified model identity; evidence claims remain unverified. No canned Bot replies, RL training, backtests, automatic rebuttal or activation.
+- Next: configure Grok Bot access/tunnel/restricted token and record a real critique. Setup: `docs/setup/grok-bot-sparring.md`. Another agent owns `demo-video/`; none of its files were edited.
+
 - **Objective:** Next.js app: dashboard, agents, creation, builder, wallet, activity.
 - **Scope:** web/ only. No financial logic. Palette in AGENTS.md 4.4 as CSS variables.
 - **Dependencies:** `docs/api.md` (v0).
@@ -94,3 +111,12 @@ Run against the real backend; charts (M2); approvals and interactions views.
 - Chrome-verified on the real backend (fresh `aen_ui` db, demo + firm seeds, 4 rounds): every page above at 1440 wide; 900 and 520 wide for Overview, Terminal, My Agents; canvas select/panel, block menu search + Enter add, live validation, discard; terminal hover tooltip, presets; code workspace add block + dry run; approve from Approvals; Dev tick from Terminal; mode switch by icon and ⌘\ keeps the agent and tab.
 - Also verified: canvas edit + ⌘S saved v2 (min conviction 6000 → 6500), Configuration save v3 kept that graph (API checked), terminal corner-resize by mouse (2×1 → 4×1, persisted across reload).
 - Not verified: panel drag-reorder by mouse (HTML5 drag; logic unit-tested), wallet vault UI with MetaMask, Arc testnet terminal view (no vault in this db).
+
+## Landing page + Devpost copy (2026-11-20)
+- Objective/scope: owner-requested default landing page referencing the supplied layout, monochrome ASCII rendition of `demo-video/assets/logos/final.jpg`, stationary hands and rotating coin. Separate submission copy beside the voiceover script.
+- Assigned: lead. Dependencies: existing Next.js shell/tokens, owner's logo. No new dependencies.
+- Files: `web/app/page.tsx`, `landing.css`, preserved Overview at `app/dashboard/page.tsx`; `components/landing/` texture + canvas renderer; reproducible `scripts/build-landing-ascii.mjs`; shell/breadcrumb/nav/mode routing; `demo-video/devpost-responses.md`.
+- Completed: black/white character art, coin rotation, responsive banner with TZW wordmark and blue Get started buttons; dashboard remains available at `/dashboard`, Advanced switch returns there. Landing has no sidebar or approvals polling. Copy contains elevator pitch, About sections, project description and technical summary; script untouched.
+- Validation: 168 frontend tests, TypeScript and targeted ESLint pass. Production webpack build passed. Headless Chrome desktop 1440 and mobile 390: no overflow, no runtime exceptions; pixel comparison found zero changed hand pixels and changing coin pixels; reduced-motion freezes the art. Direct dashboard shows the existing shell and real backend data.
+- Decision/assumptions: local repository work only, no publication. Source `final.jpg` is the requested `final.jpeg`. Silhouette masks exclude the fresco background. Full-page Get started links enter the owner console.
+- Limitations: artwork uses approximate hand silhouette masks and a projected coin texture, not a 3D mesh. No financial/business logic changed. No blockers.

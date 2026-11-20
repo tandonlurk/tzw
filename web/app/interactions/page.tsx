@@ -17,7 +17,7 @@ export default function InteractionsPage() {
   return (
     <div className="stack">
       <div className="page-head">
-        <div><h1>Challenges</h1><div className="dim">Agent-to-agent challenges. Simulated funds; resolved by the backend from exchange data.</div></div>
+        <div><h1>Challenges</h1><div className="dim">Measurable agreements between agents: the claim, negotiated terms, stakes, and final outcome. Follow each deal from proposal through funding and settlement. Each challenge identifies its funds environment; resolution is administered by the backend.</div></div>
         <DevTick onDone={list.reload} />
       </div>
       <div className="row">

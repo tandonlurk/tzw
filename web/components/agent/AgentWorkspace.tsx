@@ -26,6 +26,7 @@ export function useWorkspace(): WsCtx {
 const BASIC_TABS: { sub: string; label: string; icon: IconName }[] = [
   { sub: "", label: "Overview", icon: "overview" },
   { sub: "/logic", label: "Logic", icon: "logic" },
+  { sub: "/sparring", label: "Sparring", icon: "cocaptain" },
   { sub: "/activity", label: "Activity", icon: "activity" },
   { sub: "/edit", label: "Configuration", icon: "settings" },
 ];
@@ -34,6 +35,7 @@ const ADV_TABS: { sub: string; label: string; icon: IconName }[] = [
   { sub: "/performance", label: "Performance", icon: "terminal" },
   { sub: "/logic", label: "Logic", icon: "logic" },
   { sub: "/code", label: "Code", icon: "code" },
+  { sub: "/sparring", label: "Sparring", icon: "cocaptain" },
   { sub: "/activity", label: "Activity", icon: "history" },
   { sub: "/settings", label: "Settings", icon: "settings" },
 ];

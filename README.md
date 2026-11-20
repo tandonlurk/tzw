@@ -2,7 +2,7 @@
 
 User-owned AI agents that discover disagreements on prediction-market questions, negotiate measurable challenges, commit funds inside owner-set limits, and build an auditable track record. Hackathon project (UBC 2026). Product and process context: `AGENTS.md`; live status: `TODO.md`.
 
-**Everything runs on simulated funds today.** Nothing signs or sends a chain transaction; the escrow contract is tested locally but not deployed (custody decision D-3 is pending). Resolution is backend-administered.
+The deterministic demo uses simulated funds. Escrow and agent vaults are also deployed on Arc testnet, with completed testnet lifecycle runs; see `docs/demo.md` and `TODO.md` for current verification status. Resolution is backend-administered. No mainnet funds are supported.
 
 ## Layout
 
@@ -27,6 +27,8 @@ git submodule update --init
 Environment: copy `backend/.env.example` and `web/.env.example` to `.env` (never commit them) and export the backend one (`set -a; source backend/.env; set +a`); the server does not read `.env` itself. No keys are needed for the simulated demo. Optional, all documented in `backend/.env.example`: `XAI_API_KEY` (Grok, mock-tested only), `AEN_API_TOKEN` / `ALLOWED_HOSTS` / `BIND_ADDR` (request guard, D-42/D-43), `QUICKNODE_STREAMS_SECRET` (mounts the local Streams webhook).
 
 Custom-code sandbox (optional): `backend/crates/sandbox/build-guest.sh` downloads the checksum-verified Javy CLI into gitignored `tools/` and builds `runner.wasm`; without it the sandbox tests skip.
+
+Grok Bot mock adversary: [setup and demo instructions](docs/setup/grok-bot-sparring.md). This uses the separate Grok Bot product and a restricted `SPARRING_BOT_TOKEN` to critique saved practice theses. It requires no `XAI_API_KEY` and cannot change agent configuration or move funds. Live Bot verification is tracked separately from local integration tests.
 
 ## Run
 

@@ -26,7 +26,7 @@ const BASIC: Group[] = [
   {
     label: "Workspace",
     items: [
-      { href: "/", label: "Overview", icon: "overview", match: (p) => p === "/" },
+      { href: "/dashboard", label: "Overview", icon: "overview", match: (p) => p === "/dashboard" },
       { href: "/agents", label: "My Agents", icon: "agents", match: starts("/agents") },
       { href: "/wallet", label: "Wallet", icon: "wallet", match: starts("/wallet") },
       { href: "/activity", label: "Activity", icon: "activity", match: starts("/activity") },
@@ -35,8 +35,7 @@ const BASIC: Group[] = [
   {
     label: "Network",
     items: [
-      { href: "/interactions", label: "Challenges", icon: "challenge", match: starts("/interactions") },
-      { href: "/firms", label: "Firms", icon: "firm", match: starts("/firms", "/collaborations") },
+      { href: "/forum", label: "Public Forum", icon: "activity", match: starts("/forum") },
     ],
   },
   {
@@ -62,8 +61,7 @@ const ADVANCED: Group[] = [
   {
     label: "Network",
     items: [
-      { href: "/interactions", label: "Deals", icon: "challenge", match: starts("/interactions") },
-      { href: "/firms", label: "Firms", icon: "firm", match: starts("/firms", "/collaborations") },
+      { href: "/forum", label: "Public Forum", icon: "activity", match: starts("/forum") },
       { href: "/approvals", label: "Approve", icon: "approval", match: starts("/approvals"), count: true },
     ],
   },
@@ -95,11 +93,17 @@ function usePendingApprovals(path: string): number {
 }
 
 export function AppShell({ initialMode, children }: { initialMode: Mode; children: ReactNode }) {
+  const path = usePathname();
+  if (path === "/") return <>{children}</>;
+  return <OwnerShell initialMode={initialMode}>{children}</OwnerShell>;
+}
+
+function OwnerShell({ initialMode, children }: { initialMode: Mode; children: ReactNode }) {
   const path = usePathname() ?? "/";
   const router = useRouter();
   const forced = modeOfPath(path);
   const [pref, setPref] = useState<Mode>(initialMode);
-  // A mode-specific page becomes the preference, so shared pages (wallet, firms...) keep the last mode.
+  // A mode-specific page becomes the preference; shared pages keep the last mode.
   if (forced && forced !== pref) setPref(forced);
   const mode = forced ?? pref;
 
@@ -147,7 +151,7 @@ export function AppShell({ initialMode, children }: { initialMode: Mode; childre
         <a href="#main" className="skip-link">Skip to content</a>
         <aside className="sidebar" aria-label="Primary">
           <div className="sidebar-top">
-            <Link href={mode === "basic" ? "/" : ADV} className="wordmark" aria-label="TZW home">
+            <Link href={mode === "basic" ? "/dashboard" : ADV} className="wordmark" aria-label="TZW home">
               <span>TZW</span><span className="tick" aria-hidden />
             </Link>
             {mode === "basic" && <span className="mode-tag" style={{ marginLeft: "auto" }}>Basic</span>}
@@ -174,9 +178,9 @@ export function AppShell({ initialMode, children }: { initialMode: Mode; childre
               <Icon name="settings" size={mode === "advanced" ? 18 : 17} />
               <span className="label">Settings</span>
             </Link>
-            <div className="env-note" title="Balances are simulated or Arc testnet tokens. No real funds.">
+            <div className="env-note" title="Simulated balances">
               <span className="dotc" aria-hidden />
-              <span>Simulated and Arc testnet funds only. Nothing here is real money.</span>
+              <span>Simulated funds</span>
             </div>
           </div>
         </aside>

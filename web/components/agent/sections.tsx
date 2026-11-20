@@ -84,7 +84,7 @@ export function FundingCard({ a, onChanged }: { a: Agent; onChanged: () => void 
 
 export function OpenChallenges({ list }: { list: Interaction[] }) {
   const open = list.filter((i) => isOpen(i.state));
-  return open.length === 0 ? <Empty>No open challenges right now.</Empty> : <div className="stack">{open.map((i) => <InteractionCard key={i.id} i={i} />)}</div>;
+  return open.length === 0 ? <Empty>No open positions right now.</Empty> : <div className="stack">{open.map((i) => <InteractionCard key={i.id} i={i} />)}</div>;
 }
 
 export function PastChallenges({ list }: { list: Interaction[] }) {

@@ -130,6 +130,7 @@ fn forbidden(code: &'static str, message: &str) -> Response {
 pub struct Guard {
     pub config: GuardConfig,
     pub origin: HeaderValue,
+    pub sparring_bot_token: Option<ApiToken>,
 }
 
 pub async fn guard(State(guard): State<Guard>, req: Request, next: Next) -> Response {
@@ -153,6 +154,39 @@ pub async fn guard(State(guard): State<Guard>, req: Request, next: Next) -> Resp
         return forbidden(
             "origin_not_allowed",
             "requests from this Origin are refused (only CORS_ORIGIN may call the API)",
+        );
+    }
+    // This namespace has its own restricted credential. Fail closed even on
+    // a local server with no general API token. Never accept the owner token.
+    if req.uri().path().starts_with("/api/bot/") {
+        let presented = headers
+            .get(AUTHORIZATION)
+            .and_then(|v| v.as_bytes().strip_prefix(b"Bearer "));
+        let valid = guard.sparring_bot_token.as_ref().is_some_and(|token| {
+            guard.config.api_token.as_ref() != Some(token)
+                && presented.is_some_and(|p| token.matches(p))
+        });
+        if !valid {
+            return ApiError::new(
+                StatusCode::UNAUTHORIZED,
+                "unauthorized",
+                "a valid restricted SPARRING_BOT_TOKEN is required",
+            )
+            .into_response();
+        }
+        return next.run(req).await;
+    }
+    // The restricted credential cannot access the owner API, even when the
+    // owner has left their local API unauthenticated.
+    if let Some(token) = &guard.sparring_bot_token
+        && headers
+            .get(AUTHORIZATION)
+            .and_then(|v| v.as_bytes().strip_prefix(b"Bearer "))
+            .is_some_and(|p| token.matches(p))
+    {
+        return forbidden(
+            "restricted_token",
+            "this credential is only valid for sparring Bot routes",
         );
     }
     if let Some(token) = &guard.config.api_token {

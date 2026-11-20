@@ -1,0 +1,23 @@
+{
+  "name": "tzw-demo-animations",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Remotion animations for the TZW demo video (see ../story-outline.md)",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "node render-all.mjs",
+    "typecheck": "tsc --noEmit",
+    "logos": "node render-logos.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.545",
+    "@remotion/google-fonts": "4.0.545",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "4.0.545"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "typescript": "5.9.3"
+  }
+}

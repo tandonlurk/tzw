@@ -10,9 +10,12 @@ Deadline: event page says Devpost Fri Nov 20, 12 PM CST (AGENTS.md says Nov 19, 
 
 Handoff: `reports/handoffs/2026-11-19-evening.md`.
 
-- [ ] **You:** merge PR #10 (it contains #8 and #9 with the `docs/decisions.md` conflict already resolved; merging it closes all three). Then `git checkout main && git pull`
+- [x] **You:** merge PR #10 (owner confirmed 2026-11-19; it contains #8 and #9). Local checkout still needs syncing before implementation, coordinating with the demo-video agent.
 - [ ] **You:** get an xAI key (console.x.ai → API Keys) into `backend/.env` as `XAI_API_KEY`, so Grok does real work (bounty). Then the agent runs one live Grok check
+  - 2026-11-20 direction change: the Grok Bot bounty workflow is now the mock adversary (D-75), which needs Grok Bot product access and a restricted `SPARRING_BOT_TOKEN`, not an xAI model API key. The key remains optional for the separate model reasoner/co-captain. Do not treat a model API call as proof of Grok Bot use.
 - [ ] **You:** answer the demo plan's questions (`demo-video/animation-plan.md`, end) and record voiceover + screen recordings; then an agent builds the animations (Remotion) and the assembly script
+  - [x] Story outline (`demo-video/story-outline.md`) and the 10 full-frame animated scenes built (`demo-video/animations/README.md`, `npm run render`). Left: overlays 04/09/11 and the assembly script, after the recordings
+  - 2026-11-19: owner has another agent working on the first demo-video steps; coordinate file ownership before further video edits.
 - [ ] Optional: add vault addresses to the QuickNode filter (`docs/setup/quicknode-streams-filter.md`; addresses from `GET /api/streams`)
 - [ ] Optional: delete the terminated QuickNode stream "dry-abandoned-plateau"; withdraw ~6 testnet USDC from the two Streams-test demo vaults
 - [ ] ElevenLabs only if everything else is done
@@ -114,6 +117,9 @@ Handoff: `reports/handoffs/2026-11-19-evening.md`.
 
 ## M6 — Co-captain, voice, demo (Wed Nov 18)
 
+- [x] Populated recording portfolio and Network → Public Forum (2026-11-20): isolated 6000 simulated-USDC wallet; three strategy families 2×/3×/5×, 36 settled + 3 active challenges and 274 agent-ledger entries at capture. Six fictional forum threads with persistent post/reply forms. Test server3000→8090, simulated ticks15s; original DB preserved. UI 168 tests/build/typecheck/lint pass; forum PostgreSQL tests3/3 pass; pages/API verified. Details `docs/demo-portfolio.md`.
+- [x] Owner scope decision (2026-11-20): no Grok Bot purchase or live setup for this demo. Keep the locally tested sparring infrastructure as a prototype; explain the planned Bot integration in closing narration. Live steps in the following item are deferred, not outstanding demo requirements. The app does not generate adversary critiques by itself.
+- [~] Grok Bot mock adversary (owner choice 2026-11-20, D-75): built and integrated on `integration-1119` (`8c38667`, `84a5058`): persistent practice sessions, restricted Bot API, owner replies/revisions and Sparring UI. Backend library 84 passed / 1 ignored, four PostgreSQL integration tests passed; web 168 tests, TypeScript, targeted lint, production build pass. Separate from optional `XAI_API_KEY` reasoning; no funds or config changes. Remaining: owner Grok Bot sign-in, restricted credential/tunnel setup, and a real recorded critique (`docs/setup/grok-bot-sparring.md`).
 - [x] Co-captain text suggestions: backend (6 rules, list/generate/accept/dismiss, D-36/D-37) and "Co-captain" page (accept, dismiss, loosens-control warning); 254 backend + 30 web tests. Grok variant mock-tested only; suggestions with a proposed change were browser-tested from inserted rows, not rule-generated ones (backend/frontend, P2)
 - [ ] ElevenLabs voice for co-captain (P3, last)
 - [x] Demo script, seeded demo agents, README run instructions, AGENTS.md 9.4 filled in: simulated run hand-verified; testnet video script (setup, 15-shot list, fallbacks) rehearsed live on Arc 2026-11-18, bull +1.25 / skeptic -1.25, drift 0 (`docs/demo.md` "Testnet video script") (lead, P0)

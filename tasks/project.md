@@ -10,6 +10,22 @@ Lead-owned. `TODO.md` is the user-facing list; this file holds status detail, ri
 4. After each meaningful unit of work: update the task file, tick `TODO.md` (edit lines, never rewrite the file), commit on the specialist branch.
 5. Before stopping: write `reports/handoffs/YYYY-MM-DD-<topic>.md` with exact next actions.
 
+## Active work (2026-11-20) — Grok Bot mock adversary
+
+### Demo portfolio and forum follow-up (owner request)
+
+- Integrated forum UI `371f1c8`, API-only portfolio seeder `2c4310a`, forum backend `1d020f1`. Backend forum tests 3/3 passed; UI 168 tests, TypeScript, targeted lint and production build passed. Lead reviewed module/API compatibility and executed the seed through HTTP.
+- Current test server: web `http://127.0.0.1:3000`, backend `http://127.0.0.1:8090/api`, isolated DB `aen_video_demo_20261120`; existing `aen_dev` preserved. Simulated scheduler every 15 seconds; Arc signing and xAI model key disabled for this process. Older 8080 backend stopped. Running backend binary `/private/tmp/tzw-forum-target/debug/aen-server`, explicit sandbox path to root runner.
+- Verified capture: 6000 simulated USDC, 1500 unallocated, 218 committed, three roots (Atlas 2×, Vega 3×, Lumen 5×; ten agents including clones), 36 settled/3 active challenges, 22 wallet/274 agent-ledger entries. Six labeled demo forum threads/replies seeded; all relevant pages and proxy data verified HTTP 200. Counts may advance with scheduler.
+- Forum supports owner-authored persistent threads/replies and categories; local prototype, not public multiuser hosting. Firms/Challenges descriptions clarified. No real activity/performance claims. Reproduce: `docs/demo-portfolio.md`.
+- Another session has unrelated uncommitted dashboard/navigation changes plus video edits in the shared checkout; preserve them, stage only our exact documentation files.
+
+- Owner confirms PR #10 merged; another agent owns `demo-video/` and is actively committing there. Do not edit its files or switch this shared checkout away from `integration-1119`.
+- Owner selected Grok Bot mock adversary (D-75). Lead owns setup/API docs, decisions, tracker and integration. Backend specialist owns backend in isolated worktree; UI specialist owns web in isolated worktree. API contract: owner `/agents/{id}/sparring`, `/sparring/{id}`, `/sparring/{id}/rounds`; restricted Bot `/bot/sparring/{id}` and `/bot/sparring/{id}/rounds`.
+- Practice session and rounds only: no financial effects, no automatic configuration changes, no live negotiation gate. Bot uses a separate token; live Bot use remains unverified until owner signs in and runs a real critique.
+- Local implementation integrated: backend `8c38667`, UI `84a5058`. Independent static review has no unresolved high/medium findings; polling draft-loss bug fixed. Backend library 84 passed / 1 ignored, four isolated PostgreSQL integration tests passed; web 168 tests, TypeScript, targeted lint and production webpack build passed. Shared checkout diff check clean. Setup/handoff: `docs/setup/grok-bot-sparring.md`, `reports/handoffs/2026-11-20-grok-adversary.md`.
+- Owner direction (2026-11-20): do not buy Grok Bot; keep the sparring infrastructure as a prototype and describe the Bot connection as a future integration at the end of the demo. Live Bot setup is deferred, not a submission blocker. No automated adversary reasoning or live Bot execution is claimed. No pushes; video agent files preserved.
+
 Token discipline: read sections, not whole files; delegate web research and bulk implementation to subagents (cheaper model for routine work) with reports capped at ~200 words; keep facts in `docs/`, not in conversation.
 
 ## Status (2026-11-17, Tue evening) — current
@@ -89,3 +105,9 @@ Interfaces between specialists: the REST API in `docs/architecture.md` §9, the 
 - 2026-11-15: Merged qa-web, security-tests, backend-m2 into `recovery` (backend 211, contracts 80, web 15 tests). Simulated challenge lifecycle works. Spawning frontend-m2.
 - 2026-11-15: Merged frontend-m2 (web 21 tests). All worktrees removed. Next actions in `reports/handoffs/2026-11-15-m2-orchestration.md`.
 - 2026-11-16: Lead ran backend-m3 (5 items), web-m3 (5 stages), sandbox-spike (D-11 GO), sandbox-host (crate + custom.code). All merged into `recovery`, all worktrees, target dirs and specialist dbs removed. Submission drafts in `docs/submission/`, root README added.
+
+## 2026-11-20 — owner-requested landing page and submission copy
+- Devpost paragraphs saved separately beside narration: `demo-video/devpost-responses.md`; existing voiceover script preserved.
+- Default `/` now introduces TZW with owner's logo rendered in white ASCII on black, stationary hands and a rotating coin. Get started opens the preserved overview at `/dashboard`; shell links and presentation-mode mapping updated.
+- Frontend tests (168), TypeScript, targeted lint, production build pass; desktop/mobile browser checks verify no overflow, stationary hands/animated coin, reduced-motion support, and direct dashboard rendering. Detail: `tasks/frontend.md`.
+- No sponsor, custody, financial, deployment or API changes. Existing `demo-video/.gitignore` changes belong to other work and are preserved.

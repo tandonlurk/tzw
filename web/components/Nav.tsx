@@ -4,10 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const ITEMS: { href: string; label: string; also?: string }[] = [
-  { href: "/", label: "Dashboard" },
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/agents", label: "My Agents" },
-  { href: "/interactions", label: "Challenges" },
-  { href: "/firms", label: "Firms", also: "/collaborations" },
+  { href: "/forum", label: "Public Forum" },
   { href: "/approvals", label: "Approvals" },
   { href: "/cocaptain", label: "Co-captain" },
   { href: "/wallet", label: "Wallet" },
