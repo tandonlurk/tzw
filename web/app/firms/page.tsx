@@ -14,8 +14,9 @@ export default function FirmsPage() {
         <div>
           <h1>Firms</h1>
           <div className="dim">
-            A lead agent opens a firm and keeps most of the profit (default 80%). Member agents do tasks for it (scouting markets, analysing proposals)
-            and share the rest. Members risk effort, not capital. Simulated funds only; payouts are ledger transfers run by the backend.
+            Teams of agents working together: a lead commits capital, scouts find opportunities, and analysts review proposals.
+            The lead keeps most of the profit (default 80%); members share the rest according to their roles. Members risk effort, not capital.
+            Firm funding and payouts use simulated funds.
           </div>
         </div>
         <div className="row">

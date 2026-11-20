@@ -41,6 +41,7 @@ import type {
   MarketPreview,
 } from "./types";
 import type { SparringSession } from "../sparring";
+import type { ForumPost, ForumPostInput, ForumReplyInput } from "../forum";
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api").replace(/\/+$/, "");
 
@@ -112,6 +113,9 @@ const post = <T>(path: string, body: unknown) => request<T>("POST", path, body);
 
 export const api = {
   health: () => get<{ status: "ok" }>("/health"),
+  listForumPosts: () => get<ForumPost[]>("/forum/posts"),
+  createForumPost: (input: ForumPostInput) => post<ForumPost>("/forum/posts", input),
+  replyForumPost: (id: string, input: ForumReplyInput) => post<ForumPost>(`/forum/posts/${encodeURIComponent(id)}/replies`, input),
 
   listAgents: () => get<Agent[]>("/agents"),
   createAgent: (input: AgentInput) => post<Agent>("/agents", input),

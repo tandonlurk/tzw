@@ -9,6 +9,7 @@ import { Icon } from "./icons";
 
 const LABEL: Record<string, string> = {
   agents: "Agents", wallet: "Wallet", activity: "Activity", interactions: "Challenges", firms: "Firms",
+  forum: "Public Forum",
   collaborations: "Collaborations", approvals: "Approvals", cocaptain: "Co-captain", settings: "Settings",
   new: "New", edit: "Configuration", logic: "Logic", code: "Code", performance: "Performance", logic_: "Logic",
 };

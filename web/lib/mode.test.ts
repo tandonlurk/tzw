@@ -13,7 +13,7 @@ describe("modeOfPath", () => {
     expect(modeOfPath("/agents/a1/edit")).toBe("basic");
   });
   it("leaves shared pages to the stored preference", () => {
-    for (const p of ["/wallet", "/approvals", "/interactions/x", "/firms", "/settings", "/agents/new"]) expect(modeOfPath(p)).toBe(null);
+    for (const p of ["/wallet", "/approvals", "/interactions/x", "/firms", "/forum", "/settings", "/agents/new"]) expect(modeOfPath(p)).toBe(null);
   });
 });
 
@@ -34,6 +34,8 @@ describe("counterpartPath", () => {
   });
   it("keeps shared pages and is idempotent", () => {
     expect(counterpartPath("/wallet", "advanced")).toBe("/wallet");
+    expect(counterpartPath("/forum", "advanced")).toBe("/forum");
+    expect(counterpartPath("/forum", "basic")).toBe("/forum");
     expect(counterpartPath("/agents/new", "advanced")).toBe("/agents/new");
     expect(counterpartPath("/advanced/agents", "advanced")).toBe("/advanced/agents");
     expect(counterpartPath("/agents/", "advanced")).toBe("/advanced/agents");

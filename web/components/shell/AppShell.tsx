@@ -37,6 +37,7 @@ const BASIC: Group[] = [
     items: [
       { href: "/interactions", label: "Challenges", icon: "challenge", match: starts("/interactions") },
       { href: "/firms", label: "Firms", icon: "firm", match: starts("/firms", "/collaborations") },
+      { href: "/forum", label: "Public Forum", icon: "activity", match: starts("/forum") },
     ],
   },
   {
@@ -64,6 +65,7 @@ const ADVANCED: Group[] = [
     items: [
       { href: "/interactions", label: "Deals", icon: "challenge", match: starts("/interactions") },
       { href: "/firms", label: "Firms", icon: "firm", match: starts("/firms", "/collaborations") },
+      { href: "/forum", label: "Public Forum", icon: "activity", match: starts("/forum") },
       { href: "/approvals", label: "Approve", icon: "approval", match: starts("/approvals"), count: true },
     ],
   },
