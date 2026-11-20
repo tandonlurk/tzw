@@ -8,8 +8,18 @@ npm ci
 npm run studio          # preview and scrub every scene in the browser
 npm run render          # all scenes -> renders/NN-slug.mp4 (gitignored)
 npm run render -- 08 12 # only scenes whose id starts with these prefixes
+npm run render -- -min   # only the minimal versions
 npm run typecheck
 ```
+
+## Minimal versions
+
+Every scene also exists as `<id>-min` (e.g. `08-escrow-min`): same timing and motion, but no titles,
+captions, names or explanatory labels; only shapes, icons, numbers and a small `testnet` / `simulated`
+label in the corner (kept so funds never look real). Words move to the voiceover:
+`../voiceover-script.md` (it marks the honesty lines the voice must now say). Implemented with a
+`MinimalProvider` context (`src/lib/ui.tsx`); shared components drop their text in minimal mode and
+scenes check `useMinimal()` for anything scene-specific.
 
 ## Status (2026-11-20)
 
