@@ -67,6 +67,38 @@ ActivityItem { id, ts, agent_id: string|null, interaction_id: string|null, colla
 | POST | `/wallet/simulated-deposit` | `{amount: money}` → wallet | Credits simulated funds, labelled as such |
 | GET | `/activity?agent_id=&interaction_id=&collaboration_id=&firm_id=&limit=` | → `ActivityItem[]` | newest first |
 
+## Agent multiplier (D-73, simulated funds)
+
+Clone one agent N times so an owner can run many slightly different copies of a strategy. Each clone is an ordinary agent (own id, version 1 = the source's current version with variance applied, own simulated allocation) and goes through the same validation as `POST /agents` and the same ledger code as `/allocate`. Simulated funds only; nothing onchain.
+
+```
+MultiplyInput  { count: int (1-100), variance_bps: int (0-2500), budget: money,   // total, split evenly
+                 seed?: int (0-4294967295), dry_run?: bool }                       // seed omitted = server picks one
+MultiplyReport { env: "simulated", dry_run, multiplication_id: uuid|null,          // null on a dry run
+                 family_id: uuid,                                                  // the root agent's id
+                 source: { agent_id, name, version },
+                 count, variance_bps, seed,
+                 budget, per_clone: money, total: money, remainder: money,         // per_clone = floor(budget / count); total = per_clone × count; remainder stays unallocated
+                 unallocated: money,                                               // owner's unallocated balance before the request
+                 funds_ok: bool,                                                   // unallocated >= total (a dry run reports false instead of failing)
+                 clones: [{ agent_id: uuid|null, name, index, allocation: money, params: ParamChange[] }],
+                 note }
+ParamChange    { path, from: int, to: int, offset_bps: int }   // e.g. graph.nodes.trigger.params.threshold_bps
+Agent          += { family_id: uuid|null,                       // root's id for the root and every clone; null if never multiplied
+                    clone: { index, multiplication_id, source_agent_id, source_version, variance_bps, seed, params: ParamChange[] }|null }
+```
+
+| Method | Path | Body → Response | Notes |
+|---|---|---|---|
+| POST | `/agents/{id}/multiply` | `MultiplyInput` → **201** `MultiplyReport` (200 when `dry_run`) | A dry run validates and computes names, allocations and parameters and writes nothing; sending its `seed` back gives exactly the previewed clones. 422 `validation_failed` (paths `count`, `variance_bps`, `budget` with code `budget_too_small` when a clone would get 0), 422 `insufficient_funds` (unallocated < total; nothing written), 422 `unsupported_env` (source not simulated), 409 `source_paused`, 409 `family_full` (a family holds at most 200 clones), 404 |
+
+Rules:
+- **Money**: one `allocate` posting set per clone (`multiply:{multiplication_id}:{index}`) from `user:unallocated`, all in one transaction. No money is created; a shortfall writes nothing.
+- **Variance** (each value × a factor in [1 − v, 1 + v], rounded, clamped to its schema range; deterministic per seed, clone index and path): `config.horizon_secs`, `trigger.market_move` `threshold_bps` / `window_secs`, `trigger.schedule` `every_secs`, `cond.conviction_gte` `min_bps`, `approach.profile` `stance.ambition_bps`. `policy.min_conviction_bps` only rises (factor in [1, 1 + v]). Policy money limits, stop-loss, allowed types and money-valued graph params are copied unchanged: a clone is never looser than its source.
+- **Names**: `"Demo Bull (simulated)"` → `"Demo Bull #7 (simulated)"`; indexes continue across requests within a family. Multiplying a clone adds to the root's family.
+- **Runtime**: siblings (one family) never pick each other as counterparty. Cooldown and one open challenge per agent per market apply per clone, as for any agent.
+- Activity: `agents_multiplied` on the source (`detail`: `multiplication_id`, `family_id`, `count`, `variance_bps`, `seed`, `per_clone`, `total`, `clone_ids`); each clone gets the usual `agent_created` and `funds_allocated` (`detail.source = "multiply"`).
+
 ## M2: challenges
 
 Simulated funds only. Nothing here signs or sends an onchain transaction. Resolution is **backend-administered** (the backend reads Gemini exchange market data and decides); it is not trustless, and the UI should say so.

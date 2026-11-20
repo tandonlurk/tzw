@@ -71,8 +71,56 @@ export interface Agent {
   graph: Graph;
   balances: Balances;
   stats: Stats;
+  /** Family (D-73): the root agent's id for the root and its clones; null if never multiplied. Absent on older backends. */
+  family_id?: string | null;
+  /** Set on a clone: where it came from and the exact variance it got. */
+  clone?: CloneInfo | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ParamChange {
+  path: string;
+  from: number;
+  to: number;
+  offset_bps: number;
+}
+
+export interface CloneInfo {
+  index: number;
+  multiplication_id: string;
+  source_agent_id: string;
+  source_version: number;
+  variance_bps: number;
+  seed: number;
+  params: ParamChange[];
+}
+
+export interface MultiplyInput {
+  count: number;
+  variance_bps: number;
+  budget: Money;
+  seed?: number;
+  dry_run?: boolean;
+}
+
+export interface MultiplyReport {
+  env: "simulated";
+  dry_run: boolean;
+  multiplication_id: string | null;
+  family_id: string;
+  source: { agent_id: string; name: string; version: number };
+  count: number;
+  variance_bps: number;
+  seed: number;
+  budget: Money;
+  per_clone: Money;
+  total: Money;
+  remainder: Money;
+  unallocated: Money;
+  funds_ok: boolean;
+  clones: { agent_id: string | null; name: string; index: number; allocation: Money; params: ParamChange[] }[];
+  note: string;
 }
 
 export interface AgentInput {

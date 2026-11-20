@@ -5,7 +5,8 @@ use sqlx::PgPool;
 /// Every table with rows, in one statement.
 const ALL_TABLES: &str = "suggestions, activity, ledger_entries, agent_runs, approvals, \
                           negotiation_rounds, firm_contributions, firm_members, interactions, \
-                          firms, collaborations, chain_events, agent_versions, agents";
+                          firms, collaborations, chain_events, agent_clones, agent_multiplications, \
+                          agent_versions, agents";
 
 /// Empties the test database. The append-only tables refuse `TRUNCATE`
 /// (SEC-08) unless the transaction opts out, which only this harness does.
