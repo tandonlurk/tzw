@@ -1,5 +1,9 @@
 # Demo video: story outline (v2, 2026-11-19)
 
+> **2026-11-20:** the video is now two acts: theory over the minimal animations, then a live demo
+> of the app. The current running order and shot list are in `voiceover-script.md` (v2). The scene
+> table below remains the animation pool.
+
 Supersedes the run sheet in `animation-plan.md` section 2. The animation specs, shot list and honesty
 flags in that file still apply; this file adds the story spine and the diagram scenes that explain
 what TZW does in the background. Diagram sources: `docs/design/explainers-storyboard.md` (scenes 1–5).
