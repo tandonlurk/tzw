@@ -60,18 +60,22 @@ export const PaperDefs: React.FC<{ p: Palette }> = ({ p }) => (
 
 // ---------- Hand: pointing right, fingertip at (474, 128) ----------
 
-const HAND = "M0,118 C80,112 180,108 255,112 C285,113 305,104 330,100 C350,97 365,103 372,110 L455,116 C470,117 476,124 474,131 C472,138 464,140 452,139 L378,136 C392,140 396,150 388,156 C396,160 398,170 388,176 C394,181 392,190 380,192 C350,198 320,196 300,192 C270,196 250,200 230,202 C150,208 80,210 0,214 Z";
+const HAND = "M-600,128 L0,118 C80,112 180,108 255,112 C285,113 305,104 330,100 C350,97 365,103 372,110 L455,116 C470,117 476,124 474,131 C472,138 464,140 452,139 L378,136 C392,140 396,150 388,156 C396,160 398,170 388,176 C394,181 392,190 380,192 C350,198 320,196 300,192 C270,196 250,200 230,202 C150,208 80,210 0,214 L-600,226 Z";
 const THUMB = "M296,126 C318,121 342,126 354,137 C360,143 354,150 343,148 C328,146 312,142 298,140 Z";
-const SHADE = "M0,182 C90,180 190,176 250,178 C285,180 320,186 360,186 L380,192 C350,198 320,196 300,192 C270,196 250,200 230,202 C150,208 80,210 0,214 Z";
+const SHADE = "M-600,192 L0,182 C90,180 190,176 250,178 C285,180 320,186 360,186 L380,192 C350,198 320,196 300,192 C270,196 250,200 230,202 C150,208 80,210 0,214 L-600,226 Z";
 const CREASES = ["M384,146 L396,148", "M384,166 L396,168", "M386,184 L392,186", "M418,121 L420,133", "M440,123 L441,135"];
 export const TIP = { x: 474, y: 128 };
 
 export const Hand: React.FC<{ p: Palette; agent?: boolean; sleeve?: boolean }> = ({ p, agent, sleeve }) => (
   <g>
-    {sleeve && <path d="M-40,92 C40,80 120,86 190,96 C205,120 205,200 190,226 C120,236 40,240 -40,236 Z" style={{ fill: p.cloak, filter: "url(#paper)" }} />}
-    {sleeve && <path d="M-40,104 C40,96 110,100 168,108 C176,140 176,190 168,214 C110,222 40,226 -40,224 Z" style={{ fill: p.cloak2, opacity: 0.55 }} />}
+    {sleeve && <path d="M-600,80 L-40,92 C40,80 120,86 190,96 C205,120 205,200 190,226 C120,236 40,240 -40,236 L-600,250 Z" style={{ fill: p.cloak, filter: "url(#paper)" }} />}
+    {sleeve && <path d="M-600,96 L-40,104 C40,96 110,100 168,108 C176,140 176,190 168,214 C110,222 40,226 -40,224 L-600,236 Z" style={{ fill: p.cloak2, opacity: 0.55 }} />}
     <path d={HAND} style={{ fill: agent ? "url(#agentSkin)" : "url(#skinL)", filter: "url(#paper)" }} />
     <path d={SHADE} style={{ fill: agent ? p.agent[1] : p.skinShade, opacity: 0.35 }} />
+    {/* curled fingers, each its own cut layer */}
+    {[[382, 149, 15, 10], [384, 167, 15, 10], [378, 184, 13, 9]].map(([cx, cy, rx, ry], i) => (
+      <ellipse key={i} cx={cx} cy={cy} rx={rx} ry={ry} style={{ fill: agent ? p.agent[1] : p.skin[1], filter: "url(#paper)", opacity: 0.95 }} />
+    ))}
     <path d={THUMB} style={{ fill: agent ? p.agent[0] : p.skin[0], filter: "url(#paper)" }} />
     {CREASES.map((d) => <path key={d} d={d} style={{ stroke: agent ? p.agent[1] : p.crease, strokeWidth: 2, strokeLinecap: "round", opacity: 0.6 }} />)}
     {agent && [[120, 160], [200, 150], [280, 140], [330, 125]].map(([x, y], i) => (
@@ -109,7 +113,7 @@ export const Backdrop: React.FC<{ p: Palette; frame?: "rings" | "roundel" | "car
     {/* God's cloud-mantle (right) and Adam's hill (left), as cut paper */}
     <path d="M1200,120 C1090,130 1010,190 990,260 C960,250 920,270 915,310 C880,320 870,370 905,390 L1200,420 Z" style={{ fill: p.cloak, filter: "url(#paper)" }} />
     <path d="M1200,170 C1110,180 1050,230 1035,280 C1005,285 985,310 990,340 L1200,360 Z" style={{ fill: p.cloak2, filter: "url(#paper)" }} />
-    <path d="M0,800 L0,560 C120,520 260,540 330,600 C380,640 400,700 420,800 Z" style={{ fill: p.ground, filter: "url(#paper)" }} />
+    <path d="M0,800 L0,660 C110,620 230,630 300,690 C330,720 345,760 350,800 Z" style={{ fill: p.ground, filter: "url(#paper)" }} />
   </g>
 );
 
