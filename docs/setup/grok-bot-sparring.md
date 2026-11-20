@@ -1,5 +1,7 @@
 # Grok Bot mock adversary
 
+Owner decision, 2026-11-20: live Grok Bot setup is deferred; no purchase is required for the current demo. Keep the sparring workspace as a prototype and describe the Bot connection as planned work. The steps below are optional future setup, not outstanding owner actions for submission. The app does not independently generate adversary critiques.
+
 ## Purpose and boundary
 
 Grok Bot stress-tests an owner's agent thesis in a saved practice session. It reads the session brief, challenges assumptions, supplies source links where available, and proposes clearer terms. The owner replies or records a revision. Neither action changes the agent configuration, live negotiation, approval queue, ledger, or contracts.

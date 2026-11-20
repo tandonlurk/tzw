@@ -19,6 +19,8 @@ Owner selected mock adversary after reviewing Grok Bot product docs. Existing Gr
 
 ## Next live steps
 
+Superseded for this demo by owner direction (2026-11-20): do not purchase Grok Bot. Keep the infrastructure as a prototype; describe live Bot integration as future work in closing narration. The steps below remain an optional future checklist, not a submission blocker. No automated adversary reasoning is implemented in the standalone app.
+
 1. Owner installs/signs into Grok Bot and confirms access.
 2. Generate a separate `SPARRING_BOT_TOKEN` (at least 32 characters, never the owner API token), save in backend environment, restart with migrations. Keep the general API protected behind the public tunnel and the web server using its token proxy.
 3. Configure Bot with public HTTPS backend URL and restricted token via secure secret handoff; never share `.env`, owner token, wallet seeds, or keys.

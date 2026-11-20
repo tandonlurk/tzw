@@ -117,6 +117,7 @@ Handoff: `reports/handoffs/2026-11-19-evening.md`.
 
 ## M6 — Co-captain, voice, demo (Wed Nov 18)
 
+- [x] Owner scope decision (2026-11-20): no Grok Bot purchase or live setup for this demo. Keep the locally tested sparring infrastructure as a prototype; explain the planned Bot integration in closing narration. Live steps in the following item are deferred, not outstanding demo requirements. The app does not generate adversary critiques by itself.
 - [~] Grok Bot mock adversary (owner choice 2026-11-20, D-75): built and integrated on `integration-1119` (`8c38667`, `84a5058`): persistent practice sessions, restricted Bot API, owner replies/revisions and Sparring UI. Backend library 84 passed / 1 ignored, four PostgreSQL integration tests passed; web 168 tests, TypeScript, targeted lint, production build pass. Separate from optional `XAI_API_KEY` reasoning; no funds or config changes. Remaining: owner Grok Bot sign-in, restricted credential/tunnel setup, and a real recorded critique (`docs/setup/grok-bot-sparring.md`).
 - [x] Co-captain text suggestions: backend (6 rules, list/generate/accept/dismiss, D-36/D-37) and "Co-captain" page (accept, dismiss, loosens-control warning); 254 backend + 30 web tests. Grok variant mock-tested only; suggestions with a proposed change were browser-tested from inserted rows, not rule-generated ones (backend/frontend, P2)
 - [ ] ElevenLabs voice for co-captain (P3, last)
